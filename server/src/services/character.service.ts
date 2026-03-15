@@ -1,0 +1,27 @@
+import prisma from "../prisma/client";
+
+export type CharacterData = {
+  name?: string;
+  nickname?: string;
+  role?: string;
+  shortDescription?: string;
+  appearance?: string;
+  outfit?: string;
+  accessories?: string;
+  personality?: string;
+  traits?: string;
+  faction?: string;
+  visualNotes?: string;
+};
+
+export const getCharactersByStory = (storyId: string) =>
+  prisma.character.findMany({ where: { storyId }, orderBy: { createdAt: "asc" } });
+
+export const createCharacter = (storyId: string, data: CharacterData) =>
+  prisma.character.create({ data: { ...data, storyId } });
+
+export const updateCharacter = (id: string, data: CharacterData) =>
+  prisma.character.update({ where: { id }, data });
+
+export const deleteCharacter = (id: string) =>
+  prisma.character.delete({ where: { id } });
