@@ -15,7 +15,16 @@ export type CharacterData = {
 };
 
 export const getCharactersByStory = (storyId: string) =>
-  prisma.character.findMany({ where: { storyId }, orderBy: { createdAt: "asc" } });
+  prisma.character.findMany({
+    where: { storyId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      scenes: {
+        select: { id: true, title: true, order: true },
+        orderBy: { order: "asc" },
+      },
+    },
+  });
 
 export const createCharacter = (storyId: string, data: CharacterData) =>
   prisma.character.create({ data: { ...data, storyId } });

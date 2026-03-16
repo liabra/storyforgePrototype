@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import type { Story, Scene, Character, CharacterInput } from "./api";
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function displayName(c: Character) {
+function displayName(c: { name?: string; nickname?: string }) {
   return c.name || c.nickname || "Sans nom";
 }
 
-/** Gradient déterministe depuis le titre (couleur unique par scène) */
 function sceneGradient(title: string): string {
   let h = 0;
   for (let i = 0; i < title.length; i++) h = title.charCodeAt(i) + ((h << 5) - h);
@@ -20,7 +19,7 @@ function sceneGradient(title: string): string {
 const IS_PLACEHOLDER = (url?: string | null) =>
   !!url && url.startsWith("https://placehold.co");
 
-// ─── Component ──────────────────────────────────────────────────────────────
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function App() {
   // Stories
@@ -44,6 +43,10 @@ export default function App() {
   const [visibilityEdits, setVisibilityEdits] = useState<Record<string, { mode: string; lines: number }>>({});
   const [savingVisibility, setSavingVisibility] = useState<string | null>(null);
   const [spectatorView, setSpectatorView] = useState<Record<string, boolean>>({});
+
+  // Scene character selection
+  const [sceneCharEdits, setSceneCharEdits] = useState<Record<string, string[]>>({});
+  const [savingSceneChars, setSavingSceneChars] = useState<string | null>(null);
 
   // New scene form
   const [newScene, setNewScene] = useState({ title: "", content: "" });
@@ -78,6 +81,7 @@ export default function App() {
     setScenes(sceneData);
     setSceneContents(Object.fromEntries(sceneData.map((s) => [s.id, s.content ?? ""])));
     setVisibilityEdits(Object.fromEntries(sceneData.map((s) => [s.id, { mode: s.visibilityMode, lines: s.visibleLines }])));
+    setSceneCharEdits(Object.fromEntries(sceneData.map((s) => [s.id, (s.characters ?? []).map((c) => c.id)])));
     setSpectatorView({});
     setCharacters(charData);
     setExpandedCharId(null);
@@ -109,6 +113,7 @@ export default function App() {
       setScenes((prev) => [...prev, created]);
       setSceneContents((prev) => ({ ...prev, [created.id]: created.content ?? "" }));
       setVisibilityEdits((prev) => ({ ...prev, [created.id]: { mode: created.visibilityMode, lines: created.visibleLines } }));
+      setSceneCharEdits((prev) => ({ ...prev, [created.id]: [] }));
       setNewScene({ title: "", content: "" });
       setShowNewSceneForm(false);
     } finally {
@@ -116,16 +121,27 @@ export default function App() {
     }
   };
 
-  // ── Save scene content
+  // ── Save scene content (preserve characters)
   const handleSaveScene = async (scene: Scene) => {
     setSavingScene(scene.id);
     try {
       const updated = await api.scenes.update(scene.id, { content: sceneContents[scene.id] ?? "" });
-      setScenes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setScenes((prev) => prev.map((s) => s.id === updated.id ? { ...updated, characters: s.characters } : s));
       setSavedScenes((prev) => ({ ...prev, [scene.id]: true }));
       setTimeout(() => setSavedScenes((prev) => ({ ...prev, [scene.id]: false })), 2200);
     } finally {
       setSavingScene(null);
+    }
+  };
+
+  // ── Save scene characters
+  const handleSaveSceneCharacters = async (scene: Scene) => {
+    setSavingSceneChars(scene.id);
+    try {
+      const updated = await api.scenes.updateCharacters(scene.id, sceneCharEdits[scene.id] ?? []);
+      setScenes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    } finally {
+      setSavingSceneChars(null);
     }
   };
 
@@ -146,20 +162,20 @@ export default function App() {
     setGeneratingImage(scene.id);
     try {
       const updated = await api.scenes.generateImage(scene.id);
-      setScenes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setScenes((prev) => prev.map((s) => s.id === updated.id ? { ...updated, characters: s.characters } : s));
     } finally {
       setGeneratingImage(null);
     }
   };
 
-  // ── Save visibility
+  // ── Save visibility (preserve characters)
   const handleSaveVisibility = async (scene: Scene) => {
     const edit = visibilityEdits[scene.id];
     if (!edit) return;
     setSavingVisibility(scene.id);
     try {
       const updated = await api.scenes.update(scene.id, { visibilityMode: edit.mode, visibleLines: edit.lines });
-      setScenes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setScenes((prev) => prev.map((s) => s.id === updated.id ? { ...updated, characters: s.characters } : s));
     } finally {
       setSavingVisibility(null);
     }
@@ -187,7 +203,7 @@ export default function App() {
     setSavingChar(char.id);
     try {
       const updated = await api.characters.update(char.id, charEdits[char.id] ?? {});
-      setCharacters((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setCharacters((prev) => prev.map((c) => c.id === updated.id ? { ...updated, scenes: c.scenes } : c));
       setExpandedCharId(null);
     } finally {
       setSavingChar(null);
@@ -200,7 +216,7 @@ export default function App() {
     if (expandedCharId === id) setExpandedCharId(null);
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div style={s.page}>
@@ -222,11 +238,10 @@ export default function App() {
 
       <div style={s.layout}>
 
-        {/* ══ Sidebar — liste des histoires */}
+        {/* ══ Sidebar */}
         <aside style={s.sidebar}>
           <p style={s.sidebarLabel}>Vos histoires</p>
 
-          {/* Formulaire création */}
           {showStoryForm && (
             <form onSubmit={handleCreateStory} style={s.storyForm}>
               <input style={s.inputDark} placeholder="Titre de l'histoire" value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} required autoFocus />
@@ -264,13 +279,11 @@ export default function App() {
             </div>
           ) : (
             <>
-              {/* Story header */}
               <div style={s.storyHeader}>
                 <h2 style={s.storyTitle}>{selectedStory.title}</h2>
                 {selectedStory.description && <p style={s.storyDesc}>{selectedStory.description}</p>}
               </div>
 
-              {/* Tabs */}
               <div style={s.tabs}>
                 {(["scenes", "characters"] as const).map((tab) => (
                   <button key={tab} style={{ ...s.tab, ...(activeTab === tab ? s.tabActive : {}) }} onClick={() => setActiveTab(tab)}>
@@ -282,7 +295,6 @@ export default function App() {
               {/* ══ Scènes */}
               {activeTab === "scenes" && (
                 <div>
-                  {/* Bouton + Ajouter une scène */}
                   {!showNewSceneForm ? (
                     <button style={s.addSceneBtn} onClick={() => setShowNewSceneForm(true)}>
                       + Ajouter une scène
@@ -290,24 +302,10 @@ export default function App() {
                   ) : (
                     <form onSubmit={handleCreateScene} style={s.newSceneForm}>
                       <p style={s.newSceneFormTitle}>Nouvelle scène</p>
-                      <input
-                        style={s.inputDark}
-                        placeholder="Titre de la scène"
-                        value={newScene.title}
-                        onChange={(e) => setNewScene((p) => ({ ...p, title: e.target.value }))}
-                        required
-                        autoFocus
-                      />
-                      <textarea
-                        style={{ ...s.textareaDark, minHeight: 80 }}
-                        placeholder="Commence à écrire… (optionnel)"
-                        value={newScene.content}
-                        onChange={(e) => setNewScene((p) => ({ ...p, content: e.target.value }))}
-                      />
+                      <input style={s.inputDark} placeholder="Titre de la scène" value={newScene.title} onChange={(e) => setNewScene((p) => ({ ...p, title: e.target.value }))} required autoFocus />
+                      <textarea style={{ ...s.textareaDark, minHeight: 80 }} placeholder="Commence à écrire… (optionnel)" value={newScene.content} onChange={(e) => setNewScene((p) => ({ ...p, content: e.target.value }))} />
                       <div style={s.row}>
-                        <button style={s.btnAccent} type="submit" disabled={creatingScene}>
-                          {creatingScene ? "Création…" : "Créer la scène →"}
-                        </button>
+                        <button style={s.btnAccent} type="submit" disabled={creatingScene}>{creatingScene ? "Création…" : "Créer la scène →"}</button>
                         <button style={s.btnGhost} type="button" onClick={() => setShowNewSceneForm(false)}>Annuler</button>
                       </div>
                     </form>
@@ -320,11 +318,12 @@ export default function App() {
                       const isSpectator = spectatorView[scene.id] ?? false;
                       const vis = visibilityEdits[scene.id] ?? { mode: scene.visibilityMode, lines: scene.visibleLines };
                       const justSaved = savedScenes[scene.id];
+                      const sceneChars = scene.characters ?? [];
 
                       return (
                         <div key={scene.id} style={s.sceneCard}>
 
-                          {/* ── Card header */}
+                          {/* ── Header : numéro + titre + toggle vue */}
                           <div style={s.sceneCardHeader}>
                             <div style={s.sceneOrderBadge}>{scene.order}</div>
                             <h3 style={s.sceneCardTitle}>{scene.title}</h3>
@@ -336,20 +335,33 @@ export default function App() {
                             </button>
                           </div>
 
-                          {/* ── Image placeholder élégante ou vraie image */}
+                          {/* ── Personnages présents (toujours visible) */}
+                          {sceneChars.length > 0 && (
+                            <div style={s.sceneCharPills}>
+                              {sceneChars.map((c) => (
+                                <span key={c.id} style={s.sceneCharPill}>{displayName(c)}</span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* ── Image */}
                           {scene.imageUrl && IS_PLACEHOLDER(scene.imageUrl) && (
                             <div style={{ ...s.imagePlaceholder, background: sceneGradient(scene.title) }}>
                               <div style={s.imagePlaceholderGrid} />
                               <div style={s.imagePlaceholderBadge}>✦ Illustration générée</div>
                               <div style={s.imagePlaceholderTitle}>{scene.title}</div>
-                              <div style={s.imagePlaceholderSub}>En attente de l'API image</div>
+                              {sceneChars.length > 0 && (
+                                <div style={s.imagePlaceholderChars}>
+                                  {sceneChars.map((c) => displayName(c)).join(" · ")}
+                                </div>
+                              )}
                             </div>
                           )}
                           {scene.imageUrl && !IS_PLACEHOLDER(scene.imageUrl) && (
                             <img src={scene.imageUrl} alt={scene.title} style={s.sceneImage} />
                           )}
 
-                          {/* ── Suggestion IA */}
+                          {/* ── Suggestion */}
                           {suggestions[scene.id] && (
                             <div style={s.suggestion}>
                               <span style={s.suggestionIcon}>💡</span>
@@ -362,8 +374,7 @@ export default function App() {
                             <div style={s.spectatorBox}>
                               <div style={s.spectatorHeader}>
                                 <span style={s.spectatorLabel}>
-                                  👁 Vue spectateurs —{" "}
-                                  {vis.mode === "full" ? "texte complet" : `${vis.lines} dernières lignes`}
+                                  👁 Vue spectateurs — {vis.mode === "full" ? "texte complet" : `${vis.lines} dernières lignes`}
                                 </span>
                               </div>
                               {scene.visibleContent ? (
@@ -386,11 +397,7 @@ export default function App() {
 
                               {/* Actions */}
                               <div style={s.sceneActions}>
-                                <button
-                                  style={justSaved ? s.btnSaved : s.btnAccent}
-                                  onClick={() => handleSaveScene(scene)}
-                                  disabled={savingScene === scene.id}
-                                >
+                                <button style={justSaved ? s.btnSaved : s.btnAccent} onClick={() => handleSaveScene(scene)} disabled={savingScene === scene.id}>
                                   {savingScene === scene.id ? "Sauvegarde…" : justSaved ? "✓ Sauvegardé" : "Sauvegarder"}
                                 </button>
                                 <button style={s.btnGhost} onClick={() => handleSuggestIdea(scene)} disabled={suggestingScene === scene.id}>
@@ -401,6 +408,47 @@ export default function App() {
                                 </button>
                               </div>
 
+                              {/* Sélection des personnages présents */}
+                              <div style={s.charSelectSection}>
+                                <p style={s.charSelectLabel}>Personnages dans cette scène</p>
+                                {characters.length === 0 ? (
+                                  <p style={s.charSelectEmpty}>Aucun personnage dans cette histoire.</p>
+                                ) : (
+                                  <div style={s.charCheckList}>
+                                    {characters.map((char) => {
+                                      const checked = (sceneCharEdits[scene.id] ?? []).includes(char.id);
+                                      return (
+                                        <label key={char.id} style={{ ...s.charCheckItem, ...(checked ? s.charCheckItemActive : {}) }}>
+                                          <input
+                                            type="checkbox"
+                                            style={s.charCheckbox}
+                                            checked={checked}
+                                            onChange={() => {
+                                              setSceneCharEdits((prev) => {
+                                                const current = prev[scene.id] ?? [];
+                                                return {
+                                                  ...prev,
+                                                  [scene.id]: checked
+                                                    ? current.filter((id) => id !== char.id)
+                                                    : [...current, char.id],
+                                                };
+                                              });
+                                            }}
+                                          />
+                                          <span>{displayName(char)}</span>
+                                          {char.role && <span style={s.charCheckRole}>{char.role}</span>}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {characters.length > 0 && (
+                                  <button style={s.btnMicro} onClick={() => handleSaveSceneCharacters(scene)} disabled={savingSceneChars === scene.id}>
+                                    {savingSceneChars === scene.id ? "…" : "Enregistrer les personnages"}
+                                  </button>
+                                )}
+                              </div>
+
                               {/* Config visibilité */}
                               <div style={s.visBar}>
                                 <span style={s.visLabel}>Visible :</span>
@@ -409,12 +457,7 @@ export default function App() {
                                   <option value="full">Texte complet</option>
                                 </select>
                                 {vis.mode === "last_lines" && (
-                                  <input
-                                    type="number" min={1} max={20}
-                                    style={{ ...s.inputDark, maxWidth: 56, textAlign: "center", flex: "none" }}
-                                    value={vis.lines}
-                                    onChange={(e) => setVisibilityEdits((p) => ({ ...p, [scene.id]: { ...vis, lines: Number(e.target.value) || 1 } }))}
-                                  />
+                                  <input type="number" min={1} max={20} style={{ ...s.inputDark, maxWidth: 56, textAlign: "center", flex: "none" }} value={vis.lines} onChange={(e) => setVisibilityEdits((p) => ({ ...p, [scene.id]: { ...vis, lines: Number(e.target.value) || 1 } }))} />
                                 )}
                                 <button style={s.btnMicro} onClick={() => handleSaveVisibility(scene)} disabled={savingVisibility === scene.id}>
                                   {savingVisibility === scene.id ? "…" : "Appliquer"}
@@ -447,10 +490,16 @@ export default function App() {
                     {characters.map((char) => (
                       <div key={char.id} style={s.charCard}>
                         <div style={s.charCardHeader}>
-                          <div>
+                          <div style={s.charCardInfo}>
                             <span style={s.charName}>{displayName(char)}</span>
                             {char.role && <span style={s.roleBadge}>{char.role}</span>}
                             {char.faction && <span style={s.factionBadge}>{char.faction}</span>}
+                            {/* Badge scènes */}
+                            {char.scenes && char.scenes.length > 0 && (
+                              <span style={s.scenesBadge}>
+                                {char.scenes.length} scène{char.scenes.length > 1 ? "s" : ""}
+                              </span>
+                            )}
                           </div>
                           <div style={s.row}>
                             <button style={s.btnMicro} onClick={() => handleExpandChar(char)}>
@@ -459,7 +508,20 @@ export default function App() {
                             <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
                           </div>
                         </div>
+
                         {char.shortDescription && <p style={s.charDesc}>{char.shortDescription}</p>}
+
+                        {/* Scènes où ce personnage apparaît */}
+                        {char.scenes && char.scenes.length > 0 && (
+                          <div style={s.charAppearances}>
+                            <span style={s.charAppearancesLabel}>Apparaît dans :</span>
+                            {char.scenes.map((scene) => (
+                              <span key={scene.id} style={s.charScenePill}>
+                                {scene.order}. {scene.title}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Fiche complète */}
                         {expandedCharId === char.id && (
@@ -503,18 +565,15 @@ export default function App() {
   );
 }
 
-// ─── Design system ──────────────────────────────────────────────────────────
+// ─── Design system ────────────────────────────────────────────────────────────
 
 const C = {
   bg: "#07070d",
   surface: "#0e0e1a",
-  surfaceHover: "#13132080",
   elevated: "#16162a",
   border: "rgba(255,255,255,0.07)",
   borderActive: "#7c3aed",
   accent: "#7c3aed",
-  accentHover: "#6d28d9",
-  accentGlow: "0 0 0 3px rgba(124,58,237,0.25)",
   success: "#10b981",
   text: "#f0eeff",
   textSub: "#8b88b0",
@@ -524,100 +583,114 @@ const C = {
 };
 
 const s: Record<string, React.CSSProperties> = {
-  // Layout
   page: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter', system-ui, sans-serif" },
   layout: { display: "flex", gap: 0, maxWidth: 1100, margin: "0 auto", padding: "1.5rem 1.5rem 4rem" },
 
-  // Header
   header: { borderBottom: `1px solid ${C.border}`, padding: "0 1.5rem", position: "sticky", top: 0, background: "#07070ddd", backdropFilter: "blur(12px)", zIndex: 10 },
   headerInner: { maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 },
   logo: { fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.05em", color: "#c4b5fd" },
   logoSub: { fontSize: "0.75rem", color: C.textMuted, marginLeft: "0.75rem", letterSpacing: "0.08em", textTransform: "uppercase" },
-
-  // Error
   errorBanner: { background: C.dangerBg, color: C.danger, padding: "0.75rem 1.5rem", fontSize: "0.9rem", borderBottom: `1px solid ${C.danger}` },
 
-  // Sidebar
   sidebar: { width: 260, flexShrink: 0, paddingRight: "1.5rem", borderRight: `1px solid ${C.border}` },
   sidebarLabel: { fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.textMuted, marginBottom: "0.75rem", marginTop: "1.5rem" },
   mutedSide: { color: C.textMuted, fontSize: "0.85rem", lineHeight: 1.5 },
   storyList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 2 },
-  storyItem: { padding: "0.65rem 0.75rem", borderRadius: 6, cursor: "pointer", display: "flex", gap: "0.5rem", alignItems: "flex-start", transition: "background 0.15s", border: "1px solid transparent" },
+  storyItem: { padding: "0.65rem 0.75rem", borderRadius: 6, cursor: "pointer", display: "flex", gap: "0.5rem", alignItems: "flex-start", border: "1px solid transparent" },
   storyItemActive: { background: "rgba(124,58,237,0.12)", borderColor: C.borderActive },
   storyItemDot: { color: C.accent, fontSize: "0.7rem", marginTop: 3, flexShrink: 0 },
   storyItemTitle: { fontSize: "0.9rem", fontWeight: 500, color: C.text, lineHeight: 1.4 },
   storyItemDesc: { fontSize: "0.78rem", color: C.textMuted, marginTop: 2, lineHeight: 1.3 },
   storyForm: { display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: C.elevated, borderRadius: 8, border: `1px solid ${C.border}` },
 
-  // Main
   main: { flex: 1, paddingLeft: "1.75rem", minWidth: 0 },
   emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, gap: "1rem", opacity: 0.4 },
   emptyIcon: { fontSize: "2.5rem", color: C.accent },
   emptyText: { fontSize: "1rem", color: C.textSub },
 
-  // Story header
   storyHeader: { marginTop: "1.5rem", marginBottom: "1.25rem", paddingBottom: "1.25rem", borderBottom: `1px solid ${C.border}` },
   storyTitle: { fontSize: "1.5rem", fontWeight: 700, margin: 0, color: C.text, letterSpacing: "-0.01em" },
   storyDesc: { fontSize: "0.9rem", color: C.textSub, marginTop: "0.4rem" },
 
-  // Tabs
   tabs: { display: "flex", gap: "0.25rem", marginBottom: "1.5rem" },
   tab: { padding: "0.45rem 1.1rem", border: `1px solid ${C.border}`, borderRadius: 6, cursor: "pointer", background: "transparent", color: C.textSub, fontSize: "0.9rem" },
   tabActive: { borderColor: C.borderActive, background: "rgba(124,58,237,0.12)", color: "#c4b5fd", fontWeight: 600 },
 
-  // New scene form
-  addSceneBtn: { width: "100%", padding: "0.7rem", border: `1px dashed ${C.border}`, borderRadius: 8, background: "transparent", color: C.textSub, fontSize: "0.9rem", cursor: "pointer", marginBottom: "1.25rem", transition: "all 0.15s" },
+  addSceneBtn: { width: "100%", padding: "0.7rem", border: `1px dashed ${C.border}`, borderRadius: 8, background: "transparent", color: C.textSub, fontSize: "0.9rem", cursor: "pointer", marginBottom: "1.25rem" },
   newSceneForm: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1.25rem", marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
   newSceneFormTitle: { fontSize: "0.8rem", fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 },
   mutedCenter: { color: C.textMuted, fontSize: "0.9rem", textAlign: "center", padding: "2rem 0" },
 
-  // Scene grid + card
-  sceneGrid: { display: "flex", flexDirection: "column", gap: "1.25rem" },
-  sceneCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", gap: "0.9rem" },
+  // Scene card
+  sceneGrid: { display: "flex", flexDirection: "column", gap: "1.5rem" },
+  sceneCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", gap: "0.85rem" },
   sceneCardHeader: { display: "flex", alignItems: "center", gap: "0.75rem" },
   sceneOrderBadge: { width: 28, height: 28, borderRadius: "50%", background: "rgba(124,58,237,0.2)", border: `1px solid ${C.borderActive}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", fontWeight: 700, color: "#c4b5fd", flexShrink: 0 },
-  sceneCardTitle: { flex: 1, fontSize: "1rem", fontWeight: 600, margin: 0, color: C.text },
+  sceneCardTitle: { flex: 1, fontSize: "1.05rem", fontWeight: 600, margin: 0, color: C.text },
   viewBtn: { padding: "0.3rem 0.7rem", fontSize: "0.8rem", border: `1px solid ${C.border}`, borderRadius: 5, cursor: "pointer", background: "transparent", color: C.textSub, whiteSpace: "nowrap" as const },
   viewBtnActive: { padding: "0.3rem 0.7rem", fontSize: "0.8rem", border: `1px solid ${C.borderActive}`, borderRadius: 5, cursor: "pointer", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", whiteSpace: "nowrap" as const },
 
-  // Image placeholder cinématique
-  imagePlaceholder: { position: "relative", borderRadius: 8, height: 180, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5rem" },
+  // Personnages pills dans la scène
+  sceneCharPills: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem" },
+  sceneCharPill: { fontSize: "0.78rem", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 20, padding: "0.2rem 0.6rem" },
+
+  // Image
+  imagePlaceholder: { position: "relative", borderRadius: 8, height: 180, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.4rem" },
   imagePlaceholderGrid: { position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" },
   imagePlaceholderBadge: { position: "relative", fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.07)", padding: "0.25rem 0.7rem", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)" },
   imagePlaceholderTitle: { position: "relative", fontSize: "1.15rem", fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center" as const, padding: "0 1rem", textShadow: "0 2px 12px rgba(0,0,0,0.8)" },
-  imagePlaceholderSub: { position: "relative", fontSize: "0.75rem", color: "rgba(255,255,255,0.35)" },
+  imagePlaceholderChars: { position: "relative", fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.04em" },
   sceneImage: { width: "100%", borderRadius: 8, display: "block" },
 
   // Suggestion
   suggestion: { background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "0.65rem 1rem", fontSize: "0.9rem", color: "#fde68a", display: "flex", gap: "0.5rem", alignItems: "flex-start" },
   suggestionIcon: { flexShrink: 0 },
 
-  // Spectator box
+  // Spectator
   spectatorBox: { background: "#030308", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 8, overflow: "hidden" },
   spectatorHeader: { padding: "0.5rem 0.9rem", borderBottom: "1px solid rgba(124,58,237,0.2)", background: "rgba(124,58,237,0.08)" },
   spectatorLabel: { fontSize: "0.75rem", fontWeight: 600, color: "#a78bfa", letterSpacing: "0.06em", textTransform: "uppercase" as const },
   spectatorText: { padding: "1rem", margin: 0, color: "#d4d0f5", fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.95rem", lineHeight: 1.8, whiteSpace: "pre-wrap" as const },
   spectatorEmpty: { padding: "1.25rem", color: C.textMuted, fontSize: "0.85rem", fontStyle: "italic", margin: 0 },
 
-  // Textarea (auteur)
-  textareaDark: { width: "100%", minHeight: 140, padding: "0.75rem", fontSize: "0.95rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.7, fontFamily: "inherit", outline: "none" },
+  // Textarea
+  textareaDark: { width: "100%", minHeight: 140, padding: "0.75rem", fontSize: "0.95rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.7, fontFamily: "inherit" },
 
   // Scene actions
   sceneActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" as const },
+
+  // Character selection in scene
+  charSelectSection: { borderTop: `1px dashed ${C.border}`, paddingTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.6rem" },
+  charSelectLabel: { fontSize: "0.75rem", fontWeight: 600, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.08em", margin: 0 },
+  charSelectEmpty: { fontSize: "0.85rem", color: C.textMuted, margin: 0 },
+  charCheckList: { display: "flex", flexWrap: "wrap" as const, gap: "0.4rem" },
+  charCheckItem: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: "0.85rem", cursor: "pointer", color: C.textSub, userSelect: "none" as const },
+  charCheckItemActive: { borderColor: C.borderActive, background: "rgba(124,58,237,0.12)", color: "#c4b5fd" },
+  charCheckbox: { width: 13, height: 13, accentColor: C.accent, cursor: "pointer", flexShrink: 0 },
+  charCheckRole: { fontSize: "0.72rem", color: C.textMuted, marginLeft: "0.2rem" },
 
   // Visibility bar
   visBar: { display: "flex", alignItems: "center", gap: "0.5rem", paddingTop: "0.75rem", borderTop: `1px dashed ${C.border}`, flexWrap: "wrap" as const },
   visLabel: { fontSize: "0.78rem", color: C.textMuted, whiteSpace: "nowrap" as const },
 
-  // Characters
+  // Characters tab
   newCharForm: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", marginBottom: "1.5rem" },
   charGrid: { display: "flex", flexDirection: "column", gap: "0.75rem" },
   charCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" },
   charCardHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" as const },
+  charCardInfo: { display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" as const },
   charName: { fontSize: "1rem", fontWeight: 600, color: C.text },
   charDesc: { fontSize: "0.85rem", color: C.textSub, margin: 0 },
-  roleBadge: { marginLeft: "0.5rem", background: "rgba(124,58,237,0.2)", color: "#c4b5fd", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(124,58,237,0.3)" },
-  factionBadge: { marginLeft: "0.35rem", background: "rgba(16,185,129,0.12)", color: "#6ee7b7", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(16,185,129,0.25)" },
+  roleBadge: { background: "rgba(124,58,237,0.2)", color: "#c4b5fd", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(124,58,237,0.3)" },
+  factionBadge: { background: "rgba(16,185,129,0.12)", color: "#6ee7b7", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(16,185,129,0.25)" },
+  scenesBadge: { background: "rgba(251,191,36,0.1)", color: "#fbbf24", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(251,191,36,0.25)" },
+
+  // Character appearances (scenes list)
+  charAppearances: { display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" as const },
+  charAppearancesLabel: { fontSize: "0.75rem", color: C.textMuted, whiteSpace: "nowrap" as const },
+  charScenePill: { fontSize: "0.78rem", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 4, padding: "0.2rem 0.55rem" },
+
+  // Character sheet
   charSheet: { marginTop: "0.75rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem", paddingTop: "0.75rem", borderTop: `1px solid ${C.border}` },
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.25rem" },
   fieldLabel: { fontSize: "0.75rem", color: C.textMuted, fontWeight: 500 },
@@ -631,6 +704,6 @@ const s: Record<string, React.CSSProperties> = {
   btnDanger: { padding: "0.3rem 0.6rem", fontSize: "0.82rem", cursor: "pointer", background: C.dangerBg, color: C.danger, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: 5 },
 
   // Inputs
-  inputDark: { padding: "0.5rem 0.75rem", fontSize: "0.9rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, flex: 1, outline: "none" },
+  inputDark: { padding: "0.5rem 0.75rem", fontSize: "0.9rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, flex: 1 },
   selectDark: { padding: "0.4rem 0.6rem", fontSize: "0.85rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 5, color: C.textSub },
 };

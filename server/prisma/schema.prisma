@@ -32,20 +32,22 @@ model Character {
   visualNotes      String?
   storyId          String
   story            Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  scenes           Scene[]  @relation("SceneCharacters")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
 
 model Scene {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   title          String
   content        String?
   imageUrl       String?
-  order          Int      @default(0)
-  visibilityMode String   @default("last_lines")
-  visibleLines   Int      @default(3)
+  order          Int         @default(0)
+  visibilityMode String      @default("last_lines")
+  visibleLines   Int         @default(3)
   storyId        String
-  story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  story          Story       @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  characters     Character[] @relation("SceneCharacters")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 }

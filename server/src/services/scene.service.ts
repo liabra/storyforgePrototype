@@ -11,15 +11,20 @@ export function applyVisibility(
 ): string | null {
   if (!content) return null;
   if (mode === "full") return content;
-  // "last_lines" : retourne les N dernières lignes
   const lines = content.split("\n");
   return lines.slice(-visibleLines).join("\n");
 }
+
+// Sélecteur minimal pour les personnages d'une scène (évite de surcharger la réponse)
+const characterSelect = {
+  select: { id: true, name: true, nickname: true },
+} as const;
 
 export const getScenesByStory = async (storyId: string) => {
   const scenes = await prisma.scene.findMany({
     where: { storyId },
     orderBy: { order: "asc" },
+    include: { characters: characterSelect },
   });
   return scenes.map((scene) => ({
     ...scene,
@@ -31,12 +36,21 @@ export const getScenesByStory = async (storyId: string) => {
   }));
 };
 
-export const createScene = (
+export const createScene = async (
   storyId: string,
   data: { title: string; content?: string; order?: number }
-) => prisma.scene.create({ data: { ...data, storyId } });
+) => {
+  const scene = await prisma.scene.create({
+    data: { ...data, storyId },
+    include: { characters: characterSelect },
+  });
+  return {
+    ...scene,
+    visibleContent: applyVisibility(scene.content, scene.visibilityMode, scene.visibleLines),
+  };
+};
 
-export const updateScene = (
+export const updateScene = async (
   id: string,
   data: {
     title?: string;
@@ -46,20 +60,56 @@ export const updateScene = (
     visibilityMode?: string;
     visibleLines?: number;
   }
-) => prisma.scene.update({ where: { id }, data });
+) => {
+  const scene = await prisma.scene.update({
+    where: { id },
+    data,
+    include: { characters: characterSelect },
+  });
+  return {
+    ...scene,
+    visibleContent: applyVisibility(scene.content, scene.visibilityMode, scene.visibleLines),
+  };
+};
 
 export const deleteScene = (id: string) =>
   prisma.scene.delete({ where: { id } });
 
-// Génère une image pour la scène via image.service (provider sélectionné par IMAGE_PROVIDER).
-// Retourne la scène mise à jour avec l'imageUrl.
+// Met à jour les personnages présents dans une scène (remplace la liste entière).
+export const updateSceneCharacters = async (
+  id: string,
+  characterIds: string[]
+) => {
+  const scene = await prisma.scene.update({
+    where: { id },
+    data: {
+      characters: {
+        set: characterIds.map((cid) => ({ id: cid })),
+      },
+    },
+    include: { characters: characterSelect },
+  });
+  return {
+    ...scene,
+    visibleContent: applyVisibility(
+      scene.content,
+      scene.visibilityMode,
+      scene.visibleLines
+    ),
+  };
+};
+
+// Génère une image en utilisant les personnages présents dans la scène.
 export const generateSceneImage = async (id: string) => {
   const scene = await prisma.scene.findUniqueOrThrow({
     where: { id },
-    include: { story: { include: { characters: true } } },
+    include: {
+      story: true,
+      characters: true,
+    },
   });
 
-  const characterNames = scene.story.characters
+  const characterNames = scene.characters
     .map((c) => c.name || c.nickname)
     .filter((n): n is string => !!n);
 

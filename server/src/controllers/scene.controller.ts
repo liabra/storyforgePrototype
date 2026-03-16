@@ -38,6 +38,16 @@ export const generateImage = async (req: Request, res: Response) => {
   return res.json(scene);
 };
 
+export const updateCharacters = async (req: Request, res: Response) => {
+  const sceneId = getSingleParam(req.params.id);
+  const { characterIds } = req.body;
+  if (!Array.isArray(characterIds)) {
+    return res.status(400).json({ error: "characterIds must be an array" });
+  }
+  const scene = await sceneService.updateSceneCharacters(sceneId, characterIds);
+  return res.json(scene);
+};
+
 export const suggestIdea = async (req: Request, res: Response) => {
   const { storyId, sceneTitle } = req.body;
   if (!storyId) return res.status(400).json({ error: "storyId is required" });

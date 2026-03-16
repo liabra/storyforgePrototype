@@ -6,6 +6,20 @@ export interface Story {
   description?: string;
 }
 
+// Référence légère d'un personnage embarquée dans une scène
+export interface CharacterRef {
+  id: string;
+  name?: string;
+  nickname?: string;
+}
+
+// Référence légère d'une scène embarquée dans un personnage
+export interface SceneRef {
+  id: string;
+  title: string;
+  order: number;
+}
+
 export interface Scene {
   id: string;
   title: string;
@@ -16,6 +30,7 @@ export interface Scene {
   visibilityMode: string;
   visibleLines: number;
   visibleContent: string | null;
+  characters: CharacterRef[];
 }
 
 export interface Character {
@@ -32,9 +47,10 @@ export interface Character {
   traits?: string;
   faction?: string;
   visualNotes?: string;
+  scenes?: SceneRef[];
 }
 
-export type CharacterInput = Omit<Partial<Character>, "id" | "storyId">;
+export type CharacterInput = Omit<Partial<Character>, "id" | "storyId" | "scenes">;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -63,6 +79,11 @@ export const api = {
       request<Scene>(`/scenes/${sceneId}`, {
         method: "PUT",
         body: JSON.stringify(data),
+      }),
+    updateCharacters: (sceneId: string, characterIds: string[]) =>
+      request<Scene>(`/scenes/${sceneId}/characters`, {
+        method: "PUT",
+        body: JSON.stringify({ characterIds }),
       }),
     suggestIdea: (storyId: string, sceneTitle?: string) =>
       request<{ idea: string }>("/scenes/suggest-idea", {
