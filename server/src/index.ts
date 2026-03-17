@@ -5,7 +5,13 @@ import apiRoutes from "./routes/index";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://front-storyforge.up.railway.app"
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {
