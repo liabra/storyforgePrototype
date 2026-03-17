@@ -6,7 +6,6 @@ import type {
   Scene,
   Contribution,
   Character,
-  CharacterRef,
   CharacterInput,
 } from "./api";
 
@@ -344,14 +343,6 @@ export default function App() {
 
   const totalContribs = (ch: Chapter) =>
     ch.scenes.reduce((sum, sc) => sum + sc._count.contributions, 0);
-
-  const sceneCharsFromChapter = (sceneId: string): CharacterRef[] => {
-    for (const ch of chapters) {
-      const sc = ch.scenes.find((s) => s.id === sceneId);
-      if (sc) return sc.characters;
-    }
-    return [];
-  };
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -945,7 +936,7 @@ const s: Record<string, React.CSSProperties> = {
   layout: { display: "flex", maxWidth: 1160, margin: "0 auto", padding: "0 1rem 4rem", gap: 0, minHeight: "calc(100vh - 52px)" },
 
   // Sidebar
-  sidebar: { width: 240, flexShrink: 0, paddingRight: "1.5rem", paddingTop: "1.5rem", borderRight: `1px solid ${C.border}`, "@media (max-width: 768px)": {} },
+  sidebar: { width: 240, flexShrink: 0, paddingRight: "1.5rem", paddingTop: "1.5rem", borderRight: `1px solid ${C.border}` },
   sidebarOpen: { position: "fixed" as const, top: 52, left: 0, bottom: 0, zIndex: 30, background: C.bg, width: 260, padding: "1rem", borderRight: `1px solid ${C.borderMid}`, overflowY: "auto" as const },
   sidebarOverlay: { position: "fixed" as const, inset: 0, zIndex: 29, background: "rgba(0,0,0,0.5)" },
   sidebarHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" },
