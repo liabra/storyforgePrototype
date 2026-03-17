@@ -797,8 +797,15 @@ export default function App() {
                 <div ref={contribEndRef} />
               </div>
 
-              {/* ── Zone d'écriture (auteur seulement) */}
-              {!spectatorView && (
+              {/* ── Scène fermée */}
+              {selectedScene.status === "CLOSED" && (
+                <div style={s.closedBanner}>
+                  🔒 Cette scène est fermée — les contributions ne sont plus acceptées.
+                </div>
+              )}
+
+              {/* ── Zone d'écriture (auteur, scène active seulement) */}
+              {!spectatorView && selectedScene.status !== "CLOSED" && (
                 <div style={s.writeArea}>
                   {suggestion && (
                     <div style={s.suggestion}>
@@ -1067,6 +1074,7 @@ const s: Record<string, React.CSSProperties> = {
   suggestionClose: { background: "transparent", border: "none", color: "rgba(253,230,138,0.5)", cursor: "pointer", fontSize: "0.85rem", flexShrink: 0 },
 
   // Settings box
+  closedBanner: { background: C.elevated, border: `1px solid ${C.borderMid}`, borderRadius: 8, padding: "0.75rem 1rem", fontSize: "0.88rem", color: C.textMuted, textAlign: "center" as const },
   settingsBox: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
   settingsTitle: { fontSize: "0.75rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 },
   settingsRow: { display: "flex", alignItems: "center", gap: "0.75rem" },
