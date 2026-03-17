@@ -7,18 +7,69 @@ datasource db {
   provider = "postgresql"
 }
 
+// Préparé pour les comptes joueurs — non utilisé dans l'auth pour l'instant
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  characters   Character[]
+}
+
 model Story {
   id          String      @id @default(cuid())
   title       String
   description String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  chapters    Chapter[]
   characters  Character[]
+}
+
+model Chapter {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  order       Int      @default(0)
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
   scenes      Scene[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Scene {
+  id             String         @id @default(cuid())
+  title          String
+  description    String?
+  imageUrl       String?
+  order          Int            @default(0)
+  status         String         @default("ACTIVE")
+  visibilityMode String         @default("last")
+  visibleCount   Int            @default(3)
+  chapterId      String
+  chapter        Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  characters     Character[]    @relation("SceneCharacters")
+  contributions  Contribution[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Contribution {
+  id          String     @id @default(cuid())
+  content     String
+  sceneId     String
+  scene       Scene      @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  characterId String?
+  character   Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  modStatus   String     @default("OK")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 model Character {
-  id               String   @id @default(cuid())
+  id               String         @id @default(cuid())
   name             String?
   nickname         String?
   role             String?
@@ -30,24 +81,13 @@ model Character {
   traits           String?
   faction          String?
   visualNotes      String?
+  avatarUrl        String?
   storyId          String
-  story            Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  scenes           Scene[]  @relation("SceneCharacters")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-}
-
-model Scene {
-  id             String      @id @default(cuid())
-  title          String
-  content        String?
-  imageUrl       String?
-  order          Int         @default(0)
-  visibilityMode String      @default("last_lines")
-  visibleLines   Int         @default(3)
-  storyId        String
-  story          Story       @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  characters     Character[] @relation("SceneCharacters")
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  story            Story          @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  scenes           Scene[]        @relation("SceneCharacters")
+  contributions    Contribution[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 }

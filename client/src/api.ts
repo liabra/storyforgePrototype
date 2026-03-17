@@ -6,31 +6,60 @@ export interface Story {
   description?: string;
 }
 
-// Référence légère d'un personnage embarquée dans une scène
 export interface CharacterRef {
   id: string;
   name?: string;
   nickname?: string;
 }
 
-// Référence légère d'une scène embarquée dans un personnage
+export interface CharacterFull extends CharacterRef {
+  avatarUrl?: string;
+}
+
 export interface SceneRef {
   id: string;
   title: string;
   order: number;
+  status: string;
+}
+
+export interface ChapterSceneItem extends SceneRef {
+  _count: { contributions: number };
+  characters: CharacterRef[];
+}
+
+export interface Chapter {
+  id: string;
+  title: string;
+  description?: string;
+  order: number;
+  storyId: string;
+  scenes: ChapterSceneItem[];
+}
+
+export interface Contribution {
+  id: string;
+  content: string;
+  sceneId: string;
+  characterId?: string | null;
+  character?: CharacterFull | null;
+  modStatus: string;
+  createdAt: string;
 }
 
 export interface Scene {
   id: string;
   title: string;
-  content?: string;
+  description?: string;
   imageUrl?: string;
   order: number;
-  storyId: string;
+  status: string;
   visibilityMode: string;
-  visibleLines: number;
-  visibleContent: string | null;
+  visibleCount: number;
+  chapterId: string;
   characters: CharacterRef[];
+  contributions?: Contribution[];
+  _count?: { contributions: number };
 }
 
 export interface Character {
@@ -47,6 +76,7 @@ export interface Character {
   traits?: string;
   faction?: string;
   visualNotes?: string;
+  avatarUrl?: string;
   scenes?: SceneRef[];
 }
 
@@ -68,18 +98,27 @@ export const api = {
     create: (data: { title: string; description?: string }) =>
       request<Story>("/stories", { method: "POST", body: JSON.stringify(data) }),
   },
+  chapters: {
+    list: (storyId: string) => request<Chapter[]>(`/stories/${storyId}/chapters`),
+    create: (storyId: string, data: { title: string; description?: string; order?: number }) =>
+      request<Chapter>(`/stories/${storyId}/chapters`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: { title?: string; description?: string; order?: number }) =>
+      request<Chapter>(`/chapters/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/chapters/${id}`, { method: "DELETE" }),
+  },
   scenes: {
-    list: (storyId: string) => request<Scene[]>(`/stories/${storyId}/scenes`),
-    create: (storyId: string, data: { title: string; content?: string; order?: number }) =>
-      request<Scene>(`/stories/${storyId}/scenes`, {
+    list: (chapterId: string) => request<Scene[]>(`/chapters/${chapterId}/scenes`),
+    get: (sceneId: string) => request<Scene>(`/scenes/${sceneId}`),
+    create: (chapterId: string, data: { title: string; description?: string; order?: number }) =>
+      request<Scene>(`/chapters/${chapterId}/scenes`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
     update: (sceneId: string, data: Partial<Scene>) =>
-      request<Scene>(`/scenes/${sceneId}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }),
+      request<Scene>(`/scenes/${sceneId}`, { method: "PUT", body: JSON.stringify(data) }),
     updateCharacters: (sceneId: string, characterIds: string[]) =>
       request<Scene>(`/scenes/${sceneId}/characters`, {
         method: "PUT",
@@ -93,20 +132,23 @@ export const api = {
     generateImage: (sceneId: string) =>
       request<Scene>(`/scenes/${sceneId}/generate-image`, { method: "POST" }),
   },
+  contributions: {
+    create: (sceneId: string, data: { content: string; characterId?: string }) =>
+      request<Contribution>(`/scenes/${sceneId}/contributions`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => request<void>(`/contributions/${id}`, { method: "DELETE" }),
+  },
   characters: {
-    list: (storyId: string) =>
-      request<Character[]>(`/stories/${storyId}/characters`),
+    list: (storyId: string) => request<Character[]>(`/stories/${storyId}/characters`),
     create: (storyId: string, data: CharacterInput) =>
       request<Character>(`/stories/${storyId}/characters`, {
         method: "POST",
         body: JSON.stringify(data),
       }),
     update: (id: string, data: CharacterInput) =>
-      request<Character>(`/characters/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }),
-    delete: (id: string) =>
-      request<void>(`/characters/${id}`, { method: "DELETE" }),
+      request<Character>(`/characters/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/characters/${id}`, { method: "DELETE" }),
   },
 };

@@ -6,45 +6,51 @@ const getSingleParam = (value: string | string[] | undefined): string => {
   return Array.isArray(value) ? value[0] : value;
 };
 
-export const getByStory = async (req: Request, res: Response) => {
-  const storyId = getSingleParam(req.params.storyId);
-  const scenes = await sceneService.getScenesByStory(storyId);
+export const getByChapter = async (req: Request, res: Response) => {
+  const chapterId = getSingleParam(req.params.chapterId);
+  const scenes = await sceneService.getScenesByChapter(chapterId);
   return res.json(scenes);
 };
 
+export const getOne = async (req: Request, res: Response) => {
+  const id = getSingleParam(req.params.id);
+  const scene = await sceneService.getSceneWithContributions(id);
+  return res.json(scene);
+};
+
 export const create = async (req: Request, res: Response) => {
-  const storyId = getSingleParam(req.params.storyId);
-  const { title, content, order } = req.body;
+  const chapterId = getSingleParam(req.params.chapterId);
+  const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
-  const scene = await sceneService.createScene(storyId, { title, content, order });
+  const scene = await sceneService.createScene(chapterId, { title, description, order });
   return res.status(201).json(scene);
 };
 
 export const update = async (req: Request, res: Response) => {
-  const sceneId = getSingleParam(req.params.id);
-  const scene = await sceneService.updateScene(sceneId, req.body);
+  const id = getSingleParam(req.params.id);
+  const scene = await sceneService.updateScene(id, req.body);
   return res.json(scene);
 };
 
 export const remove = async (req: Request, res: Response) => {
-  const sceneId = getSingleParam(req.params.id);
-  await sceneService.deleteScene(sceneId);
+  const id = getSingleParam(req.params.id);
+  await sceneService.deleteScene(id);
   return res.status(204).send();
 };
 
 export const generateImage = async (req: Request, res: Response) => {
-  const sceneId = getSingleParam(req.params.id);
-  const scene = await sceneService.generateSceneImage(sceneId);
+  const id = getSingleParam(req.params.id);
+  const scene = await sceneService.generateSceneImage(id);
   return res.json(scene);
 };
 
 export const updateCharacters = async (req: Request, res: Response) => {
-  const sceneId = getSingleParam(req.params.id);
+  const id = getSingleParam(req.params.id);
   const { characterIds } = req.body;
   if (!Array.isArray(characterIds)) {
     return res.status(400).json({ error: "characterIds must be an array" });
   }
-  const scene = await sceneService.updateSceneCharacters(sceneId, characterIds);
+  const scene = await sceneService.updateSceneCharacters(id, characterIds);
   return res.json(scene);
 };
 

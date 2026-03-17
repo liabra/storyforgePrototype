@@ -1,12 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: #07070d;
-  color: #f0eeff;
+  background: #0d0d18;
+  color: #ece8ff;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 #root {
@@ -14,7 +18,7 @@ body {
   min-height: 100svh;
 }
 
-h1, h2, h3, h4 { margin: 0; font-weight: 600; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.25; }
 p { margin: 0; }
 ul, li { margin: 0; padding: 0; }
 
@@ -26,15 +30,23 @@ input, textarea, select, button {
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: rgba(124, 58, 237, 0.6) !important;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
 }
 
 textarea { resize: vertical; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:not(:disabled):hover { filter: brightness(1.08); }
 
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-button:not(:disabled):hover { filter: brightness(1.1); }
-
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+/* Mobile : sidebar masquée par défaut, visible uniquement en mode overlay */
+@media (max-width: 720px) {
+  .app-sidebar:not(.is-open) {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+}

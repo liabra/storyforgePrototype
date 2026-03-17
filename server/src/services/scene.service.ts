@@ -2,109 +2,90 @@ import OpenAI from "openai";
 import prisma from "../prisma/client";
 import { generateImage } from "./image.service";
 
-// Calcule le texte visible selon le mode de visibilité.
-// Fonction pure — n'accède pas à la base.
-export function applyVisibility(
-  content: string | null,
-  mode: string,
-  visibleLines: number
-): string | null {
-  if (!content) return null;
-  if (mode === "full") return content;
-  const lines = content.split("\n");
-  return lines.slice(-visibleLines).join("\n");
-}
-
-// Sélecteur minimal pour les personnages d'une scène (évite de surcharger la réponse)
 const characterSelect = {
   select: { id: true, name: true, nickname: true },
 } as const;
 
-export const getScenesByStory = async (storyId: string) => {
-  const scenes = await prisma.scene.findMany({
-    where: { storyId },
+const charFullSelect = {
+  select: { id: true, name: true, nickname: true, avatarUrl: true },
+} as const;
+
+export const getScenesByChapter = (chapterId: string) =>
+  prisma.scene.findMany({
+    where: { chapterId },
     orderBy: { order: "asc" },
-    include: { characters: characterSelect },
+    include: {
+      characters: characterSelect,
+      _count: { select: { contributions: true } },
+    },
   });
-  return scenes.map((scene) => ({
-    ...scene,
-    visibleContent: applyVisibility(
-      scene.content,
-      scene.visibilityMode,
-      scene.visibleLines
-    ),
-  }));
-};
+
+export const getSceneWithContributions = (sceneId: string) =>
+  prisma.scene.findUniqueOrThrow({
+    where: { id: sceneId },
+    include: {
+      characters: characterSelect,
+      contributions: {
+        where: { modStatus: { not: "BLOCKED" } },
+        orderBy: { createdAt: "asc" },
+        include: { character: charFullSelect },
+      },
+    },
+  });
 
 export const createScene = async (
-  storyId: string,
-  data: { title: string; content?: string; order?: number }
+  chapterId: string,
+  data: { title: string; description?: string; order?: number }
 ) => {
   const scene = await prisma.scene.create({
-    data: { ...data, storyId },
-    include: { characters: characterSelect },
+    data: { ...data, chapterId },
+    include: {
+      characters: characterSelect,
+      _count: { select: { contributions: true } },
+    },
   });
-  return {
-    ...scene,
-    visibleContent: applyVisibility(scene.content, scene.visibilityMode, scene.visibleLines),
-  };
+  return scene;
 };
 
-export const updateScene = async (
+export const updateScene = (
   id: string,
   data: {
     title?: string;
-    content?: string;
+    description?: string;
     order?: number;
     imageUrl?: string;
+    status?: string;
     visibilityMode?: string;
-    visibleLines?: number;
+    visibleCount?: number;
   }
-) => {
-  const scene = await prisma.scene.update({
+) =>
+  prisma.scene.update({
     where: { id },
     data,
-    include: { characters: characterSelect },
+    include: {
+      characters: characterSelect,
+      _count: { select: { contributions: true } },
+    },
   });
-  return {
-    ...scene,
-    visibleContent: applyVisibility(scene.content, scene.visibilityMode, scene.visibleLines),
-  };
-};
 
 export const deleteScene = (id: string) =>
   prisma.scene.delete({ where: { id } });
 
-// Met à jour les personnages présents dans une scène (remplace la liste entière).
-export const updateSceneCharacters = async (
-  id: string,
-  characterIds: string[]
-) => {
-  const scene = await prisma.scene.update({
+export const updateSceneCharacters = (id: string, characterIds: string[]) =>
+  prisma.scene.update({
     where: { id },
-    data: {
-      characters: {
-        set: characterIds.map((cid) => ({ id: cid })),
-      },
+    data: { characters: { set: characterIds.map((cid) => ({ id: cid })) } },
+    include: {
+      characters: characterSelect,
+      _count: { select: { contributions: true } },
     },
-    include: { characters: characterSelect },
   });
-  return {
-    ...scene,
-    visibleContent: applyVisibility(
-      scene.content,
-      scene.visibilityMode,
-      scene.visibleLines
-    ),
-  };
-};
 
-// Génère une image en utilisant les personnages présents dans la scène.
 export const generateSceneImage = async (id: string) => {
   const scene = await prisma.scene.findUniqueOrThrow({
     where: { id },
     include: {
-      story: true,
+      chapter: { include: { story: true } },
       characters: true,
     },
   });
@@ -115,23 +96,34 @@ export const generateSceneImage = async (id: string) => {
 
   const imageUrl = await generateImage({
     sceneTitle: scene.title,
-    storyTitle: scene.story.title,
-    content: scene.content,
+    storyTitle: scene.chapter.story.title,
+    content: scene.description,
     characterNames,
   });
 
-  return prisma.scene.update({ where: { id }, data: { imageUrl } });
+  return prisma.scene.update({
+    where: { id },
+    data: { imageUrl },
+    include: {
+      characters: characterSelect,
+      _count: { select: { contributions: true } },
+    },
+  });
 };
 
-// Suggère une courte idée de scène pour inspirer le joueur.
-// Ne modifie pas la base — retourne seulement { idea: string }.
 export const suggestSceneIdea = async (
   storyId: string,
   sceneTitle?: string
 ): Promise<string> => {
   const story = await prisma.story.findUniqueOrThrow({
     where: { id: storyId },
-    include: { characters: true, scenes: { orderBy: { order: "asc" } } },
+    include: {
+      characters: true,
+      chapters: {
+        orderBy: { order: "asc" },
+        include: { scenes: { orderBy: { order: "asc" } } },
+      },
+    },
   });
 
   const charactersList = story.characters
@@ -139,12 +131,10 @@ export const suggestSceneIdea = async (
     .filter(Boolean)
     .join(", ");
 
-  const scenesList = story.scenes
-    .map((s) => `"${s.title}"`)
-    .join(", ");
+  const allScenes = story.chapters.flatMap((ch) => ch.scenes);
+  const scenesList = allScenes.map((s) => `"${s.title}"`).join(", ");
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -161,7 +151,7 @@ export const suggestSceneIdea = async (
           charactersList ? `Personnages : ${charactersList}` : "",
           scenesList ? `Scènes existantes : ${scenesList}` : "",
           sceneTitle ? `Scène en cours : "${sceneTitle}"` : "",
-          "\nSuggère une idée courte pour inspirer l'auteur dans l'écriture de sa prochaine scène.",
+          "\nSuggère une idée courte pour inspirer l'auteur.",
         ]
           .filter(Boolean)
           .join("\n"),

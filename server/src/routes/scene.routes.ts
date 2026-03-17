@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
-  getByStory,
+  getByChapter,
+  getOne,
   create,
   update,
   updateCharacters,
@@ -11,11 +12,12 @@ import {
 
 const router = Router();
 
-// Routes littérales avant toute route avec :id
+// Literal avant toute route avec :id
 router.post("/scenes/suggest-idea", suggestIdea);
 
-router.get("/stories/:storyId/scenes", getByStory);
-router.post("/stories/:storyId/scenes", create);
+router.get("/chapters/:chapterId/scenes", getByChapter);
+router.get("/scenes/:id", getOne);
+router.post("/chapters/:chapterId/scenes", create);
 router.put("/scenes/:id", update);
 router.put("/scenes/:id/characters", updateCharacters);
 router.delete("/scenes/:id", remove);

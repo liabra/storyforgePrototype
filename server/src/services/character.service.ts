@@ -20,7 +20,7 @@ export const getCharactersByStory = (storyId: string) =>
     orderBy: { createdAt: "asc" },
     include: {
       scenes: {
-        select: { id: true, title: true, order: true },
+        select: { id: true, title: true, order: true, status: true },
         orderBy: { order: "asc" },
       },
     },

@@ -1,57 +1,98 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import type { Story, Scene, Character, CharacterInput } from "./api";
+import type {
+  Story,
+  Chapter,
+  Scene,
+  Contribution,
+  Character,
+  CharacterRef,
+  CharacterInput,
+} from "./api";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function displayName(c: { name?: string; nickname?: string }) {
+function displayName(c: { name?: string; nickname?: string } | null | undefined) {
+  if (!c) return "Anonyme";
   return c.name || c.nickname || "Sans nom";
+}
+
+function initial(c: { name?: string; nickname?: string } | null | undefined) {
+  const n = displayName(c);
+  return n.charAt(0).toUpperCase();
+}
+
+function avatarHue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return Math.abs(h) % 360;
 }
 
 function sceneGradient(title: string): string {
   let h = 0;
   for (let i = 0; i < title.length; i++) h = title.charCodeAt(i) + ((h << 5) - h);
   const h1 = Math.abs(h) % 360;
-  const h2 = (h1 + 50) % 360;
-  return `linear-gradient(135deg, hsl(${h1},55%,10%) 0%, hsl(${h2},65%,18%) 70%, hsl(${(h2 + 30) % 360},75%,13%) 100%)`;
+  const h2 = (h1 + 60) % 360;
+  return `linear-gradient(135deg, hsl(${h1},50%,8%) 0%, hsl(${h2},60%,14%) 100%)`;
 }
 
-const IS_PLACEHOLDER = (url?: string | null) =>
-  !!url && url.startsWith("https://placehold.co");
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
 
-// ─── Component ───────────────────────────────────────────────────────────────
+function applyVisibility(contributions: Contribution[], mode: string, count: number): Contribution[] {
+  if (mode === "all") return contributions;
+  if (mode === "none") return [];
+  return contributions.slice(-count);
+}
+
+const IS_PLACEHOLDER = (url?: string | null) => !!url && url.startsWith("https://placehold.co");
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  // Navigation
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
+  const [activeTab, setActiveTab] = useState<"chapters" | "characters">("chapters");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // Stories
   const [stories, setStories] = useState<Story[]>([]);
-  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+  const [showStoryForm, setShowStoryForm] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDesc, setStoryDesc] = useState("");
-  const [showStoryForm, setShowStoryForm] = useState(false);
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState<"scenes" | "characters">("scenes");
+  // Chapters
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [showChapterForm, setShowChapterForm] = useState(false);
+  const [newChapter, setNewChapter] = useState({ title: "", description: "" });
+  const [creatingChapter, setCreatingChapter] = useState(false);
 
   // Scenes
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [sceneContents, setSceneContents] = useState<Record<string, string>>({});
-  const [savingScene, setSavingScene] = useState<string | null>(null);
-  const [savedScenes, setSavedScenes] = useState<Record<string, boolean>>({});
-  const [suggestions, setSuggestions] = useState<Record<string, string>>({});
-  const [suggestingScene, setSuggestingScene] = useState<string | null>(null);
-  const [generatingImage, setGeneratingImage] = useState<string | null>(null);
-  const [visibilityEdits, setVisibilityEdits] = useState<Record<string, { mode: string; lines: number }>>({});
-  const [savingVisibility, setSavingVisibility] = useState<string | null>(null);
-  const [spectatorView, setSpectatorView] = useState<Record<string, boolean>>({});
-
-  // Scene character selection
-  const [sceneCharEdits, setSceneCharEdits] = useState<Record<string, string[]>>({});
-  const [savingSceneChars, setSavingSceneChars] = useState<string | null>(null);
-
-  // New scene form
-  const [newScene, setNewScene] = useState({ title: "", content: "" });
+  const [showSceneForm, setShowSceneForm] = useState(false);
+  const [newScene, setNewScene] = useState({ title: "", description: "" });
   const [creatingScene, setCreatingScene] = useState(false);
-  const [showNewSceneForm, setShowNewSceneForm] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [spectatorView, setSpectatorView] = useState(false);
+
+  // Scene settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsEdit, setSettingsEdit] = useState({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE" });
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Scene characters
+  const [sceneCharEdits, setSceneCharEdits] = useState<string[]>([]);
+  const [savingChars, setSavingChars] = useState(false);
+  const [showCharSelect, setShowCharSelect] = useState(false);
+
+  // Contributions
+  const [contribContent, setContribContent] = useState("");
+  const [contribCharId, setContribCharId] = useState<string>("");
+  const [submittingContrib, setSubmittingContrib] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestingIdea, setSuggestingIdea] = useState(false);
 
   // Characters
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -61,31 +102,58 @@ export default function App() {
   const [savingChar, setSavingChar] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
-  const mainRef = useRef<HTMLDivElement>(null);
+  const contribEndRef = useRef<HTMLDivElement>(null);
 
   // ── Load stories
   useEffect(() => {
     api.stories.list().then(setStories).catch(() => setError("Impossible de charger les histoires."));
   }, []);
 
+  // ── Scroll to latest contribution
+  useEffect(() => {
+    if (selectedScene && !spectatorView) {
+      contribEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [selectedScene?.contributions?.length]);
+
   // ── Select story
   const handleSelectStory = async (story: Story) => {
     setSelectedStory(story);
-    setActiveTab("scenes");
-    setSuggestions({});
-    setShowNewSceneForm(false);
-    const [sceneData, charData] = await Promise.all([
-      api.scenes.list(story.id),
+    setSelectedChapter(null);
+    setSelectedScene(null);
+    setActiveTab("chapters");
+    setSidebarOpen(false);
+    const [chapterData, charData] = await Promise.all([
+      api.chapters.list(story.id),
       api.characters.list(story.id),
     ]);
-    setScenes(sceneData);
-    setSceneContents(Object.fromEntries(sceneData.map((s) => [s.id, s.content ?? ""])));
-    setVisibilityEdits(Object.fromEntries(sceneData.map((s) => [s.id, { mode: s.visibilityMode, lines: s.visibleLines }])));
-    setSceneCharEdits(Object.fromEntries(sceneData.map((s) => [s.id, (s.characters ?? []).map((c) => c.id)])));
-    setSpectatorView({});
+    setChapters(chapterData);
     setCharacters(charData);
-    setExpandedCharId(null);
-    setTimeout(() => mainRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+
+  // ── Select chapter → show scene list
+  const handleSelectChapter = (chapter: Chapter) => {
+    setSelectedChapter(chapter);
+    setSelectedScene(null);
+    setShowSceneForm(false);
+  };
+
+  // ── Select scene → load full scene with contributions
+  const handleSelectScene = async (sceneId: string) => {
+    const scene = await api.scenes.get(sceneId);
+    setSelectedScene(scene);
+    setSettingsEdit({
+      visibilityMode: scene.visibilityMode,
+      visibleCount: scene.visibleCount,
+      status: scene.status,
+    });
+    setSceneCharEdits(scene.characters.map((c) => c.id));
+    setSpectatorView(false);
+    setShowSettings(false);
+    setShowCharSelect(false);
+    setSuggestion(null);
+    setContribContent("");
+    setContribCharId(characters[0]?.id ?? "");
   };
 
   // ── Create story
@@ -93,91 +161,153 @@ export default function App() {
     e.preventDefault();
     if (!storyTitle.trim()) return;
     const story = await api.stories.create({ title: storyTitle.trim(), description: storyDesc.trim() || undefined });
-    setStories((prev) => [story, ...prev]);
+    setStories((p) => [story, ...p]);
     setStoryTitle(""); setStoryDesc("");
     setShowStoryForm(false);
     handleSelectStory(story);
   };
 
+  // ── Create chapter
+  const handleCreateChapter = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedStory || !newChapter.title.trim()) return;
+    setCreatingChapter(true);
+    try {
+      const created = await api.chapters.create(selectedStory.id, {
+        title: newChapter.title.trim(),
+        description: newChapter.description.trim() || undefined,
+        order: chapters.length + 1,
+      });
+      setChapters((p) => [...p, created]);
+      setNewChapter({ title: "", description: "" });
+      setShowChapterForm(false);
+    } finally {
+      setCreatingChapter(false);
+    }
+  };
+
   // ── Create scene
   const handleCreateScene = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedStory || !newScene.title.trim()) return;
+    if (!selectedChapter || !newScene.title.trim()) return;
     setCreatingScene(true);
     try {
-      const created = await api.scenes.create(selectedStory.id, {
+      const created = await api.scenes.create(selectedChapter.id, {
         title: newScene.title.trim(),
-        content: newScene.content.trim() || undefined,
-        order: scenes.length + 1,
+        description: newScene.description.trim() || undefined,
+        order: (selectedChapter.scenes?.length ?? 0) + 1,
       });
-      setScenes((prev) => [...prev, created]);
-      setSceneContents((prev) => ({ ...prev, [created.id]: created.content ?? "" }));
-      setVisibilityEdits((prev) => ({ ...prev, [created.id]: { mode: created.visibilityMode, lines: created.visibleLines } }));
-      setSceneCharEdits((prev) => ({ ...prev, [created.id]: [] }));
-      setNewScene({ title: "", content: "" });
-      setShowNewSceneForm(false);
+      // Update chapter scenes list
+      setChapters((p) =>
+        p.map((ch) =>
+          ch.id === selectedChapter.id
+            ? { ...ch, scenes: [...ch.scenes, { id: created.id, title: created.title, order: created.order, status: created.status, _count: { contributions: 0 }, characters: [] }] }
+            : ch
+        )
+      );
+      setSelectedChapter((ch) =>
+        ch ? { ...ch, scenes: [...ch.scenes, { id: created.id, title: created.title, order: created.order, status: created.status, _count: { contributions: 0 }, characters: [] }] } : ch
+      );
+      setNewScene({ title: "", description: "" });
+      setShowSceneForm(false);
     } finally {
       setCreatingScene(false);
     }
   };
 
-  // ── Save scene content (preserve characters)
-  const handleSaveScene = async (scene: Scene) => {
-    setSavingScene(scene.id);
+  // ── Submit contribution
+  const handleSubmitContrib = async () => {
+    if (!selectedScene || !contribContent.trim()) return;
+    setSubmittingContrib(true);
     try {
-      const updated = await api.scenes.update(scene.id, { content: sceneContents[scene.id] ?? "" });
-      setScenes((prev) => prev.map((s) => s.id === updated.id ? { ...updated, characters: s.characters } : s));
-      setSavedScenes((prev) => ({ ...prev, [scene.id]: true }));
-      setTimeout(() => setSavedScenes((prev) => ({ ...prev, [scene.id]: false })), 2200);
+      const contrib = await api.contributions.create(selectedScene.id, {
+        content: contribContent.trim(),
+        characterId: contribCharId || undefined,
+      });
+      setSelectedScene((s) =>
+        s ? { ...s, contributions: [...(s.contributions ?? []), contrib], _count: { contributions: (s._count?.contributions ?? 0) + 1 } } : s
+      );
+      // Update chapter contribution count
+      setChapters((p) =>
+        p.map((ch) => ({
+          ...ch,
+          scenes: ch.scenes.map((sc) =>
+            sc.id === selectedScene.id ? { ...sc, _count: { contributions: sc._count.contributions + 1 } } : sc
+          ),
+        }))
+      );
+      setContribContent("");
     } finally {
-      setSavingScene(null);
+      setSubmittingContrib(false);
     }
   };
 
-  // ── Save scene characters
-  const handleSaveSceneCharacters = async (scene: Scene) => {
-    setSavingSceneChars(scene.id);
-    try {
-      const updated = await api.scenes.updateCharacters(scene.id, sceneCharEdits[scene.id] ?? []);
-      setScenes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    } finally {
-      setSavingSceneChars(null);
-    }
+  // ── Delete contribution
+  const handleDeleteContrib = async (id: string) => {
+    if (!selectedScene) return;
+    await api.contributions.delete(id);
+    setSelectedScene((s) =>
+      s ? { ...s, contributions: (s.contributions ?? []).filter((c) => c.id !== id) } : s
+    );
   };
 
   // ── Suggest idea
-  const handleSuggestIdea = async (scene: Scene) => {
-    if (!selectedStory) return;
-    setSuggestingScene(scene.id);
+  const handleSuggestIdea = async () => {
+    if (!selectedStory || !selectedScene) return;
+    setSuggestingIdea(true);
     try {
-      const { idea } = await api.scenes.suggestIdea(selectedStory.id, scene.title);
-      setSuggestions((prev) => ({ ...prev, [scene.id]: idea }));
+      const { idea } = await api.scenes.suggestIdea(selectedStory.id, selectedScene.title);
+      setSuggestion(idea);
     } finally {
-      setSuggestingScene(null);
+      setSuggestingIdea(false);
     }
   };
 
   // ── Generate image
-  const handleGenerateImage = async (scene: Scene) => {
-    setGeneratingImage(scene.id);
+  const handleGenerateImage = async () => {
+    if (!selectedScene) return;
+    setGeneratingImage(true);
     try {
-      const updated = await api.scenes.generateImage(scene.id);
-      setScenes((prev) => prev.map((s) => s.id === updated.id ? { ...updated, characters: s.characters } : s));
+      const updated = await api.scenes.generateImage(selectedScene.id);
+      setSelectedScene((s) => s ? { ...s, imageUrl: updated.imageUrl } : s);
     } finally {
-      setGeneratingImage(null);
+      setGeneratingImage(false);
     }
   };
 
-  // ── Save visibility (preserve characters)
-  const handleSaveVisibility = async (scene: Scene) => {
-    const edit = visibilityEdits[scene.id];
-    if (!edit) return;
-    setSavingVisibility(scene.id);
+  // ── Save scene settings
+  const handleSaveSettings = async () => {
+    if (!selectedScene) return;
+    setSavingSettings(true);
     try {
-      const updated = await api.scenes.update(scene.id, { visibilityMode: edit.mode, visibleLines: edit.lines });
-      setScenes((prev) => prev.map((s) => s.id === updated.id ? { ...updated, characters: s.characters } : s));
+      const updated = await api.scenes.update(selectedScene.id, settingsEdit);
+      setSelectedScene((s) => s ? { ...s, ...settingsEdit, characters: s.characters, contributions: s.contributions } : s);
+      // Sync status in chapter list
+      setChapters((p) =>
+        p.map((ch) => ({
+          ...ch,
+          scenes: ch.scenes.map((sc) =>
+            sc.id === selectedScene.id ? { ...sc, status: settingsEdit.status } : sc
+          ),
+        }))
+      );
+      setShowSettings(false);
+      void updated;
     } finally {
-      setSavingVisibility(null);
+      setSavingSettings(false);
+    }
+  };
+
+  // ── Save scene characters
+  const handleSaveSceneCharacters = async () => {
+    if (!selectedScene) return;
+    setSavingChars(true);
+    try {
+      const updated = await api.scenes.updateCharacters(selectedScene.id, sceneCharEdits);
+      setSelectedScene((s) => s ? { ...s, characters: updated.characters } : s);
+      setShowCharSelect(false);
+    } finally {
+      setSavingChars(false);
     }
   };
 
@@ -189,21 +319,15 @@ export default function App() {
       name: newChar.name?.trim() || undefined,
       nickname: newChar.nickname?.trim() || undefined,
     });
-    setCharacters((prev) => [...prev, created]);
+    setCharacters((p) => [...p, created]);
     setNewChar({ name: "", nickname: "" });
-  };
-
-  const handleExpandChar = (char: Character) => {
-    if (expandedCharId === char.id) { setExpandedCharId(null); return; }
-    setExpandedCharId(char.id);
-    setCharEdits((prev) => ({ ...prev, [char.id]: { ...char } }));
   };
 
   const handleSaveChar = async (char: Character) => {
     setSavingChar(char.id);
     try {
       const updated = await api.characters.update(char.id, charEdits[char.id] ?? {});
-      setCharacters((prev) => prev.map((c) => c.id === updated.id ? { ...updated, scenes: c.scenes } : c));
+      setCharacters((p) => p.map((c) => (c.id === updated.id ? { ...updated, scenes: c.scenes } : c)));
       setExpandedCharId(null);
     } finally {
       setSavingChar(null);
@@ -212,21 +336,67 @@ export default function App() {
 
   const handleDeleteChar = async (id: string) => {
     await api.characters.delete(id);
-    setCharacters((prev) => prev.filter((c) => c.id !== id));
+    setCharacters((p) => p.filter((c) => c.id !== id));
     if (expandedCharId === id) setExpandedCharId(null);
   };
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  const totalContribs = (ch: Chapter) =>
+    ch.scenes.reduce((sum, sc) => sum + sc._count.contributions, 0);
+
+  const sceneCharsFromChapter = (sceneId: string): CharacterRef[] => {
+    for (const ch of chapters) {
+      const sc = ch.scenes.find((s) => s.id === sceneId);
+      if (sc) return sc.characters;
+    }
+    return [];
+  };
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+
+  // Breadcrumb context
+  const crumbStory = selectedStory?.title ?? null;
+  const crumbChapter = selectedChapter?.title ?? null;
+  const crumbScene = selectedScene?.title ?? null;
 
   return (
-    <div style={s.page}>
+    <div style={s.root}>
 
       {/* ══ Header */}
       <header style={s.header}>
         <div style={s.headerInner}>
-          <div>
-            <span style={s.logo}>✦ StoryForge</span>
-            <span style={s.logoSub}>prototype narratif</span>
+          <div style={s.headerLeft}>
+            <button style={s.menuBtn} onClick={() => setSidebarOpen((v) => !v)} aria-label="Menu">
+              ☰
+            </button>
+            <div style={s.breadcrumb}>
+              <span style={s.logoMark} onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
+                ✦ StoryForge
+              </span>
+              {crumbStory && (
+                <>
+                  <span style={s.crumbSep}>/</span>
+                  <span style={s.crumbItem} onClick={() => { setSelectedChapter(null); setSelectedScene(null); }}>
+                    {crumbStory}
+                  </span>
+                </>
+              )}
+              {crumbChapter && (
+                <>
+                  <span style={s.crumbSep}>/</span>
+                  <span style={s.crumbItem} onClick={() => setSelectedScene(null)}>
+                    {crumbChapter}
+                  </span>
+                </>
+              )}
+              {crumbScene && (
+                <>
+                  <span style={s.crumbSep}>/</span>
+                  <span style={s.crumbCurrent}>{crumbScene}</span>
+                </>
+              )}
+            </div>
           </div>
           <button style={s.btnAccent} onClick={() => setShowStoryForm((v) => !v)}>
             {showStoryForm ? "Annuler" : "+ Nouvelle histoire"}
@@ -234,24 +404,23 @@ export default function App() {
         </div>
       </header>
 
-      {error && <div style={s.errorBanner}>{error}</div>}
+      {error && <div style={s.errorBanner}>{error}<button style={s.errorClose} onClick={() => setError(null)}>✕</button></div>}
 
       <div style={s.layout}>
 
         {/* ══ Sidebar */}
-        <aside style={s.sidebar}>
-          <p style={s.sidebarLabel}>Vos histoires</p>
+        <aside className={`app-sidebar${sidebarOpen ? " is-open" : ""}`} style={{ ...s.sidebar, ...(sidebarOpen ? s.sidebarOpen : {}) }}>
+          <div style={s.sidebarHead}>
+            <p style={s.sidebarLabel}>Histoires</p>
+            <button style={s.sidebarClose} onClick={() => setSidebarOpen(false)}>✕</button>
+          </div>
 
           {showStoryForm && (
             <form onSubmit={handleCreateStory} style={s.storyForm}>
-              <input style={s.inputDark} placeholder="Titre de l'histoire" value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} required autoFocus />
+              <input style={s.inputDark} placeholder="Titre" value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} required autoFocus />
               <input style={s.inputDark} placeholder="Description (optionnelle)" value={storyDesc} onChange={(e) => setStoryDesc(e.target.value)} />
               <button style={s.btnAccent} type="submit">Créer →</button>
             </form>
-          )}
-
-          {stories.length === 0 && !showStoryForm && (
-            <p style={s.mutedSide}>Aucune histoire pour l'instant.</p>
           )}
 
           <ul style={s.storyList}>
@@ -259,7 +428,7 @@ export default function App() {
               const active = selectedStory?.id === story.id;
               return (
                 <li key={story.id} style={{ ...s.storyItem, ...(active ? s.storyItemActive : {}) }} onClick={() => handleSelectStory(story)}>
-                  {active && <span style={s.storyItemDot}>▶</span>}
+                  <div style={s.storyItemDot}>{active ? "▶" : "○"}</div>
                   <div>
                     <div style={s.storyItemTitle}>{story.title}</div>
                     {story.description && <div style={s.storyItemDesc}>{story.description}</div>}
@@ -267,289 +436,84 @@ export default function App() {
                 </li>
               );
             })}
+            {stories.length === 0 && <p style={s.mutedSmall}>Aucune histoire pour l'instant.</p>}
           </ul>
         </aside>
 
+        {sidebarOpen && <div style={s.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
+
         {/* ══ Main */}
-        <main style={s.main} ref={mainRef}>
-          {!selectedStory ? (
+        <main style={s.main}>
+
+          {/* ── Aucune histoire sélectionnée */}
+          {!selectedStory && (
             <div style={s.emptyState}>
               <div style={s.emptyIcon}>✦</div>
-              <p style={s.emptyText}>Sélectionne une histoire pour commencer.</p>
+              <p style={s.emptyTitle}>Bienvenue dans StoryForge</p>
+              <p style={s.emptyText}>Sélectionne une histoire dans le menu ou crée-en une nouvelle.</p>
             </div>
-          ) : (
-            <>
-              <div style={s.storyHeader}>
-                <h2 style={s.storyTitle}>{selectedStory.title}</h2>
-                {selectedStory.description && <p style={s.storyDesc}>{selectedStory.description}</p>}
+          )}
+
+          {/* ── Histoire sélectionnée, pas de chapitre */}
+          {selectedStory && !selectedChapter && !selectedScene && (
+            <div>
+              <div style={s.pageHeader}>
+                <h1 style={s.pageTitle}>{selectedStory.title}</h1>
+                {selectedStory.description && <p style={s.pageDesc}>{selectedStory.description}</p>}
               </div>
 
+              {/* Tabs */}
               <div style={s.tabs}>
-                {(["scenes", "characters"] as const).map((tab) => (
+                {(["chapters", "characters"] as const).map((tab) => (
                   <button key={tab} style={{ ...s.tab, ...(activeTab === tab ? s.tabActive : {}) }} onClick={() => setActiveTab(tab)}>
-                    {tab === "scenes" ? `Scènes (${scenes.length})` : `Personnages (${characters.length})`}
+                    {tab === "chapters" ? `Chapitres (${chapters.length})` : `Personnages (${characters.length})`}
                   </button>
                 ))}
               </div>
 
-              {/* ══ Scènes */}
-              {activeTab === "scenes" && (
+              {/* ── Tab Chapitres */}
+              {activeTab === "chapters" && (
                 <div>
-                  {!showNewSceneForm ? (
-                    <button style={s.addSceneBtn} onClick={() => setShowNewSceneForm(true)}>
-                      + Ajouter une scène
-                    </button>
+                  {!showChapterForm ? (
+                    <button style={s.addBtn} onClick={() => setShowChapterForm(true)}>+ Ajouter un chapitre</button>
                   ) : (
-                    <form onSubmit={handleCreateScene} style={s.newSceneForm}>
-                      <p style={s.newSceneFormTitle}>Nouvelle scène</p>
-                      <input style={s.inputDark} placeholder="Titre de la scène" value={newScene.title} onChange={(e) => setNewScene((p) => ({ ...p, title: e.target.value }))} required autoFocus />
-                      <textarea style={{ ...s.textareaDark, minHeight: 80 }} placeholder="Commence à écrire… (optionnel)" value={newScene.content} onChange={(e) => setNewScene((p) => ({ ...p, content: e.target.value }))} />
+                    <form onSubmit={handleCreateChapter} style={s.inlineForm}>
+                      <p style={s.formTitle}>Nouveau chapitre</p>
+                      <input style={s.inputDark} placeholder="Titre du chapitre" value={newChapter.title} onChange={(e) => setNewChapter((p) => ({ ...p, title: e.target.value }))} required autoFocus />
+                      <input style={s.inputDark} placeholder="Contexte / description (optionnel)" value={newChapter.description} onChange={(e) => setNewChapter((p) => ({ ...p, description: e.target.value }))} />
                       <div style={s.row}>
-                        <button style={s.btnAccent} type="submit" disabled={creatingScene}>{creatingScene ? "Création…" : "Créer la scène →"}</button>
-                        <button style={s.btnGhost} type="button" onClick={() => setShowNewSceneForm(false)}>Annuler</button>
+                        <button style={s.btnAccent} type="submit" disabled={creatingChapter}>{creatingChapter ? "Création…" : "Créer →"}</button>
+                        <button style={s.btnGhost} type="button" onClick={() => setShowChapterForm(false)}>Annuler</button>
                       </div>
                     </form>
                   )}
 
-                  {scenes.length === 0 && <p style={s.mutedCenter}>Aucune scène. Ajoutes-en une pour commencer.</p>}
+                  {chapters.length === 0 && <p style={s.mutedCenter}>Aucun chapitre. Commence par en créer un.</p>}
 
-                  <div style={s.sceneGrid}>
-                    {scenes.map((scene) => {
-                      const isSpectator = spectatorView[scene.id] ?? false;
-                      const vis = visibilityEdits[scene.id] ?? { mode: scene.visibilityMode, lines: scene.visibleLines };
-                      const justSaved = savedScenes[scene.id];
-                      const sceneChars = scene.characters ?? [];
-
-                      return (
-                        <div key={scene.id} style={s.sceneCard}>
-
-                          {/* ── Header : numéro + titre + toggle vue */}
-                          <div style={s.sceneCardHeader}>
-                            <div style={s.sceneOrderBadge}>{scene.order}</div>
-                            <h3 style={s.sceneCardTitle}>{scene.title}</h3>
-                            <button
-                              style={isSpectator ? s.viewBtnActive : s.viewBtn}
-                              onClick={() => setSpectatorView((p) => ({ ...p, [scene.id]: !isSpectator }))}
-                            >
-                              {isSpectator ? "✏️ Auteur" : "👁 Spectateurs"}
-                            </button>
+                  <div style={s.chapterList}>
+                    {chapters.map((ch) => (
+                      <div key={ch.id} style={s.chapterCard} onClick={() => handleSelectChapter(ch)}>
+                        <div style={s.chapterCardHeader}>
+                          <div style={s.chapterOrder}>{ch.order}</div>
+                          <div style={s.chapterCardBody}>
+                            <div style={s.chapterTitle}>{ch.title}</div>
+                            {ch.description && <div style={s.chapterDesc}>{ch.description}</div>}
+                            <div style={s.chapterMeta}>
+                              <span>{ch.scenes.length} scène{ch.scenes.length !== 1 ? "s" : ""}</span>
+                              <span style={s.metaDot}>·</span>
+                              <span>{totalContribs(ch)} contribution{totalContribs(ch) !== 1 ? "s" : ""}</span>
+                            </div>
                           </div>
-
-                          {/* ── Personnages présents (toujours visible) */}
-                          {sceneChars.length > 0 && (
-                            <div style={s.sceneCharPills}>
-                              {sceneChars.map((c) => (
-                                <span key={c.id} style={s.sceneCharPill}>{displayName(c)}</span>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* ── Image */}
-                          {scene.imageUrl && IS_PLACEHOLDER(scene.imageUrl) && (
-                            <div style={{ ...s.imagePlaceholder, background: sceneGradient(scene.title) }}>
-                              <div style={s.imagePlaceholderGrid} />
-                              <div style={s.imagePlaceholderBadge}>✦ Illustration générée</div>
-                              <div style={s.imagePlaceholderTitle}>{scene.title}</div>
-                              {sceneChars.length > 0 && (
-                                <div style={s.imagePlaceholderChars}>
-                                  {sceneChars.map((c) => displayName(c)).join(" · ")}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          {scene.imageUrl && !IS_PLACEHOLDER(scene.imageUrl) && (
-                            <img src={scene.imageUrl} alt={scene.title} style={s.sceneImage} />
-                          )}
-
-                          {/* ── Suggestion */}
-                          {suggestions[scene.id] && (
-                            <div style={s.suggestion}>
-                              <span style={s.suggestionIcon}>💡</span>
-                              <em>{suggestions[scene.id]}</em>
-                            </div>
-                          )}
-
-                          {/* ── Vue spectateurs */}
-                          {isSpectator && (
-                            <div style={s.spectatorBox}>
-                              <div style={s.spectatorHeader}>
-                                <span style={s.spectatorLabel}>
-                                  👁 Vue spectateurs — {vis.mode === "full" ? "texte complet" : `${vis.lines} dernières lignes`}
-                                </span>
-                              </div>
-                              {scene.visibleContent ? (
-                                <pre style={s.spectatorText}>{scene.visibleContent}</pre>
-                              ) : (
-                                <p style={s.spectatorEmpty}>Aucun texte visible pour les spectateurs.</p>
-                              )}
-                            </div>
-                          )}
-
-                          {/* ── Vue auteur */}
-                          {!isSpectator && (
-                            <>
-                              <textarea
-                                style={s.textareaDark}
-                                placeholder="Écris ta scène ici…"
-                                value={sceneContents[scene.id] ?? ""}
-                                onChange={(e) => setSceneContents((p) => ({ ...p, [scene.id]: e.target.value }))}
-                              />
-
-                              {/* Actions */}
-                              <div style={s.sceneActions}>
-                                <button style={justSaved ? s.btnSaved : s.btnAccent} onClick={() => handleSaveScene(scene)} disabled={savingScene === scene.id}>
-                                  {savingScene === scene.id ? "Sauvegarde…" : justSaved ? "✓ Sauvegardé" : "Sauvegarder"}
-                                </button>
-                                <button style={s.btnGhost} onClick={() => handleSuggestIdea(scene)} disabled={suggestingScene === scene.id}>
-                                  {suggestingScene === scene.id ? "…" : "💡 Idée"}
-                                </button>
-                                <button style={s.btnGhost} onClick={() => handleGenerateImage(scene)} disabled={generatingImage === scene.id}>
-                                  {generatingImage === scene.id ? "…" : "🎨 Illustrer"}
-                                </button>
-                              </div>
-
-                              {/* Sélection des personnages présents */}
-                              <div style={s.charSelectSection}>
-                                <p style={s.charSelectLabel}>Personnages dans cette scène</p>
-                                {characters.length === 0 ? (
-                                  <p style={s.charSelectEmpty}>Aucun personnage dans cette histoire.</p>
-                                ) : (
-                                  <div style={s.charCheckList}>
-                                    {characters.map((char) => {
-                                      const checked = (sceneCharEdits[scene.id] ?? []).includes(char.id);
-                                      return (
-                                        <label key={char.id} style={{ ...s.charCheckItem, ...(checked ? s.charCheckItemActive : {}) }}>
-                                          <input
-                                            type="checkbox"
-                                            style={s.charCheckbox}
-                                            checked={checked}
-                                            onChange={() => {
-                                              setSceneCharEdits((prev) => {
-                                                const current = prev[scene.id] ?? [];
-                                                return {
-                                                  ...prev,
-                                                  [scene.id]: checked
-                                                    ? current.filter((id) => id !== char.id)
-                                                    : [...current, char.id],
-                                                };
-                                              });
-                                            }}
-                                          />
-                                          <span>{displayName(char)}</span>
-                                          {char.role && <span style={s.charCheckRole}>{char.role}</span>}
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                                {characters.length > 0 && (
-                                  <button style={s.btnMicro} onClick={() => handleSaveSceneCharacters(scene)} disabled={savingSceneChars === scene.id}>
-                                    {savingSceneChars === scene.id ? "…" : "Enregistrer les personnages"}
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Config visibilité */}
-                              <div style={s.visBar}>
-                                <span style={s.visLabel}>Visible :</span>
-                                <select style={s.selectDark} value={vis.mode} onChange={(e) => setVisibilityEdits((p) => ({ ...p, [scene.id]: { ...vis, mode: e.target.value } }))}>
-                                  <option value="last_lines">Dernières lignes</option>
-                                  <option value="full">Texte complet</option>
-                                </select>
-                                {vis.mode === "last_lines" && (
-                                  <input type="number" min={1} max={20} style={{ ...s.inputDark, maxWidth: 56, textAlign: "center", flex: "none" }} value={vis.lines} onChange={(e) => setVisibilityEdits((p) => ({ ...p, [scene.id]: { ...vis, lines: Number(e.target.value) || 1 } }))} />
-                                )}
-                                <button style={s.btnMicro} onClick={() => handleSaveVisibility(scene)} disabled={savingVisibility === scene.id}>
-                                  {savingVisibility === scene.id ? "…" : "Appliquer"}
-                                </button>
-                              </div>
-                            </>
-                          )}
+                          <span style={s.chapterArrow}>→</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ══ Personnages */}
-              {activeTab === "characters" && (
-                <div>
-                  <form onSubmit={handleCreateChar} style={s.newCharForm}>
-                    <div style={s.row}>
-                      <input style={s.inputDark} placeholder="Nom" value={newChar.name ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, name: e.target.value }))} />
-                      <input style={s.inputDark} placeholder="Pseudo" value={newChar.nickname ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, nickname: e.target.value }))} />
-                      <button style={s.btnAccent} type="submit">+ Ajouter</button>
-                    </div>
-                    <p style={s.visLabel}>Un nom ou un pseudo suffit pour commencer.</p>
-                  </form>
-
-                  {characters.length === 0 && <p style={s.mutedCenter}>Aucun personnage dans cette histoire.</p>}
-
-                  <div style={s.charGrid}>
-                    {characters.map((char) => (
-                      <div key={char.id} style={s.charCard}>
-                        <div style={s.charCardHeader}>
-                          <div style={s.charCardInfo}>
-                            <span style={s.charName}>{displayName(char)}</span>
-                            {char.role && <span style={s.roleBadge}>{char.role}</span>}
-                            {char.faction && <span style={s.factionBadge}>{char.faction}</span>}
-                            {/* Badge scènes */}
-                            {char.scenes && char.scenes.length > 0 && (
-                              <span style={s.scenesBadge}>
-                                {char.scenes.length} scène{char.scenes.length > 1 ? "s" : ""}
-                              </span>
-                            )}
-                          </div>
-                          <div style={s.row}>
-                            <button style={s.btnMicro} onClick={() => handleExpandChar(char)}>
-                              {expandedCharId === char.id ? "Fermer" : "Fiche"}
-                            </button>
-                            <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
-                          </div>
-                        </div>
-
-                        {char.shortDescription && <p style={s.charDesc}>{char.shortDescription}</p>}
-
-                        {/* Scènes où ce personnage apparaît */}
-                        {char.scenes && char.scenes.length > 0 && (
-                          <div style={s.charAppearances}>
-                            <span style={s.charAppearancesLabel}>Apparaît dans :</span>
-                            {char.scenes.map((scene) => (
-                              <span key={scene.id} style={s.charScenePill}>
-                                {scene.order}. {scene.title}
+                        {ch.scenes.length > 0 && (
+                          <div style={s.chapterSceneTags}>
+                            {ch.scenes.slice(0, 4).map((sc) => (
+                              <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "CLOSED" ? s.sceneTagClosed : {}) }}>
+                                {sc.order}. {sc.title}
                               </span>
                             ))}
-                          </div>
-                        )}
-
-                        {/* Fiche complète */}
-                        {expandedCharId === char.id && (
-                          <div style={s.charSheet}>
-                            {(
-                              [
-                                ["name", "Nom"], ["nickname", "Pseudo"],
-                                ["role", "Rôle"], ["faction", "Faction"],
-                                ["shortDescription", "Description courte"],
-                                ["appearance", "Apparence physique"], ["outfit", "Tenue"],
-                                ["accessories", "Accessoires"], ["personality", "Personnalité"],
-                                ["traits", "Traits distinctifs"], ["visualNotes", "Notes visuelles (IA)"],
-                              ] as [keyof CharacterInput, string][]
-                            ).map(([field, label]) => (
-                              <div key={field} style={s.fieldGroup}>
-                                <label style={s.fieldLabel}>{label}</label>
-                                <input
-                                  style={s.inputDark}
-                                  value={(charEdits[char.id]?.[field] as string) ?? ""}
-                                  onChange={(e) => setCharEdits((p) => ({ ...p, [char.id]: { ...p[char.id], [field]: e.target.value } }))}
-                                />
-                              </div>
-                            ))}
-                            <div style={{ gridColumn: "1 / -1" }}>
-                              <button style={s.btnAccent} onClick={() => handleSaveChar(char)} disabled={savingChar === char.id}>
-                                {savingChar === char.id ? "Sauvegarde…" : "Sauvegarder la fiche →"}
-                              </button>
-                            </div>
+                            {ch.scenes.length > 4 && <span style={s.sceneTagMore}>+{ch.scenes.length - 4}</span>}
                           </div>
                         )}
                       </div>
@@ -557,7 +521,376 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </>
+
+              {/* ── Tab Personnages */}
+              {activeTab === "characters" && (
+                <div>
+                  <form onSubmit={handleCreateChar} style={s.inlineForm}>
+                    <div style={s.row}>
+                      <input style={s.inputDark} placeholder="Nom" value={newChar.name ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, name: e.target.value }))} />
+                      <input style={s.inputDark} placeholder="Pseudo / surnom" value={newChar.nickname ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, nickname: e.target.value }))} />
+                      <button style={s.btnAccent} type="submit">+ Ajouter</button>
+                    </div>
+                    <p style={s.hint}>Un nom ou un pseudo suffit pour commencer.</p>
+                  </form>
+
+                  {characters.length === 0 && <p style={s.mutedCenter}>Aucun personnage dans cette histoire.</p>}
+
+                  <div style={s.charGrid}>
+                    {characters.map((char) => {
+                      const hue = avatarHue(displayName(char));
+                      const isExpanded = expandedCharId === char.id;
+                      return (
+                        <div key={char.id} style={s.charCard}>
+                          <div style={s.charCardTop}>
+                            <div style={{ ...s.avatar, background: `hsl(${hue},50%,30%)`, border: `2px solid hsl(${hue},60%,45%)` }}>
+                              {initial(char)}
+                            </div>
+                            <div style={s.charInfo}>
+                              <div style={s.charName}>{displayName(char)}</div>
+                              <div style={s.charBadges}>
+                                {char.role && <span style={s.badge}>{char.role}</span>}
+                                {char.faction && <span style={{ ...s.badge, ...s.badgeGreen }}>{char.faction}</span>}
+                                {char.scenes && char.scenes.length > 0 && (
+                                  <span style={{ ...s.badge, ...s.badgeGold }}>{char.scenes.length} scène{char.scenes.length !== 1 ? "s" : ""}</span>
+                                )}
+                              </div>
+                              {char.shortDescription && <p style={s.charDesc}>{char.shortDescription}</p>}
+                            </div>
+                            <div style={s.charActions}>
+                              <button style={s.btnMicro} onClick={() => {
+                                if (isExpanded) { setExpandedCharId(null); return; }
+                                setExpandedCharId(char.id);
+                                setCharEdits((p) => ({ ...p, [char.id]: { ...char } }));
+                              }}>
+                                {isExpanded ? "Fermer" : "Fiche"}
+                              </button>
+                              <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
+                            </div>
+                          </div>
+
+                          {char.scenes && char.scenes.length > 0 && (
+                            <div style={s.charScenes}>
+                              <span style={s.charScenesLabel}>Apparaît dans :</span>
+                              {char.scenes.map((sc) => (
+                                <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "CLOSED" ? s.sceneTagClosed : {}) }}>
+                                  {sc.order}. {sc.title}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {isExpanded && (
+                            <div style={s.charSheet}>
+                              {(
+                                [
+                                  ["name", "Nom"], ["nickname", "Pseudo"],
+                                  ["role", "Rôle"], ["faction", "Faction"],
+                                  ["shortDescription", "Description courte"],
+                                  ["appearance", "Apparence physique"], ["outfit", "Tenue"],
+                                  ["accessories", "Accessoires"], ["personality", "Personnalité"],
+                                  ["traits", "Traits distinctifs"], ["visualNotes", "Notes visuelles (IA)"],
+                                ] as [keyof CharacterInput, string][]
+                              ).map(([field, label]) => (
+                                <div key={field} style={s.fieldGroup}>
+                                  <label style={s.fieldLabel}>{label}</label>
+                                  <input
+                                    style={s.inputDark}
+                                    value={(charEdits[char.id]?.[field] as string) ?? ""}
+                                    onChange={(e) => setCharEdits((p) => ({ ...p, [char.id]: { ...p[char.id], [field]: e.target.value } }))}
+                                  />
+                                </div>
+                              ))}
+                              <div style={{ gridColumn: "1 / -1" }}>
+                                <button style={s.btnAccent} onClick={() => handleSaveChar(char)} disabled={savingChar === char.id}>
+                                  {savingChar === char.id ? "Sauvegarde…" : "Sauvegarder →"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Chapitre sélectionné → liste des scènes */}
+          {selectedStory && selectedChapter && !selectedScene && (
+            <div>
+              <div style={s.pageHeader}>
+                <button style={s.backBtn} onClick={() => setSelectedChapter(null)}>← Chapitres</button>
+                <h2 style={s.pageTitle}>{selectedChapter.title}</h2>
+                {selectedChapter.description && <p style={s.pageDesc}>{selectedChapter.description}</p>}
+              </div>
+
+              {!showSceneForm ? (
+                <button style={s.addBtn} onClick={() => setShowSceneForm(true)}>+ Ajouter une scène</button>
+              ) : (
+                <form onSubmit={handleCreateScene} style={s.inlineForm}>
+                  <p style={s.formTitle}>Nouvelle scène</p>
+                  <input style={s.inputDark} placeholder="Titre de la scène" value={newScene.title} onChange={(e) => setNewScene((p) => ({ ...p, title: e.target.value }))} required autoFocus />
+                  <textarea style={s.textareaDark} placeholder="Description / contexte de la scène (optionnel)" value={newScene.description} onChange={(e) => setNewScene((p) => ({ ...p, description: e.target.value }))} rows={3} />
+                  <div style={s.row}>
+                    <button style={s.btnAccent} type="submit" disabled={creatingScene}>{creatingScene ? "Création…" : "Créer la scène →"}</button>
+                    <button style={s.btnGhost} type="button" onClick={() => setShowSceneForm(false)}>Annuler</button>
+                  </div>
+                </form>
+              )}
+
+              {selectedChapter.scenes.length === 0 && <p style={s.mutedCenter}>Aucune scène dans ce chapitre.</p>}
+
+              <div style={s.sceneList}>
+                {selectedChapter.scenes.map((sc) => (
+                  <div key={sc.id} style={s.sceneListItem} onClick={() => handleSelectScene(sc.id)}>
+                    <div style={s.sceneListOrder}>{sc.order}</div>
+                    <div style={s.sceneListBody}>
+                      <div style={s.sceneListTitle}>
+                        {sc.title}
+                        <span style={{ ...s.statusBadge, ...(sc.status === "CLOSED" ? s.statusBadgeClosed : s.statusBadgeActive) }}>
+                          {sc.status === "CLOSED" ? "Fermée" : "Active"}
+                        </span>
+                      </div>
+                      <div style={s.sceneListMeta}>
+                        {sc._count.contributions} contribution{sc._count.contributions !== 1 ? "s" : ""}
+                        {sc.characters.length > 0 && (
+                          <span style={s.sceneListChars}>
+                            {sc.characters.map((c) => displayName(c)).join(" · ")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span style={s.chapterArrow}>→</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Scène sélectionnée → vue complète */}
+          {selectedStory && selectedChapter && selectedScene && (
+            <div style={s.sceneView}>
+
+              {/* Header scène */}
+              <div style={s.sceneViewHeader}>
+                <button style={s.backBtn} onClick={() => setSelectedScene(null)}>← Scènes</button>
+                <div style={s.sceneViewTitleRow}>
+                  <h2 style={s.sceneViewTitle}>{selectedScene.title}</h2>
+                  <span style={{ ...s.statusBadge, ...(selectedScene.status === "CLOSED" ? s.statusBadgeClosed : s.statusBadgeActive) }}>
+                    {selectedScene.status === "CLOSED" ? "Fermée" : "Active"}
+                  </span>
+                </div>
+                {selectedScene.description && <p style={s.sceneViewDesc}>{selectedScene.description}</p>}
+
+                {/* Personnages présents */}
+                {selectedScene.characters.length > 0 && (
+                  <div style={s.sceneChars}>
+                    {selectedScene.characters.map((c) => {
+                      const hue = avatarHue(displayName(c));
+                      return (
+                        <div key={c.id} style={s.sceneCharChip}>
+                          <div style={{ ...s.avatarXs, background: `hsl(${hue},50%,30%)` }}>{initial(c)}</div>
+                          <span>{displayName(c)}</span>
+                        </div>
+                      );
+                    })}
+                    <button style={s.btnMicro} onClick={() => setShowCharSelect((v) => !v)}>
+                      {showCharSelect ? "Fermer" : "✏️ Modifier"}
+                    </button>
+                  </div>
+                )}
+                {selectedScene.characters.length === 0 && (
+                  <button style={s.addPersonnageBtn} onClick={() => setShowCharSelect((v) => !v)}>
+                    + Ajouter des personnages à cette scène
+                  </button>
+                )}
+
+                {/* Sélection personnages */}
+                {showCharSelect && (
+                  <div style={s.charSelectBox}>
+                    <p style={s.charSelectTitle}>Personnages présents dans cette scène</p>
+                    <div style={s.charCheckList}>
+                      {characters.map((char) => {
+                        const checked = sceneCharEdits.includes(char.id);
+                        return (
+                          <label key={char.id} style={{ ...s.charCheckItem, ...(checked ? s.charCheckItemOn : {}) }}>
+                            <input type="checkbox" checked={checked} onChange={() => {
+                              setSceneCharEdits((p) => checked ? p.filter((id) => id !== char.id) : [...p, char.id]);
+                            }} style={s.checkbox} />
+                            <span>{displayName(char)}</span>
+                            {char.role && <span style={s.charCheckRole}>{char.role}</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <button style={s.btnAccent} onClick={handleSaveSceneCharacters} disabled={savingChars}>
+                      {savingChars ? "Sauvegarde…" : "Enregistrer"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Image */}
+              {selectedScene.imageUrl && IS_PLACEHOLDER(selectedScene.imageUrl) && (
+                <div style={{ ...s.imageBanner, background: sceneGradient(selectedScene.title) }}>
+                  <div style={s.imageBannerGrid} />
+                  <div style={s.imageBannerTitle}>{selectedScene.title}</div>
+                  {selectedScene.characters.length > 0 && (
+                    <div style={s.imageBannerChars}>
+                      {selectedScene.characters.map((c) => displayName(c)).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              )}
+              {selectedScene.imageUrl && !IS_PLACEHOLDER(selectedScene.imageUrl) && (
+                <img src={selectedScene.imageUrl} alt={selectedScene.title} style={s.sceneImg} />
+              )}
+
+              {/* Toggle vue */}
+              <div style={s.viewToggleBar}>
+                <button
+                  style={spectatorView ? s.viewToggleBtnActive : s.viewToggleBtn}
+                  onClick={() => setSpectatorView(false)}
+                >
+                  ✏️ Auteur
+                </button>
+                <button
+                  style={!spectatorView ? s.viewToggleBtnActive : s.viewToggleBtn}
+                  onClick={() => setSpectatorView(true)}
+                >
+                  👁 Spectateurs
+                </button>
+              </div>
+
+              {/* ── Contributions */}
+              <div style={s.contributionsList}>
+                {(() => {
+                  const contribs = selectedScene.contributions ?? [];
+                  const visible = spectatorView
+                    ? applyVisibility(contribs, selectedScene.visibilityMode, selectedScene.visibleCount)
+                    : contribs;
+
+                  if (visible.length === 0) {
+                    return (
+                      <div style={s.contribEmpty}>
+                        {spectatorView
+                          ? "Aucun texte visible pour les spectateurs selon les paramètres actuels."
+                          : "Aucune contribution encore. Sois le premier à écrire !"}
+                      </div>
+                    );
+                  }
+
+                  return visible.map((contrib) => {
+                    const hue = avatarHue(displayName(contrib.character));
+                    return (
+                      <div key={contrib.id} style={s.contribBubble}>
+                        <div style={{ ...s.avatarSm, background: `hsl(${hue},50%,30%)`, border: `2px solid hsl(${hue},55%,42%)` }}>
+                          {initial(contrib.character)}
+                        </div>
+                        <div style={s.contribBody}>
+                          <div style={s.contribMeta}>
+                            <span style={s.contribAuthor}>{displayName(contrib.character)}</span>
+                            <span style={s.contribTime}>{formatTime(contrib.createdAt)}</span>
+                            {!spectatorView && (
+                              <button style={s.contribDelete} onClick={() => handleDeleteContrib(contrib.id)} title="Supprimer">✕</button>
+                            )}
+                          </div>
+                          <p style={s.contribText}>{contrib.content}</p>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+                <div ref={contribEndRef} />
+              </div>
+
+              {/* ── Zone d'écriture (auteur seulement) */}
+              {!spectatorView && (
+                <div style={s.writeArea}>
+                  {suggestion && (
+                    <div style={s.suggestion}>
+                      <span style={s.suggestionIcon}>💡</span>
+                      <em style={s.suggestionText}>{suggestion}</em>
+                      <button style={s.suggestionClose} onClick={() => setSuggestion(null)}>✕</button>
+                    </div>
+                  )}
+
+                  {characters.length > 0 && (
+                    <select
+                      style={s.charSelect}
+                      value={contribCharId}
+                      onChange={(e) => setContribCharId(e.target.value)}
+                    >
+                      <option value="">— Aucun personnage —</option>
+                      {characters.map((c) => (
+                        <option key={c.id} value={c.id}>{displayName(c)}{c.role ? ` (${c.role})` : ""}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  <textarea
+                    style={s.writeTextarea}
+                    placeholder="Écris ta contribution narrative ici…"
+                    value={contribContent}
+                    onChange={(e) => setContribContent(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmitContrib();
+                    }}
+                    rows={4}
+                  />
+
+                  <div style={s.writeActions}>
+                    <button style={s.btnAccent} onClick={handleSubmitContrib} disabled={submittingContrib || !contribContent.trim()}>
+                      {submittingContrib ? "Envoi…" : "Contribuer"}
+                    </button>
+                    <button style={s.btnGhost} onClick={handleSuggestIdea} disabled={suggestingIdea}>
+                      {suggestingIdea ? "…" : "💡 Idée"}
+                    </button>
+                    <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
+                      {generatingImage ? "…" : "🎨 Illustrer"}
+                    </button>
+                    <button style={s.btnGhost} onClick={() => setShowSettings((v) => !v)}>
+                      ⚙ Paramètres
+                    </button>
+                  </div>
+
+                  <p style={s.writeHint}>⌘↵ ou Ctrl+↵ pour envoyer</p>
+
+                  {/* Paramètres de visibilité */}
+                  {showSettings && (
+                    <div style={s.settingsBox}>
+                      <p style={s.settingsTitle}>Paramètres de la scène</p>
+                      <div style={s.settingsRow}>
+                        <label style={s.settingsLabel}>Statut</label>
+                        <select style={s.selectDark} value={settingsEdit.status} onChange={(e) => setSettingsEdit((p) => ({ ...p, status: e.target.value }))}>
+                          <option value="ACTIVE">Active</option>
+                          <option value="CLOSED">Fermée</option>
+                        </select>
+                      </div>
+                      <div style={s.settingsRow}>
+                        <label style={s.settingsLabel}>Visible aux spectateurs</label>
+                        <select style={s.selectDark} value={settingsEdit.visibilityMode} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibilityMode: e.target.value }))}>
+                          <option value="last">Dernières contributions</option>
+                          <option value="all">Toutes les contributions</option>
+                          <option value="none">Rien (masqué)</option>
+                        </select>
+                      </div>
+                      {settingsEdit.visibilityMode === "last" && (
+                        <div style={s.settingsRow}>
+                          <label style={s.settingsLabel}>Nombre visible</label>
+                          <input type="number" min={1} max={20} style={{ ...s.inputDark, maxWidth: 70 }} value={settingsEdit.visibleCount} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibleCount: Number(e.target.value) || 1 }))} />
+                        </div>
+                      )}
+                      <button style={s.btnAccent} onClick={handleSaveSettings} disabled={savingSettings}>
+                        {savingSettings ? "Sauvegarde…" : "Appliquer"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </main>
       </div>
@@ -568,142 +901,213 @@ export default function App() {
 // ─── Design system ────────────────────────────────────────────────────────────
 
 const C = {
-  bg: "#07070d",
-  surface: "#0e0e1a",
-  elevated: "#16162a",
-  border: "rgba(255,255,255,0.07)",
-  borderActive: "#7c3aed",
+  bg: "#0d0d18",
+  surface: "#131320",
+  elevated: "#1a1a2c",
+  overlay: "#20203a",
+  border: "rgba(255,255,255,0.06)",
+  borderMid: "rgba(255,255,255,0.10)",
   accent: "#7c3aed",
+  accentLight: "#a78bfa",
+  accentGlow: "rgba(124,58,237,0.15)",
   success: "#10b981",
-  text: "#f0eeff",
-  textSub: "#8b88b0",
-  textMuted: "#5c5880",
+  successBg: "rgba(16,185,129,0.12)",
+  warning: "#f59e0b",
+  warningBg: "rgba(245,158,11,0.10)",
   danger: "#ef4444",
-  dangerBg: "rgba(239,68,68,0.15)",
+  dangerBg: "rgba(239,68,68,0.12)",
+  text: "#ece8ff",
+  textSub: "#9490bb",
+  textMuted: "#4e4a6e",
+  gold: "#fbbf24",
+  goldBg: "rgba(251,191,36,0.10)",
+  sans: "'Inter', system-ui, sans-serif",
+  serif: "Georgia, 'Palatino Linotype', serif",
 };
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'Inter', system-ui, sans-serif" },
-  layout: { display: "flex", gap: 0, maxWidth: 1100, margin: "0 auto", padding: "1.5rem 1.5rem 4rem" },
+  root: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: C.sans, fontSize: 15 },
 
-  header: { borderBottom: `1px solid ${C.border}`, padding: "0 1.5rem", position: "sticky", top: 0, background: "#07070ddd", backdropFilter: "blur(12px)", zIndex: 10 },
-  headerInner: { maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 },
-  logo: { fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.05em", color: "#c4b5fd" },
-  logoSub: { fontSize: "0.75rem", color: C.textMuted, marginLeft: "0.75rem", letterSpacing: "0.08em", textTransform: "uppercase" },
-  errorBanner: { background: C.dangerBg, color: C.danger, padding: "0.75rem 1.5rem", fontSize: "0.9rem", borderBottom: `1px solid ${C.danger}` },
+  // Header
+  header: { position: "sticky", top: 0, zIndex: 20, background: "rgba(13,13,24,0.9)", backdropFilter: "blur(16px)", borderBottom: `1px solid ${C.border}` },
+  headerInner: { maxWidth: 1160, margin: "0 auto", padding: "0 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52 },
+  headerLeft: { display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 },
+  menuBtn: { background: "transparent", border: "none", color: C.textSub, fontSize: "1.2rem", cursor: "pointer", padding: "0.25rem 0.5rem", flexShrink: 0 },
+  breadcrumb: { display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0, overflow: "hidden" },
+  logoMark: { fontSize: "0.95rem", fontWeight: 700, color: C.accentLight, cursor: "pointer", letterSpacing: "0.04em", flexShrink: 0 },
+  crumbSep: { color: C.textMuted, fontSize: "0.85rem" },
+  crumbItem: { fontSize: "0.85rem", color: C.textSub, cursor: "pointer", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 },
+  crumbCurrent: { fontSize: "0.85rem", color: C.text, whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 },
+  errorBanner: { background: C.dangerBg, color: C.danger, padding: "0.65rem 1.5rem", fontSize: "0.88rem", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  errorClose: { background: "transparent", border: "none", color: C.danger, cursor: "pointer", fontSize: "1rem" },
 
-  sidebar: { width: 260, flexShrink: 0, paddingRight: "1.5rem", borderRight: `1px solid ${C.border}` },
-  sidebarLabel: { fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: C.textMuted, marginBottom: "0.75rem", marginTop: "1.5rem" },
-  mutedSide: { color: C.textMuted, fontSize: "0.85rem", lineHeight: 1.5 },
-  storyList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 2 },
-  storyItem: { padding: "0.65rem 0.75rem", borderRadius: 6, cursor: "pointer", display: "flex", gap: "0.5rem", alignItems: "flex-start", border: "1px solid transparent" },
-  storyItemActive: { background: "rgba(124,58,237,0.12)", borderColor: C.borderActive },
-  storyItemDot: { color: C.accent, fontSize: "0.7rem", marginTop: 3, flexShrink: 0 },
-  storyItemTitle: { fontSize: "0.9rem", fontWeight: 500, color: C.text, lineHeight: 1.4 },
-  storyItemDesc: { fontSize: "0.78rem", color: C.textMuted, marginTop: 2, lineHeight: 1.3 },
+  // Layout
+  layout: { display: "flex", maxWidth: 1160, margin: "0 auto", padding: "0 1rem 4rem", gap: 0, minHeight: "calc(100vh - 52px)" },
+
+  // Sidebar
+  sidebar: { width: 240, flexShrink: 0, paddingRight: "1.5rem", paddingTop: "1.5rem", borderRight: `1px solid ${C.border}`, "@media (max-width: 768px)": {} },
+  sidebarOpen: { position: "fixed" as const, top: 52, left: 0, bottom: 0, zIndex: 30, background: C.bg, width: 260, padding: "1rem", borderRight: `1px solid ${C.borderMid}`, overflowY: "auto" as const },
+  sidebarOverlay: { position: "fixed" as const, inset: 0, zIndex: 29, background: "rgba(0,0,0,0.5)" },
+  sidebarHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" },
+  sidebarLabel: { fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: C.textMuted, margin: 0 },
+  sidebarClose: { background: "transparent", border: "none", color: C.textMuted, fontSize: "1rem", cursor: "pointer" },
   storyForm: { display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: C.elevated, borderRadius: 8, border: `1px solid ${C.border}` },
+  storyList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 2 },
+  storyItem: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.6rem 0.65rem", borderRadius: 7, cursor: "pointer", border: "1px solid transparent" },
+  storyItemActive: { background: C.accentGlow, borderColor: C.accent },
+  storyItemDot: { fontSize: "0.65rem", color: C.accent, marginTop: 3, flexShrink: 0 },
+  storyItemTitle: { fontSize: "0.88rem", fontWeight: 500, color: C.text, lineHeight: 1.4 },
+  storyItemDesc: { fontSize: "0.76rem", color: C.textMuted, marginTop: 2, lineHeight: 1.3 },
+  mutedSmall: { fontSize: "0.82rem", color: C.textMuted, padding: "0.5rem 0" },
 
-  main: { flex: 1, paddingLeft: "1.75rem", minWidth: 0 },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, gap: "1rem", opacity: 0.4 },
-  emptyIcon: { fontSize: "2.5rem", color: C.accent },
-  emptyText: { fontSize: "1rem", color: C.textSub },
+  // Main
+  main: { flex: 1, paddingLeft: "1.75rem", paddingTop: "1.5rem", minWidth: 0 },
 
-  storyHeader: { marginTop: "1.5rem", marginBottom: "1.25rem", paddingBottom: "1.25rem", borderBottom: `1px solid ${C.border}` },
-  storyTitle: { fontSize: "1.5rem", fontWeight: 700, margin: 0, color: C.text, letterSpacing: "-0.01em" },
-  storyDesc: { fontSize: "0.9rem", color: C.textSub, marginTop: "0.4rem" },
+  // Empty state
+  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: "1rem", textAlign: "center" as const },
+  emptyIcon: { fontSize: "3rem", color: C.accent, opacity: 0.4 },
+  emptyTitle: { fontSize: "1.2rem", fontWeight: 600, color: C.textSub, margin: 0 },
+  emptyText: { fontSize: "0.9rem", color: C.textMuted, margin: 0, maxWidth: 320 },
 
+  // Page header
+  pageHeader: { marginBottom: "1.5rem", paddingBottom: "1.25rem", borderBottom: `1px solid ${C.border}` },
+  pageTitle: { fontSize: "1.6rem", fontWeight: 700, margin: "0 0 0.3rem", letterSpacing: "-0.02em", color: C.text },
+  pageDesc: { fontSize: "0.9rem", color: C.textSub, margin: 0, lineHeight: 1.6 },
+  backBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "transparent", border: "none", color: C.textMuted, fontSize: "0.85rem", cursor: "pointer", padding: "0 0 0.75rem", letterSpacing: "0.01em" },
+
+  // Tabs
   tabs: { display: "flex", gap: "0.25rem", marginBottom: "1.5rem" },
-  tab: { padding: "0.45rem 1.1rem", border: `1px solid ${C.border}`, borderRadius: 6, cursor: "pointer", background: "transparent", color: C.textSub, fontSize: "0.9rem" },
-  tabActive: { borderColor: C.borderActive, background: "rgba(124,58,237,0.12)", color: "#c4b5fd", fontWeight: 600 },
+  tab: { padding: "0.45rem 1.1rem", border: `1px solid ${C.border}`, borderRadius: 6, cursor: "pointer", background: "transparent", color: C.textSub, fontSize: "0.88rem" },
+  tabActive: { borderColor: C.accent, background: C.accentGlow, color: C.accentLight, fontWeight: 600 },
 
-  addSceneBtn: { width: "100%", padding: "0.7rem", border: `1px dashed ${C.border}`, borderRadius: 8, background: "transparent", color: C.textSub, fontSize: "0.9rem", cursor: "pointer", marginBottom: "1.25rem" },
-  newSceneForm: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1.25rem", marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
-  newSceneFormTitle: { fontSize: "0.8rem", fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 },
-  mutedCenter: { color: C.textMuted, fontSize: "0.9rem", textAlign: "center", padding: "2rem 0" },
+  // Forms
+  addBtn: { width: "100%", padding: "0.65rem", border: `1px dashed ${C.borderMid}`, borderRadius: 8, background: "transparent", color: C.textSub, fontSize: "0.88rem", cursor: "pointer", marginBottom: "1.25rem" },
+  inlineForm: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1.25rem", marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
+  formTitle: { fontSize: "0.75rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 },
+  mutedCenter: { color: C.textMuted, fontSize: "0.88rem", textAlign: "center" as const, padding: "2rem 0" },
+  hint: { fontSize: "0.76rem", color: C.textMuted, margin: 0 },
 
-  // Scene card
-  sceneGrid: { display: "flex", flexDirection: "column", gap: "1.5rem" },
-  sceneCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.25rem", display: "flex", flexDirection: "column", gap: "0.85rem" },
-  sceneCardHeader: { display: "flex", alignItems: "center", gap: "0.75rem" },
-  sceneOrderBadge: { width: 28, height: 28, borderRadius: "50%", background: "rgba(124,58,237,0.2)", border: `1px solid ${C.borderActive}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", fontWeight: 700, color: "#c4b5fd", flexShrink: 0 },
-  sceneCardTitle: { flex: 1, fontSize: "1.05rem", fontWeight: 600, margin: 0, color: C.text },
-  viewBtn: { padding: "0.3rem 0.7rem", fontSize: "0.8rem", border: `1px solid ${C.border}`, borderRadius: 5, cursor: "pointer", background: "transparent", color: C.textSub, whiteSpace: "nowrap" as const },
-  viewBtnActive: { padding: "0.3rem 0.7rem", fontSize: "0.8rem", border: `1px solid ${C.borderActive}`, borderRadius: 5, cursor: "pointer", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", whiteSpace: "nowrap" as const },
+  // Chapter cards
+  chapterList: { display: "flex", flexDirection: "column", gap: "0.75rem" },
+  chapterCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.1rem 1.25rem", cursor: "pointer", transition: "border-color 0.15s" },
+  chapterCardHeader: { display: "flex", alignItems: "flex-start", gap: "0.85rem" },
+  chapterOrder: { width: 30, height: 30, borderRadius: "50%", background: C.accentGlow, border: `1px solid ${C.accent}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", fontWeight: 700, color: C.accentLight, flexShrink: 0, marginTop: 2 },
+  chapterCardBody: { flex: 1, minWidth: 0 },
+  chapterTitle: { fontSize: "1rem", fontWeight: 600, color: C.text, lineHeight: 1.4 },
+  chapterDesc: { fontSize: "0.84rem", color: C.textSub, marginTop: "0.2rem", lineHeight: 1.5 },
+  chapterMeta: { display: "flex", gap: "0.4rem", alignItems: "center", marginTop: "0.35rem", fontSize: "0.78rem", color: C.textMuted },
+  metaDot: { opacity: 0.5 },
+  chapterArrow: { color: C.textMuted, fontSize: "1rem", flexShrink: 0, marginTop: 4 },
+  chapterSceneTags: { display: "flex", gap: "0.35rem", flexWrap: "wrap" as const, marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: `1px solid ${C.border}` },
+  sceneTag: { fontSize: "0.76rem", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 4, padding: "0.2rem 0.55rem" },
+  sceneTagClosed: { color: C.textMuted, opacity: 0.6 },
+  sceneTagMore: { fontSize: "0.76rem", color: C.textMuted, padding: "0.2rem 0.4rem" },
 
-  // Personnages pills dans la scène
-  sceneCharPills: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem" },
-  sceneCharPill: { fontSize: "0.78rem", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 20, padding: "0.2rem 0.6rem" },
+  // Scene list (in chapter)
+  sceneList: { display: "flex", flexDirection: "column", gap: "0.5rem" },
+  sceneListItem: { display: "flex", alignItems: "center", gap: "0.85rem", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer" },
+  sceneListOrder: { width: 26, height: 26, borderRadius: "50%", background: C.elevated, border: `1px solid ${C.borderMid}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.78rem", fontWeight: 600, color: C.textSub, flexShrink: 0 },
+  sceneListBody: { flex: 1, minWidth: 0 },
+  sceneListTitle: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 600, color: C.text },
+  sceneListMeta: { display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.78rem", color: C.textMuted, marginTop: "0.2rem" },
+  sceneListChars: { color: C.textSub },
+  statusBadge: { fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, padding: "0.15rem 0.5rem", borderRadius: 20 },
+  statusBadgeActive: { background: C.successBg, color: C.success, border: `1px solid rgba(16,185,129,0.3)` },
+  statusBadgeClosed: { background: C.elevated, color: C.textMuted, border: `1px solid ${C.border}` },
 
-  // Image
-  imagePlaceholder: { position: "relative", borderRadius: 8, height: 180, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.4rem" },
-  imagePlaceholderGrid: { position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" },
-  imagePlaceholderBadge: { position: "relative", fontSize: "0.72rem", fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.07)", padding: "0.25rem 0.7rem", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)" },
-  imagePlaceholderTitle: { position: "relative", fontSize: "1.15rem", fontWeight: 700, color: "rgba(255,255,255,0.9)", textAlign: "center" as const, padding: "0 1rem", textShadow: "0 2px 12px rgba(0,0,0,0.8)" },
-  imagePlaceholderChars: { position: "relative", fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", letterSpacing: "0.04em" },
-  sceneImage: { width: "100%", borderRadius: 8, display: "block" },
+  // Scene view
+  sceneView: { display: "flex", flexDirection: "column", gap: "1.25rem" },
+  sceneViewHeader: { display: "flex", flexDirection: "column", gap: "0.5rem" },
+  sceneViewTitleRow: { display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" as const },
+  sceneViewTitle: { fontSize: "1.45rem", fontWeight: 700, margin: 0, letterSpacing: "-0.02em", color: C.text },
+  sceneViewDesc: { fontSize: "0.9rem", color: C.textSub, margin: 0, fontStyle: "italic", lineHeight: 1.6 },
+  sceneChars: { display: "flex", flexWrap: "wrap" as const, gap: "0.5rem", alignItems: "center", marginTop: "0.25rem" },
+  sceneCharChip: { display: "flex", alignItems: "center", gap: "0.35rem", background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 20, padding: "0.2rem 0.65rem 0.2rem 0.35rem", fontSize: "0.82rem", color: C.textSub },
+  addPersonnageBtn: { background: "transparent", border: `1px dashed ${C.borderMid}`, borderRadius: 20, color: C.textMuted, fontSize: "0.82rem", cursor: "pointer", padding: "0.3rem 0.9rem", alignSelf: "flex-start" as const },
+
+  // Character select box
+  charSelectBox: { background: C.elevated, border: `1px solid ${C.borderMid}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
+  charSelectTitle: { fontSize: "0.75rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 },
+  charCheckList: { display: "flex", flexWrap: "wrap" as const, gap: "0.4rem" },
+  charCheckItem: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: "0.84rem", cursor: "pointer", color: C.textSub, userSelect: "none" as const },
+  charCheckItemOn: { borderColor: C.accent, background: C.accentGlow, color: C.accentLight },
+  checkbox: { width: 13, height: 13, accentColor: C.accent, cursor: "pointer" },
+  charCheckRole: { fontSize: "0.72rem", color: C.textMuted },
+
+  // Image banner
+  imageBanner: { position: "relative", borderRadius: 10, height: 200, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", padding: "1.5rem" },
+  imageBannerGrid: { position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)", backgroundSize: "28px 28px" },
+  imageBannerTitle: { position: "relative", fontSize: "1.2rem", fontWeight: 700, color: "rgba(255,255,255,0.9)", textShadow: "0 2px 16px rgba(0,0,0,0.8)", textAlign: "center" as const },
+  imageBannerChars: { position: "relative", fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.3rem", letterSpacing: "0.04em" },
+  sceneImg: { width: "100%", borderRadius: 10, display: "block" },
+
+  // View toggle
+  viewToggleBar: { display: "flex", background: C.elevated, borderRadius: 8, padding: "0.25rem", gap: "0.25rem", width: "fit-content" },
+  viewToggleBtn: { padding: "0.35rem 0.85rem", border: "none", borderRadius: 6, background: "transparent", color: C.textMuted, fontSize: "0.84rem", cursor: "pointer" },
+  viewToggleBtnActive: { padding: "0.35rem 0.85rem", border: "none", borderRadius: 6, background: C.surface, color: C.text, fontSize: "0.84rem", cursor: "pointer", fontWeight: 500 },
+
+  // Contributions
+  contributionsList: { display: "flex", flexDirection: "column", gap: "0" },
+  contribBubble: { display: "flex", gap: "0.85rem", padding: "1rem 0", borderBottom: `1px solid ${C.border}` },
+  contribBody: { flex: 1, minWidth: 0 },
+  contribMeta: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" },
+  contribAuthor: { fontSize: "0.85rem", fontWeight: 600, color: C.accentLight },
+  contribTime: { fontSize: "0.75rem", color: C.textMuted },
+  contribDelete: { marginLeft: "auto", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.78rem", opacity: 0.5, padding: "0.1rem 0.3rem" },
+  contribText: { margin: 0, color: C.text, lineHeight: 1.75, fontFamily: C.serif, fontSize: "0.96rem", whiteSpace: "pre-wrap" as const },
+  contribEmpty: { padding: "2rem 0", color: C.textMuted, fontSize: "0.88rem", fontStyle: "italic", textAlign: "center" as const },
+
+  // Avatars
+  avatar: { width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", fontWeight: 700, color: "#fff", flexShrink: 0 },
+  avatarSm: { width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 700, color: "#fff", flexShrink: 0 },
+  avatarXs: { width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.65rem", fontWeight: 700, color: "#fff", flexShrink: 0 },
+
+  // Write area
+  writeArea: { background: C.surface, border: `1px solid ${C.borderMid}`, borderRadius: 12, padding: "1.1rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
+  charSelect: { padding: "0.45rem 0.75rem", fontSize: "0.88rem", background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 7, color: C.textSub, width: "100%", maxWidth: 280 },
+  writeTextarea: { width: "100%", padding: "0.75rem", fontSize: "0.95rem", fontFamily: C.serif, background: "#0a0a15", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.75 },
+  writeActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" as const },
+  writeHint: { fontSize: "0.74rem", color: C.textMuted, margin: 0 },
 
   // Suggestion
-  suggestion: { background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 8, padding: "0.65rem 1rem", fontSize: "0.9rem", color: "#fde68a", display: "flex", gap: "0.5rem", alignItems: "flex-start" },
+  suggestion: { background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 8, padding: "0.65rem 0.85rem", display: "flex", gap: "0.5rem", alignItems: "flex-start" },
   suggestionIcon: { flexShrink: 0 },
+  suggestionText: { fontSize: "0.9rem", color: "#fde68a", flex: 1 },
+  suggestionClose: { background: "transparent", border: "none", color: "rgba(253,230,138,0.5)", cursor: "pointer", fontSize: "0.85rem", flexShrink: 0 },
 
-  // Spectator
-  spectatorBox: { background: "#030308", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 8, overflow: "hidden" },
-  spectatorHeader: { padding: "0.5rem 0.9rem", borderBottom: "1px solid rgba(124,58,237,0.2)", background: "rgba(124,58,237,0.08)" },
-  spectatorLabel: { fontSize: "0.75rem", fontWeight: 600, color: "#a78bfa", letterSpacing: "0.06em", textTransform: "uppercase" as const },
-  spectatorText: { padding: "1rem", margin: 0, color: "#d4d0f5", fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "0.95rem", lineHeight: 1.8, whiteSpace: "pre-wrap" as const },
-  spectatorEmpty: { padding: "1.25rem", color: C.textMuted, fontSize: "0.85rem", fontStyle: "italic", margin: 0 },
-
-  // Textarea
-  textareaDark: { width: "100%", minHeight: 140, padding: "0.75rem", fontSize: "0.95rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.7, fontFamily: "inherit" },
-
-  // Scene actions
-  sceneActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" as const },
-
-  // Character selection in scene
-  charSelectSection: { borderTop: `1px dashed ${C.border}`, paddingTop: "0.85rem", display: "flex", flexDirection: "column", gap: "0.6rem" },
-  charSelectLabel: { fontSize: "0.75rem", fontWeight: 600, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.08em", margin: 0 },
-  charSelectEmpty: { fontSize: "0.85rem", color: C.textMuted, margin: 0 },
-  charCheckList: { display: "flex", flexWrap: "wrap" as const, gap: "0.4rem" },
-  charCheckItem: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: "0.85rem", cursor: "pointer", color: C.textSub, userSelect: "none" as const },
-  charCheckItemActive: { borderColor: C.borderActive, background: "rgba(124,58,237,0.12)", color: "#c4b5fd" },
-  charCheckbox: { width: 13, height: 13, accentColor: C.accent, cursor: "pointer", flexShrink: 0 },
-  charCheckRole: { fontSize: "0.72rem", color: C.textMuted, marginLeft: "0.2rem" },
-
-  // Visibility bar
-  visBar: { display: "flex", alignItems: "center", gap: "0.5rem", paddingTop: "0.75rem", borderTop: `1px dashed ${C.border}`, flexWrap: "wrap" as const },
-  visLabel: { fontSize: "0.78rem", color: C.textMuted, whiteSpace: "nowrap" as const },
+  // Settings box
+  settingsBox: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
+  settingsTitle: { fontSize: "0.75rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 },
+  settingsRow: { display: "flex", alignItems: "center", gap: "0.75rem" },
+  settingsLabel: { fontSize: "0.84rem", color: C.textSub, minWidth: 160, flexShrink: 0 },
 
   // Characters tab
-  newCharForm: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", marginBottom: "1.5rem" },
   charGrid: { display: "flex", flexDirection: "column", gap: "0.75rem" },
-  charCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" },
-  charCardHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" as const },
-  charCardInfo: { display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" as const },
+  charCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1rem 1.1rem", display: "flex", flexDirection: "column", gap: "0.6rem" },
+  charCardTop: { display: "flex", gap: "0.85rem", alignItems: "flex-start" },
+  charInfo: { flex: 1, minWidth: 0 },
   charName: { fontSize: "1rem", fontWeight: 600, color: C.text },
-  charDesc: { fontSize: "0.85rem", color: C.textSub, margin: 0 },
-  roleBadge: { background: "rgba(124,58,237,0.2)", color: "#c4b5fd", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(124,58,237,0.3)" },
-  factionBadge: { background: "rgba(16,185,129,0.12)", color: "#6ee7b7", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(16,185,129,0.25)" },
-  scenesBadge: { background: "rgba(251,191,36,0.1)", color: "#fbbf24", borderRadius: 4, padding: "0.15rem 0.5rem", fontSize: "0.75rem", border: "1px solid rgba(251,191,36,0.25)" },
-
-  // Character appearances (scenes list)
-  charAppearances: { display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" as const },
-  charAppearancesLabel: { fontSize: "0.75rem", color: C.textMuted, whiteSpace: "nowrap" as const },
-  charScenePill: { fontSize: "0.78rem", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 4, padding: "0.2rem 0.55rem" },
-
-  // Character sheet
-  charSheet: { marginTop: "0.75rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem", paddingTop: "0.75rem", borderTop: `1px solid ${C.border}` },
+  charBadges: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem", marginTop: "0.3rem" },
+  badge: { fontSize: "0.72rem", fontWeight: 600, background: C.accentGlow, color: C.accentLight, border: `1px solid rgba(124,58,237,0.3)`, borderRadius: 4, padding: "0.15rem 0.5rem" },
+  badgeGreen: { background: C.successBg, color: C.success, border: `1px solid rgba(16,185,129,0.3)` },
+  badgeGold: { background: C.goldBg, color: C.gold, border: `1px solid rgba(251,191,36,0.3)` },
+  charDesc: { fontSize: "0.84rem", color: C.textSub, margin: "0.35rem 0 0", lineHeight: 1.5 },
+  charActions: { display: "flex", gap: "0.4rem", flexShrink: 0 },
+  charScenes: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem", alignItems: "center", paddingTop: "0.5rem", borderTop: `1px solid ${C.border}` },
+  charScenesLabel: { fontSize: "0.74rem", color: C.textMuted },
+  charSheet: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem", paddingTop: "0.85rem", borderTop: `1px solid ${C.border}` },
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.25rem" },
-  fieldLabel: { fontSize: "0.75rem", color: C.textMuted, fontWeight: 500 },
+  fieldLabel: { fontSize: "0.74rem", color: C.textMuted, fontWeight: 500 },
 
   // Buttons
   row: { display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" as const },
-  btnAccent: { padding: "0.5rem 1.1rem", fontSize: "0.9rem", cursor: "pointer", background: C.accent, color: "#fff", border: "none", borderRadius: 6, fontWeight: 500, whiteSpace: "nowrap" as const },
-  btnSaved: { padding: "0.5rem 1.1rem", fontSize: "0.9rem", cursor: "default", background: C.success, color: "#fff", border: "none", borderRadius: 6, fontWeight: 500, whiteSpace: "nowrap" as const },
-  btnGhost: { padding: "0.5rem 0.9rem", fontSize: "0.88rem", cursor: "pointer", background: "transparent", color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 6, whiteSpace: "nowrap" as const },
-  btnMicro: { padding: "0.3rem 0.65rem", fontSize: "0.8rem", cursor: "pointer", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 5 },
-  btnDanger: { padding: "0.3rem 0.6rem", fontSize: "0.82rem", cursor: "pointer", background: C.dangerBg, color: C.danger, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: 5 },
+  btnAccent: { padding: "0.5rem 1.1rem", fontSize: "0.88rem", cursor: "pointer", background: C.accent, color: "#fff", border: "none", borderRadius: 7, fontWeight: 500, whiteSpace: "nowrap" as const },
+  btnGhost: { padding: "0.5rem 0.9rem", fontSize: "0.86rem", cursor: "pointer", background: "transparent", color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 7, whiteSpace: "nowrap" as const },
+  btnMicro: { padding: "0.28rem 0.65rem", fontSize: "0.78rem", cursor: "pointer", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 5, whiteSpace: "nowrap" as const },
+  btnDanger: { padding: "0.28rem 0.6rem", fontSize: "0.8rem", cursor: "pointer", background: C.dangerBg, color: C.danger, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: 5 },
 
   // Inputs
-  inputDark: { padding: "0.5rem 0.75rem", fontSize: "0.9rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, flex: 1 },
-  selectDark: { padding: "0.4rem 0.6rem", fontSize: "0.85rem", background: "#0a0a14", border: `1px solid ${C.border}`, borderRadius: 5, color: C.textSub },
+  inputDark: { padding: "0.5rem 0.75rem", fontSize: "0.88rem", background: "#0a0a15", border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, flex: 1, minWidth: 0 },
+  textareaDark: { width: "100%", padding: "0.65rem 0.75rem", fontSize: "0.88rem", background: "#0a0a15", border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.6, fontFamily: C.sans },
+  selectDark: { padding: "0.4rem 0.65rem", fontSize: "0.86rem", background: "#0a0a15", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textSub },
 };
