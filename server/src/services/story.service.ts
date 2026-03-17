@@ -6,7 +6,7 @@ export const getAllStories = () =>
 export const getStoryById = (id: string) =>
   prisma.story.findUnique({
     where: { id },
-    include: { characters: true, scenes: { orderBy: { order: "asc" } } },
+    include: { characters: true, chapters: { orderBy: { order: "asc" } } },
   });
 
 export const createStory = (data: { title: string; description?: string }) =>
