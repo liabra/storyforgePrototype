@@ -342,7 +342,7 @@ export default function App() {
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   const totalContribs = (ch: Chapter) =>
-    ch.scenes.reduce((sum, sc) => sum + sc._count.contributions, 0);
+    (ch.scenes ?? []).reduce((sum, sc) => sum + sc._count.contributions, 0);
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -490,21 +490,21 @@ export default function App() {
                             <div style={s.chapterTitle}>{ch.title}</div>
                             {ch.description && <div style={s.chapterDesc}>{ch.description}</div>}
                             <div style={s.chapterMeta}>
-                              <span>{ch.scenes.length} scène{ch.scenes.length !== 1 ? "s" : ""}</span>
+                              <span>{(ch.scenes ?? []).length} scène{(ch.scenes ?? []).length !== 1 ? "s" : ""}</span>
                               <span style={s.metaDot}>·</span>
                               <span>{totalContribs(ch)} contribution{totalContribs(ch) !== 1 ? "s" : ""}</span>
                             </div>
                           </div>
                           <span style={s.chapterArrow}>→</span>
                         </div>
-                        {ch.scenes.length > 0 && (
+                        {(ch.scenes ?? []).length > 0 && (
                           <div style={s.chapterSceneTags}>
-                            {ch.scenes.slice(0, 4).map((sc) => (
+                            {(ch.scenes ?? []).slice(0, 4).map((sc) => (
                               <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "CLOSED" ? s.sceneTagClosed : {}) }}>
                                 {sc.order}. {sc.title}
                               </span>
                             ))}
-                            {ch.scenes.length > 4 && <span style={s.sceneTagMore}>+{ch.scenes.length - 4}</span>}
+                            {(ch.scenes ?? []).length > 4 && <span style={s.sceneTagMore}>+{(ch.scenes ?? []).length - 4}</span>}
                           </div>
                         )}
                       </div>
