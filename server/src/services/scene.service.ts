@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import prisma from "../prisma/client";
+import { SceneStatus } from "../generated/prisma/client";
 import { generateImage } from "./image.service";
 
 const characterSelect = {
@@ -54,7 +55,7 @@ export const updateScene = (
     description?: string;
     order?: number;
     imageUrl?: string;
-    status?: string;
+    status?: SceneStatus;
     visibilityMode?: string;
     visibleCount?: number;
   }

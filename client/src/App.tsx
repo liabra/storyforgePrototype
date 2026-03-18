@@ -47,6 +47,18 @@ function applyVisibility(contributions: Contribution[], mode: string, count: num
 
 const IS_PLACEHOLDER = (url?: string | null) => !!url && url.startsWith("https://placehold.co");
 
+function statusLabel(status: string): string {
+  if (status === "DRAFT") return "Brouillon";
+  if (status === "DONE") return "Terminée";
+  return "Active";
+}
+
+function statusBadgeStyle(status: string): React.CSSProperties {
+  if (status === "DRAFT") return { background: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" };
+  if (status === "DONE") return { background: "rgba(255,255,255,0.05)", color: "#4e4a6e", border: "1px solid rgba(255,255,255,0.08)" };
+  return { background: "rgba(16,185,129,0.12)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -78,7 +90,7 @@ export default function App() {
 
   // Scene settings
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsEdit, setSettingsEdit] = useState({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE" });
+  const [settingsEdit, setSettingsEdit] = useState({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE" as string });
   const [savingSettings, setSavingSettings] = useState(false);
 
   // Scene characters
@@ -500,7 +512,7 @@ export default function App() {
                         {(ch.scenes ?? []).length > 0 && (
                           <div style={s.chapterSceneTags}>
                             {(ch.scenes ?? []).slice(0, 4).map((sc) => (
-                              <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "CLOSED" ? s.sceneTagClosed : {}) }}>
+                              <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "DONE" ? s.sceneTagClosed : sc.status === "DRAFT" ? s.sceneTagDraft : {}) }}>
                                 {sc.order}. {sc.title}
                               </span>
                             ))}
@@ -564,7 +576,7 @@ export default function App() {
                             <div style={s.charScenes}>
                               <span style={s.charScenesLabel}>Apparaît dans :</span>
                               {char.scenes.map((sc) => (
-                                <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "CLOSED" ? s.sceneTagClosed : {}) }}>
+                                <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "DONE" ? s.sceneTagClosed : sc.status === "DRAFT" ? s.sceneTagDraft : {}) }}>
                                   {sc.order}. {sc.title}
                                 </span>
                               ))}
@@ -640,8 +652,8 @@ export default function App() {
                     <div style={s.sceneListBody}>
                       <div style={s.sceneListTitle}>
                         {sc.title}
-                        <span style={{ ...s.statusBadge, ...(sc.status === "CLOSED" ? s.statusBadgeClosed : s.statusBadgeActive) }}>
-                          {sc.status === "CLOSED" ? "Fermée" : "Active"}
+                        <span style={{ ...s.statusBadge, ...statusBadgeStyle(sc.status) }}>
+                          {statusLabel(sc.status)}
                         </span>
                       </div>
                       <div style={s.sceneListMeta}>
@@ -669,8 +681,8 @@ export default function App() {
                 <button style={s.backBtn} onClick={() => setSelectedScene(null)}>← Scènes</button>
                 <div style={s.sceneViewTitleRow}>
                   <h2 style={s.sceneViewTitle}>{selectedScene.title}</h2>
-                  <span style={{ ...s.statusBadge, ...(selectedScene.status === "CLOSED" ? s.statusBadgeClosed : s.statusBadgeActive) }}>
-                    {selectedScene.status === "CLOSED" ? "Fermée" : "Active"}
+                  <span style={{ ...s.statusBadge, ...statusBadgeStyle(selectedScene.status) }}>
+                    {statusLabel(selectedScene.status)}
                   </span>
                 </div>
                 {selectedScene.description && <p style={s.sceneViewDesc}>{selectedScene.description}</p>}
@@ -797,15 +809,20 @@ export default function App() {
                 <div ref={contribEndRef} />
               </div>
 
-              {/* ── Scène fermée */}
-              {selectedScene.status === "CLOSED" && (
+              {/* ── Scène non-active */}
+              {selectedScene.status === "DONE" && (
                 <div style={s.closedBanner}>
-                  🔒 Cette scène est fermée — les contributions ne sont plus acceptées.
+                  ✅ Cette scène est terminée — les contributions ne sont plus acceptées.
+                </div>
+              )}
+              {selectedScene.status === "DRAFT" && (
+                <div style={{ ...s.closedBanner, ...s.draftBanner }}>
+                  📝 Cette scène est en brouillon — elle n'est pas encore ouverte aux contributions.
                 </div>
               )}
 
-              {/* ── Zone d'écriture (auteur, scène active seulement) */}
-              {!spectatorView && selectedScene.status !== "CLOSED" && (
+              {/* ── Zone d'écriture (auteur, scène ACTIVE seulement) */}
+              {!spectatorView && selectedScene.status === "ACTIVE" && (
                 <div style={s.writeArea}>
                   {suggestion && (
                     <div style={s.suggestion}>
@@ -863,8 +880,9 @@ export default function App() {
                       <div style={s.settingsRow}>
                         <label style={s.settingsLabel}>Statut</label>
                         <select style={s.selectDark} value={settingsEdit.status} onChange={(e) => setSettingsEdit((p) => ({ ...p, status: e.target.value }))}>
+                          <option value="DRAFT">Brouillon</option>
                           <option value="ACTIVE">Active</option>
-                          <option value="CLOSED">Fermée</option>
+                          <option value="DONE">Terminée</option>
                         </select>
                       </div>
                       <div style={s.settingsRow}>
@@ -1075,6 +1093,8 @@ const s: Record<string, React.CSSProperties> = {
 
   // Settings box
   closedBanner: { background: C.elevated, border: `1px solid ${C.borderMid}`, borderRadius: 8, padding: "0.75rem 1rem", fontSize: "0.88rem", color: C.textMuted, textAlign: "center" as const },
+  draftBanner: { background: "rgba(245,158,11,0.07)", borderColor: "rgba(245,158,11,0.25)", color: "#f59e0b" },
+  sceneTagDraft: { color: "#f59e0b", opacity: 0.8 },
   settingsBox: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" },
   settingsTitle: { fontSize: "0.75rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.1em", margin: 0 },
   settingsRow: { display: "flex", alignItems: "center", gap: "0.75rem" },

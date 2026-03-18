@@ -39,14 +39,20 @@ model Chapter {
   updatedAt   DateTime @updatedAt
 }
 
+enum SceneStatus {
+  DRAFT
+  ACTIVE
+  DONE
+}
+
 model Scene {
-  id             String         @id @default(cuid())
+  id             String      @id @default(cuid())
   title          String
   description    String?
   imageUrl       String?
-  order          Int            @default(0)
-  status         String         @default("ACTIVE")
-  visibilityMode String         @default("last")
+  order          Int         @default(0)
+  status         SceneStatus @default(ACTIVE)
+  visibilityMode String      @default("last")
   visibleCount   Int            @default(3)
   chapterId      String
   chapter        Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)

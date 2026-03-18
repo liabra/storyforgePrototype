@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../prisma/client";
+import { SceneStatus } from "../generated/prisma/client";
 
 export const seed = async (_req: Request, res: Response) => {
   await prisma.story.deleteMany({});
@@ -51,14 +52,14 @@ export const seed = async (_req: Request, res: Response) => {
                   description:
                     "Une auberge délabrée à la lisière du Bois des Âmes. Trois étrangers se retrouvent autour d'un feu mourant.",
                   order: 1,
-                  status: "CLOSED",
+                  status: SceneStatus.DONE,
                 },
                 {
                   title: "La Route du Nord",
                   description:
                     "La troupe quitte la taverne à l'aube sous une pluie froide. La forêt s'épaissit.",
                   order: 2,
-                  status: "ACTIVE",
+                  status: SceneStatus.ACTIVE,
                 },
               ],
             },
@@ -73,14 +74,14 @@ export const seed = async (_req: Request, res: Response) => {
                   description:
                     "Les ruines du château se dressent dans la brume du matin. Des inscriptions anciennes couvrent les murs.",
                   order: 1,
-                  status: "ACTIVE",
+                  status: SceneStatus.ACTIVE,
                 },
                 {
                   title: "La Chambre du Conseil",
                   description:
                     "Une salle secrète sous les décombres, encore intacte. Une table ronde et sept sièges vides.",
                   order: 2,
-                  status: "ACTIVE",
+                  status: SceneStatus.ACTIVE,
                 },
               ],
             },
