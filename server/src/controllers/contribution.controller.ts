@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import * as contributionService from "../services/contribution.service";
+import prisma from "../prisma/client";
+import { SceneStatus } from "../generated/prisma/client";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -15,7 +17,18 @@ export const getByScene = async (req: Request, res: Response) => {
 export const create = async (req: Request, res: Response) => {
   const sceneId = getSingleParam(req.params.sceneId);
   const { content, characterId } = req.body;
+
   if (!content?.trim()) return res.status(400).json({ error: "content is required" });
+
+  const scene = await prisma.scene.findUnique({ where: { id: sceneId }, select: { status: true } });
+  if (!scene) return res.status(404).json({ error: "Scene not found" });
+  if (scene.status !== SceneStatus.ACTIVE) {
+    return res.status(403).json({
+      error: "Cette scène n'accepte pas de contributions",
+      status: scene.status,
+    });
+  }
+
   const contribution = await contributionService.createContribution(sceneId, {
     content: content.trim(),
     characterId: characterId || undefined,

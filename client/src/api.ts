@@ -1,5 +1,7 @@
 const BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
+export type SceneStatus = "DRAFT" | "ACTIVE" | "DONE";
+
 export interface Story {
   id: string;
   title: string;
@@ -20,7 +22,7 @@ export interface SceneRef {
   id: string;
   title: string;
   order: number;
-  status: string;
+  status: SceneStatus;
 }
 
 export interface ChapterSceneItem extends SceneRef {
@@ -53,7 +55,7 @@ export interface Scene {
   description?: string;
   imageUrl?: string;
   order: number;
-  status: string;
+  status: SceneStatus;
   visibilityMode: string;
   visibleCount: number;
   chapterId: string;
