@@ -31,9 +31,8 @@ function avatarHue(name: string): number {
 function sceneGradient(title: string): string {
   let h = 0;
   for (let i = 0; i < title.length; i++) h = title.charCodeAt(i) + ((h << 5) - h);
-  const h1 = Math.abs(h) % 360;
-  const h2 = (h1 + 60) % 360;
-  return `linear-gradient(135deg, hsl(${h1},50%,8%) 0%, hsl(${h2},60%,14%) 100%)`;
+  const hue = Math.abs(h) % 40 + 18;
+  return `linear-gradient(135deg, hsl(${hue},65%,22%) 0%, hsl(${(hue + 25) % 360},55%,36%) 100%)`;
 }
 
 function formatTime(iso: string) {
@@ -55,15 +54,27 @@ function statusLabel(status: string): string {
 }
 
 function statusBadgeStyle(status: string): React.CSSProperties {
-  if (status === "DRAFT") return { background: "rgba(184,119,24,0.10)", color: "#b87718", border: "1px solid rgba(184,119,24,0.28)" };
-  if (status === "DONE") return { background: "rgba(255,240,200,0.05)", color: "#5e5040", border: "1px solid rgba(255,240,200,0.08)" };
-  return { background: "rgba(42,157,110,0.10)", color: "#2a9d6e", border: "1px solid rgba(42,157,110,0.28)" };
+  if (status === "DRAFT") return { background: "rgba(122,76,8,0.10)", color: "#7a4c08", border: "1px solid rgba(122,76,8,0.3)" };
+  if (status === "DONE")  return { background: "rgba(75,35,5,0.07)",  color: "rgba(75,35,5,0.45)", border: "1px solid rgba(75,35,5,0.18)" };
+  return { background: "rgba(25,72,32,0.10)", color: "#194820", border: "1px solid rgba(45,115,55,0.32)" };
 }
 
 function sceneItemStyle(status: string): React.CSSProperties {
-  if (status === "ACTIVE") return { boxShadow: "inset 3px 0 0 rgba(42,157,110,0.55), 0 1px 6px rgba(0,0,0,0.3)" };
-  if (status === "DRAFT")  return { boxShadow: "inset 3px 0 0 rgba(184,119,24,0.5),   0 1px 6px rgba(0,0,0,0.3)" };
-  return                           { boxShadow: "inset 3px 0 0 rgba(94,82,68,0.45),    0 1px 6px rgba(0,0,0,0.3)" };
+  if (status === "ACTIVE") return { boxShadow: "inset 3px 0 0 rgba(25,72,32,0.65),  0 1px 6px rgba(75,35,5,0.1)" };
+  if (status === "DRAFT")  return { boxShadow: "inset 3px 0 0 rgba(122,76,8,0.6),   0 1px 6px rgba(75,35,5,0.1)" };
+  return                           { boxShadow: "inset 3px 0 0 rgba(75,35,5,0.38),   0 1px 6px rgba(75,35,5,0.1)" };
+}
+
+function characterInk(hue: number): { color: string; bg: string; border: string } {
+  const palette = [
+    { color: "#3c1e6a", bg: "rgba(60,30,106,0.07)",  border: "rgba(95,65,155,0.42)"  },
+    { color: "#194820", bg: "rgba(25,72,32,0.07)",   border: "rgba(45,115,55,0.42)"  },
+    { color: "#662205", bg: "rgba(102,34,5,0.07)",   border: "rgba(155,75,18,0.44)"  },
+    { color: "#1a3a5c", bg: "rgba(26,58,92,0.07)",   border: "rgba(45,100,155,0.42)" },
+    { color: "#4a2800", bg: "rgba(74,40,0,0.07)",    border: "rgba(130,80,20,0.44)"  },
+    { color: "#5a1e40", bg: "rgba(90,30,64,0.07)",   border: "rgba(140,65,100,0.42)" },
+  ];
+  return palette[Math.floor(hue / 60) % 6];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -372,6 +383,8 @@ export default function App() {
 
   return (
     <div style={s.root}>
+      <div style={s.sealTL} aria-hidden="true">✦</div>
+      <div style={s.sealBR} aria-hidden="true">✦</div>
 
       {/* ══ Header */}
       <header style={s.header}>
@@ -552,11 +565,12 @@ export default function App() {
                   <div style={s.charGrid}>
                     {characters.map((char) => {
                       const hue = avatarHue(displayName(char));
+                      const ink = characterInk(hue);
                       const isExpanded = expandedCharId === char.id;
                       return (
                         <div key={char.id} style={s.charCard}>
                           <div style={s.charCardTop}>
-                            <div style={{ ...s.avatar, background: `hsl(${hue},50%,30%)`, border: `2px solid hsl(${hue},60%,45%)` }}>
+                            <div style={{ ...s.avatar, background: ink.color, border: `2px solid ${ink.border}`, boxShadow: `0 0 0 2px rgba(255,235,170,0.3), 0 2px 8px rgba(0,0,0,0.15)` }}>
                               {initial(char)}
                             </div>
                             <div style={s.charInfo}>
@@ -705,9 +719,10 @@ export default function App() {
                   <div style={s.sceneChars}>
                     {selectedScene.characters.map((c) => {
                       const hue = avatarHue(displayName(c));
+                      const ink = characterInk(hue);
                       return (
                         <div key={c.id} style={s.sceneCharChip}>
-                          <div style={{ ...s.avatarXs, background: `hsl(${hue},50%,30%)` }}>{initial(c)}</div>
+                          <div style={{ ...s.avatarXs, background: ink.color }}>{initial(c)}</div>
                           <span>{displayName(c)}</span>
                         </div>
                       );
@@ -800,14 +815,15 @@ export default function App() {
 
                   return visible.map((contrib) => {
                     const hue = avatarHue(displayName(contrib.character));
+                    const ink = characterInk(hue);
                     return (
-                      <div key={contrib.id} style={s.contribBubble} className="contrib-bubble">
-                        <div style={{ ...s.avatarSm, background: `hsl(${hue},50%,30%)`, border: `2px solid hsl(${hue},55%,42%)` }}>
+                      <div key={contrib.id} style={{ ...s.contribBubble, borderLeft: `3px solid ${ink.border}`, background: ink.bg }} className="contrib-bubble">
+                        <div style={{ ...s.avatarSm, background: ink.color, border: `2px solid ${ink.border}`, boxShadow: "0 0 0 2px rgba(255,235,170,0.3), 0 2px 8px rgba(0,0,0,0.15)" }}>
                           {initial(contrib.character)}
                         </div>
                         <div style={s.contribBody}>
                           <div style={s.contribMeta}>
-                            <span style={s.contribAuthor}>{displayName(contrib.character)}</span>
+                            <span style={{ ...s.contribAuthor, color: ink.color }}>{displayName(contrib.character)}</span>
                             <span style={s.contribTime}>{formatTime(contrib.createdAt)}</span>
                             {!spectatorView && (
                               <button style={s.contribDelete} onClick={() => handleDeleteContrib(contrib.id)} title="Supprimer">✕</button>
@@ -944,72 +960,69 @@ export default function App() {
 // ─── Design system ────────────────────────────────────────────────────────────
 
 const C = {
-  bg: "#0e0d0b",
-  bgSidebar: "#0a0908",
-  surface: "#161311",
-  elevated: "#1e1b16",
-  overlay: "#262118",
-  border: "rgba(255,240,200,0.07)",
-  borderMid: "rgba(255,240,200,0.13)",
-  borderStrong: "rgba(255,240,200,0.22)",
-  accent: "#7c3aed",
-  accentLight: "#a78bfa",
-  accentGlow: "rgba(124,58,237,0.14)",
-  ember: "#c4892a",
-  emberLight: "#d4a53a",
-  emberBg: "rgba(196,137,42,0.10)",
-  emberBorder: "rgba(196,137,42,0.28)",
-  gold: "#c4912e",
-  goldLight: "#d4a53a",
-  goldBg: "rgba(196,145,46,0.10)",
-  success: "#2a9d6e",
-  successBg: "rgba(42,157,110,0.10)",
-  successBorder: "rgba(42,157,110,0.28)",
-  warning: "#b87718",
-  warningBg: "rgba(184,119,24,0.10)",
-  warningBorder: "rgba(184,119,24,0.28)",
-  danger: "#b83428",
-  dangerBg: "rgba(184,52,40,0.10)",
-  dangerBorder: "rgba(184,52,40,0.28)",
-  text: "#f2ede4",
-  textSub: "#a09278",
-  textMuted: "#5e5040",
-  sans: "'Inter', system-ui, sans-serif",
-  serif: "'Lora', Georgia, 'Palatino Linotype', serif",
+  bg: "transparent",
+  surface: "rgba(225,190,105,0.38)",
+  elevated: "rgba(205,168,78,0.45)",
+  overlay: "rgba(188,150,62,0.52)",
+  border: "rgba(75,35,5,0.18)",
+  borderMid: "rgba(75,35,5,0.28)",
+  borderStrong: "rgba(75,35,5,0.45)",
+  accent: "#3c1e6a",
+  accentLight: "#6b4b9e",
+  accentGlow: "rgba(60,30,106,0.10)",
+  success: "#194820",
+  successBg: "rgba(25,72,32,0.10)",
+  successBorder: "rgba(45,115,55,0.34)",
+  warning: "#7a4c08",
+  warningBg: "rgba(122,76,8,0.10)",
+  warningBorder: "rgba(160,100,20,0.34)",
+  danger: "#8b1a0a",
+  dangerBg: "rgba(139,26,10,0.10)",
+  dangerBorder: "rgba(180,60,20,0.34)",
+  text: "#180b01",
+  textSub: "#2a1003",
+  textMuted: "rgba(75,35,5,0.50)",
+  sans: "'Jost', system-ui, sans-serif",
+  serif: "'EB Garamond', Georgia, serif",
+  display: "'Cinzel Decorative', 'Cinzel', serif",
+  ui: "'Cinzel', 'Jost', serif",
 };
 
 const s: Record<string, React.CSSProperties> = {
-  root: { minHeight: "100vh", background: C.bg, color: C.text, fontFamily: C.sans, fontSize: 15 },
+  root: { minHeight: "100vh", color: C.text, fontFamily: C.sans, fontSize: 15 },
+
+  // Cachets de cire
+  sealTL: { position: "fixed" as const, top: "4.5rem", left: "0.7rem", width: 42, height: 42, borderRadius: "50%", background: "radial-gradient(circle at 36% 36%, #c85a30 0%, #8b2010 48%, #4d0d05 100%)", boxShadow: "0 3px 12px rgba(0,0,0,0.35), 0 0 0 2px rgba(140,50,15,0.32), 0 0 0 4px rgba(140,50,15,0.1)", color: "rgba(255,215,175,0.5)", fontSize: "0.85rem", lineHeight: "42px", textAlign: "center" as const, pointerEvents: "none", zIndex: 98, userSelect: "none" as const },
+  sealBR: { position: "fixed" as const, bottom: "5rem", right: "0.5rem", width: 44, height: 44, borderRadius: "50%", background: "radial-gradient(circle at 36% 36%, #c85a30 0%, #8b2010 48%, #4d0d05 100%)", boxShadow: "0 3px 12px rgba(0,0,0,0.35), 0 0 0 2px rgba(140,50,15,0.32), 0 0 0 4px rgba(140,50,15,0.1)", color: "rgba(255,215,175,0.5)", fontSize: "0.85rem", lineHeight: "44px", textAlign: "center" as const, pointerEvents: "none", zIndex: 98, userSelect: "none" as const },
 
   // Header
-  header: { position: "sticky", top: 0, zIndex: 20, background: "rgba(14,13,11,0.94)", backdropFilter: "blur(20px)", borderBottom: `1px solid ${C.border}` },
-  headerInner: { maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58 },
+  header: { position: "sticky" as const, top: 0, zIndex: 20, background: "rgba(175,132,42,0.92)", backdropFilter: "blur(14px)", borderBottom: "2px solid rgba(75,35,5,0.28)" },
+  headerInner: { maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 62 },
   headerLeft: { display: "flex", alignItems: "center", gap: "0.85rem", minWidth: 0, flex: 1 },
-  menuBtn: { background: "transparent", border: "none", color: C.textMuted, fontSize: "1.1rem", cursor: "pointer", padding: "0.3rem 0.4rem", flexShrink: 0, lineHeight: 1 },
-  breadcrumb: { display: "flex", alignItems: "center", gap: "0.45rem", minWidth: 0, overflow: "hidden" },
-  logoMark: { fontSize: "0.88rem", fontWeight: 700, color: C.accentLight, cursor: "pointer", letterSpacing: "0.08em", flexShrink: 0, fontFamily: C.serif },
-  crumbSep: { color: C.textMuted, fontSize: "0.78rem", opacity: 0.6 },
-  crumbItem: { fontSize: "0.81rem", color: C.textSub, cursor: "pointer", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140 },
-  crumbCurrent: { fontSize: "0.81rem", color: C.text, whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 },
+  menuBtn: { background: "transparent", border: "none", color: C.textSub, fontSize: "1.1rem", cursor: "pointer", padding: "0.3rem 0.4rem", flexShrink: 0, lineHeight: 1 },
+  breadcrumb: { display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, overflow: "hidden" },
+  logoMark: { fontSize: "0.82rem", fontWeight: 700, color: C.text, cursor: "pointer", letterSpacing: "0.1em", flexShrink: 0, fontFamily: C.display },
+  crumbSep: { color: C.textMuted, fontSize: "0.8rem" },
+  crumbItem: { fontSize: "0.78rem", color: C.textSub, cursor: "pointer", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, fontFamily: C.ui },
+  crumbCurrent: { fontSize: "0.78rem", color: C.text, whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180, fontFamily: C.ui },
   errorBanner: { background: C.dangerBg, color: C.danger, padding: "0.65rem 1.5rem", fontSize: "0.88rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.dangerBorder}` },
   errorClose: { background: "transparent", border: "none", color: C.danger, cursor: "pointer", fontSize: "1rem" },
 
   // Layout
-  layout: { display: "flex", maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem 5rem", gap: 0, minHeight: "calc(100vh - 58px)" },
+  layout: { display: "flex", maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem 5rem", gap: 0, minHeight: "calc(100vh - 62px)" },
 
-  // Sidebar — fond légèrement plus sombre pour créer de la profondeur
-  sidebar: { width: 240, flexShrink: 0, paddingRight: "1.5rem", paddingTop: "1.75rem", borderRight: `1px solid ${C.border}` },
-  sidebarOpen: { position: "fixed" as const, top: 58, left: 0, bottom: 0, zIndex: 30, width: 260, padding: "1.25rem", borderRight: `1px solid ${C.borderMid}`, overflowY: "auto" as const },
-  sidebarOverlay: { position: "fixed" as const, inset: 0, zIndex: 29, background: "rgba(0,0,0,0.65)" },
+  // Sidebar
+  sidebar: { width: 230, flexShrink: 0, paddingRight: "1.5rem", paddingTop: "1.75rem", borderRight: "1px solid rgba(75,35,5,0.2)" },
+  sidebarOpen: { position: "fixed" as const, top: 62, left: 0, bottom: 0, zIndex: 30, width: 250, padding: "1.25rem", borderRight: "1px solid rgba(75,35,5,0.3)", overflowY: "auto" as const },
+  sidebarOverlay: { position: "fixed" as const, inset: 0, zIndex: 29, background: "rgba(60,25,5,0.55)" },
   sidebarHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" },
-  sidebarLabel: { fontSize: "0.66rem", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase" as const, color: C.textMuted, margin: 0 },
+  sidebarLabel: { fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase" as const, color: C.textMuted, margin: 0, fontFamily: C.ui },
   sidebarClose: { background: "transparent", border: "none", color: C.textMuted, fontSize: "1rem", cursor: "pointer" },
-  storyForm: { display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1rem", padding: "0.9rem", background: C.elevated, borderRadius: 10, border: `1px solid ${C.borderMid}` },
-  storyList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 2 },
-  // Story items: le CSS class .story-item gère le hover
-  storyItem: { display: "flex", gap: "0.6rem", alignItems: "flex-start", padding: "0.7rem 0.75rem", borderRadius: 8, cursor: "pointer", border: "1px solid transparent" },
-  storyItemActive: { background: C.accentGlow, borderColor: "rgba(124,58,237,0.4)" },
-  storyItemDot: { fontSize: "0.55rem", color: C.accentLight, marginTop: 5, flexShrink: 0 },
+  storyForm: { display: "flex", flexDirection: "column" as const, gap: "0.5rem", marginBottom: "1rem", padding: "0.9rem", background: "rgba(200,165,80,0.42)", borderRadius: 3, border: `1px solid ${C.borderMid}` },
+  storyList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column" as const, gap: 2 },
+  storyItem: { display: "flex", gap: "0.6rem", alignItems: "flex-start", padding: "0.65rem 0.7rem", borderRadius: 3, cursor: "pointer", border: "1px solid transparent" },
+  storyItemActive: { background: "rgba(75,35,5,0.12)", borderColor: "rgba(75,35,5,0.32)" },
+  storyItemDot: { fontSize: "0.55rem", color: C.textSub, marginTop: 5, flexShrink: 0 },
   storyItemTitle: { fontSize: "0.87rem", fontWeight: 500, color: C.text, lineHeight: 1.4, fontFamily: C.serif },
   storyItemDesc: { fontSize: "0.74rem", color: C.textMuted, marginTop: 2, lineHeight: 1.35 },
   mutedSmall: { fontSize: "0.82rem", color: C.textMuted, padding: "0.5rem 0" },
@@ -1017,160 +1030,160 @@ const s: Record<string, React.CSSProperties> = {
   // Main
   main: { flex: 1, paddingLeft: "2.25rem", paddingTop: "1.75rem", minWidth: 0 },
 
-  // Empty state — plus atmosphérique
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "65vh", gap: "1.25rem", textAlign: "center" as const },
-  emptyOrn: { fontSize: "2.8rem", color: C.accentLight, fontFamily: C.serif, lineHeight: 1 },
-  emptyTitle: { fontSize: "1.5rem", fontWeight: 600, color: C.textSub, margin: 0, fontFamily: C.serif, letterSpacing: "-0.01em" },
-  emptyText: { fontSize: "0.88rem", color: C.textMuted, margin: 0, maxWidth: 280, lineHeight: 1.8 },
+  // Empty state
+  emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", minHeight: "65vh", gap: "1.25rem", textAlign: "center" as const },
+  emptyOrn: { fontSize: "2.8rem", color: C.text, fontFamily: C.display, lineHeight: 1 },
+  emptyTitle: { fontSize: "1.6rem", fontWeight: 700, color: C.text, margin: 0, fontFamily: C.display, letterSpacing: "0.05em" },
+  emptyText: { fontSize: "0.9rem", color: C.textSub, margin: 0, maxWidth: 280, lineHeight: 1.85, fontFamily: C.serif, fontStyle: "italic" },
 
   // Page header
-  pageHeader: { marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: `1px solid ${C.border}` },
-  pageTitle: { fontSize: "1.7rem", fontWeight: 700, margin: "0 0 0.45rem", letterSpacing: "-0.03em", color: C.text, fontFamily: C.serif },
-  pageDesc: { fontSize: "0.91rem", color: C.textSub, margin: 0, lineHeight: 1.75, fontStyle: "italic", fontFamily: C.serif },
-  backBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "transparent", border: "none", color: C.textMuted, fontSize: "0.82rem", cursor: "pointer", padding: "0 0 0.9rem", letterSpacing: "0.02em" },
+  pageHeader: { marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid rgba(75,35,5,0.2)" },
+  pageTitle: { fontSize: "1.75rem", fontWeight: 700, margin: "0 0 0.45rem", letterSpacing: "0.04em", color: C.text, fontFamily: C.display },
+  pageDesc: { fontSize: "0.95rem", color: C.textSub, margin: 0, lineHeight: 1.75, fontStyle: "italic", fontFamily: C.serif },
+  backBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "transparent", border: "none", color: C.textMuted, fontSize: "0.7rem", cursor: "pointer", padding: "0 0 0.9rem", letterSpacing: "0.12em", textTransform: "uppercase" as const, fontFamily: C.ui },
 
   // Tabs
   tabs: { display: "flex", gap: "0.25rem", marginBottom: "1.75rem" },
-  tab: { padding: "0.45rem 1.2rem", border: `1px solid ${C.border}`, borderRadius: 6, cursor: "pointer", background: "transparent", color: C.textMuted, fontSize: "0.85rem" },
-  tabActive: { borderColor: "rgba(124,58,237,0.45)", background: C.accentGlow, color: C.accentLight, fontWeight: 600 },
+  tab: { padding: "0.42rem 1.1rem", border: "1px solid rgba(75,35,5,0.28)", borderRadius: 3, cursor: "pointer", background: "transparent", color: C.textMuted, fontSize: "0.68rem", letterSpacing: "0.12em", textTransform: "uppercase" as const, fontFamily: C.ui },
+  tabActive: { background: "rgba(75,35,5,0.14)", borderColor: "rgba(75,35,5,0.45)", color: C.text, fontWeight: 600, fontFamily: C.ui },
 
   // Forms
-  addBtn: { width: "100%", padding: "0.75rem", border: `1px dashed ${C.borderMid}`, borderRadius: 10, background: "transparent", color: C.textMuted, fontSize: "0.85rem", cursor: "pointer", marginBottom: "1.25rem" },
-  inlineForm: { background: C.elevated, border: `1px solid ${C.borderMid}`, borderRadius: 12, padding: "1.4rem", marginBottom: "1.75rem", display: "flex", flexDirection: "column", gap: "0.85rem", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" },
-  formTitle: { fontSize: "0.7rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.14em", margin: 0 },
-  mutedCenter: { color: C.textMuted, fontSize: "0.87rem", textAlign: "center" as const, padding: "2.5rem 0", fontStyle: "italic" },
-  hint: { fontSize: "0.75rem", color: C.textMuted, margin: 0 },
+  addBtn: { width: "100%", padding: "0.7rem", border: "1px dashed rgba(75,35,5,0.3)", borderRadius: 3, background: "transparent", color: C.textMuted, fontSize: "0.68rem", cursor: "pointer", marginBottom: "1.25rem", letterSpacing: "0.1em", textTransform: "uppercase" as const, fontFamily: C.ui },
+  inlineForm: { background: "rgba(230,200,115,0.38)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.4rem", marginBottom: "1.75rem", display: "flex", flexDirection: "column" as const, gap: "0.85rem", boxShadow: "0 2px 12px rgba(75,35,5,0.1), inset 0 1px 0 rgba(255,248,220,0.5)" },
+  formTitle: { fontSize: "0.62rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.18em", margin: 0, fontFamily: C.ui },
+  mutedCenter: { color: C.textMuted, fontSize: "0.9rem", textAlign: "center" as const, padding: "2.5rem 0", fontStyle: "italic", fontFamily: C.serif },
+  hint: { fontSize: "0.76rem", color: C.textMuted, margin: 0 },
 
-  // Chapter cards — inset left border via boxShadow + hover via CSS class
-  chapterList: { display: "flex", flexDirection: "column", gap: "0.9rem" },
-  chapterCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "1.25rem 1.4rem 1.25rem 1.5rem", cursor: "pointer", boxShadow: `inset 3px 0 0 rgba(124,58,237,0.35), 0 2px 10px rgba(0,0,0,0.4)` },
+  // Chapter cards
+  chapterList: { display: "flex", flexDirection: "column" as const, gap: "0.85rem" },
+  chapterCard: { background: "rgba(232,200,110,0.44)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.2rem 1.4rem 1.2rem 1.55rem", cursor: "pointer", boxShadow: "inset 3px 0 0 rgba(60,30,106,0.38), 0 2px 10px rgba(75,35,5,0.1), inset 0 1px 0 rgba(255,248,220,0.42)" },
   chapterCardHeader: { display: "flex", alignItems: "flex-start", gap: "0.9rem" },
-  chapterOrder: { width: 32, height: 32, borderRadius: "50%", background: C.accentGlow, border: `1px solid rgba(124,58,237,0.45)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", fontWeight: 700, color: C.accentLight, flexShrink: 0, marginTop: 1 },
+  chapterOrder: { width: 32, height: 32, borderRadius: "50%", background: "rgba(75,35,5,0.14)", border: "2px solid rgba(75,35,5,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, color: C.text, flexShrink: 0, marginTop: 1, fontFamily: C.ui, letterSpacing: "0.05em", boxShadow: "0 0 0 2px rgba(255,240,185,0.3)" },
   chapterCardBody: { flex: 1, minWidth: 0 },
-  chapterTitle: { fontSize: "1.02rem", fontWeight: 600, color: C.text, lineHeight: 1.35, fontFamily: C.serif },
-  chapterDesc: { fontSize: "0.84rem", color: C.textSub, marginTop: "0.28rem", lineHeight: 1.65, fontStyle: "italic" },
-  chapterMeta: { display: "flex", gap: "0.45rem", alignItems: "center", marginTop: "0.45rem", fontSize: "0.75rem", color: C.textMuted },
+  chapterTitle: { fontSize: "1rem", fontWeight: 600, color: C.text, lineHeight: 1.35, fontFamily: C.serif },
+  chapterDesc: { fontSize: "0.85rem", color: C.textSub, marginTop: "0.28rem", lineHeight: 1.65, fontStyle: "italic", fontFamily: C.serif },
+  chapterMeta: { display: "flex", gap: "0.45rem", alignItems: "center", marginTop: "0.45rem", fontSize: "0.7rem", color: C.textMuted, fontFamily: C.ui, letterSpacing: "0.04em" },
   metaDot: { opacity: 0.4 },
   chapterArrow: { color: C.textMuted, fontSize: "1rem", flexShrink: 0, marginTop: 5, opacity: 0.5 },
-  chapterSceneTags: { display: "flex", gap: "0.35rem", flexWrap: "wrap" as const, marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: `1px solid ${C.border}` },
-  sceneTag: { fontSize: "0.73rem", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 4, padding: "0.2rem 0.55rem" },
+  chapterSceneTags: { display: "flex", gap: "0.35rem", flexWrap: "wrap" as const, marginTop: "0.85rem", paddingTop: "0.85rem", borderTop: "1px solid rgba(75,35,5,0.15)" },
+  sceneTag: { fontSize: "0.68rem", background: "rgba(75,35,5,0.07)", color: C.textSub, border: "1px solid rgba(75,35,5,0.18)", borderRadius: 2, padding: "0.18rem 0.55rem", fontFamily: C.ui, letterSpacing: "0.04em" },
   sceneTagClosed: { color: C.textMuted, opacity: 0.5 },
-  sceneTagDraft: { color: C.warning, opacity: 0.75, borderColor: C.warningBorder },
-  sceneTagMore: { fontSize: "0.73rem", color: C.textMuted, padding: "0.2rem 0.4rem" },
+  sceneTagDraft: { color: "#7a4c08", borderColor: "rgba(122,76,8,0.3)" },
+  sceneTagMore: { fontSize: "0.68rem", color: C.textMuted, padding: "0.18rem 0.4rem" },
 
-  // Scene list — status border via sceneItemStyle() + hover via CSS class
-  sceneList: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  sceneListItem: { display: "flex", alignItems: "center", gap: "0.95rem", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 11, padding: "0.95rem 1.15rem", cursor: "pointer" },
-  sceneListOrder: { width: 28, height: 28, borderRadius: "50%", background: C.elevated, border: `1px solid ${C.borderMid}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 600, color: C.textSub, flexShrink: 0 },
+  // Scene list
+  sceneList: { display: "flex", flexDirection: "column" as const, gap: "0.55rem" },
+  sceneListItem: { display: "flex", alignItems: "center", gap: "0.95rem", background: "rgba(232,200,110,0.42)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 3, padding: "0.95rem 1.15rem", cursor: "pointer" },
+  sceneListOrder: { width: 28, height: 28, borderRadius: "50%", background: "rgba(75,35,5,0.1)", border: "1px solid rgba(75,35,5,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 600, color: C.textSub, flexShrink: 0, fontFamily: C.ui, boxShadow: "0 0 0 2px rgba(255,240,185,0.2)" },
   sceneListBody: { flex: 1, minWidth: 0 },
   sceneListTitle: { display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.96rem", fontWeight: 600, color: C.text, fontFamily: C.serif },
-  sceneListMeta: { display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.75rem", color: C.textMuted, marginTop: "0.28rem" },
+  sceneListMeta: { display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.7rem", color: C.textMuted, marginTop: "0.28rem", fontFamily: C.ui },
   sceneListChars: { color: C.textSub },
-  statusBadge: { fontSize: "0.64rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, padding: "0.14rem 0.5rem", borderRadius: 20, flexShrink: 0 },
-  statusBadgeActive: { background: C.successBg, color: C.success, border: `1px solid ${C.successBorder}` },
-  statusBadgeClosed: { background: C.elevated, color: C.textMuted, border: `1px solid ${C.border}` },
+  statusBadge: { fontSize: "0.58rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase" as const, padding: "0.14rem 0.5rem", borderRadius: 2, flexShrink: 0, fontFamily: C.ui },
+  statusBadgeActive: { background: "rgba(25,72,32,0.12)", color: "#194820", border: "1px solid rgba(45,115,55,0.34)" },
+  statusBadgeClosed: { background: "rgba(75,35,5,0.08)", color: C.textMuted, border: "1px solid rgba(75,35,5,0.2)" },
 
-  // Scene view — zone principale narrative
-  sceneView: { display: "flex", flexDirection: "column", gap: "1.5rem" },
-  sceneViewHeader: { display: "flex", flexDirection: "column", gap: "0.55rem", paddingBottom: "1.25rem", borderBottom: `1px solid ${C.border}` },
-  sceneChapterLabel: { fontSize: "0.67rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase" as const, color: C.textMuted },
+  // Scene view
+  sceneView: { display: "flex", flexDirection: "column" as const, gap: "1.5rem" },
+  sceneViewHeader: { display: "flex", flexDirection: "column" as const, gap: "0.55rem", paddingBottom: "1.25rem", borderBottom: "1px solid rgba(75,35,5,0.2)" },
+  sceneChapterLabel: { fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase" as const, color: C.textMuted, fontFamily: C.ui },
   sceneViewTitleRow: { display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap" as const },
-  sceneViewTitle: { fontSize: "1.65rem", fontWeight: 700, margin: 0, letterSpacing: "-0.025em", color: C.text, fontFamily: C.serif },
-  sceneViewDesc: { fontSize: "0.97rem", color: C.textSub, margin: 0, fontStyle: "italic", lineHeight: 1.8, fontFamily: C.serif },
+  sceneViewTitle: { fontSize: "1.75rem", fontWeight: 700, margin: 0, letterSpacing: "0.04em", color: C.text, fontFamily: C.display },
+  sceneViewDesc: { fontSize: "0.98rem", color: C.textSub, margin: 0, fontStyle: "italic", lineHeight: 1.8, fontFamily: C.serif },
   sceneChars: { display: "flex", flexWrap: "wrap" as const, gap: "0.5rem", alignItems: "center", paddingTop: "0.25rem" },
-  sceneCharChip: { display: "flex", alignItems: "center", gap: "0.35rem", background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 20, padding: "0.22rem 0.72rem 0.22rem 0.35rem", fontSize: "0.81rem", color: C.textSub },
-  addPersonnageBtn: { background: "transparent", border: `1px dashed ${C.borderMid}`, borderRadius: 20, color: C.textMuted, fontSize: "0.81rem", cursor: "pointer", padding: "0.3rem 0.9rem", alignSelf: "flex-start" as const },
+  sceneCharChip: { display: "flex", alignItems: "center", gap: "0.35rem", background: "rgba(75,35,5,0.08)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 20, padding: "0.22rem 0.72rem 0.22rem 0.35rem", fontSize: "0.8rem", color: C.textSub },
+  addPersonnageBtn: { background: "transparent", border: "1px dashed rgba(75,35,5,0.3)", borderRadius: 20, color: C.textMuted, fontSize: "0.8rem", cursor: "pointer", padding: "0.3rem 0.9rem", alignSelf: "flex-start" as const },
 
-  // Character select box
-  charSelectBox: { background: C.elevated, border: `1px solid ${C.borderMid}`, borderRadius: 12, padding: "1.15rem", display: "flex", flexDirection: "column", gap: "0.8rem" },
-  charSelectTitle: { fontSize: "0.7rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.14em", margin: 0 },
+  // Character select
+  charSelectBox: { background: "rgba(218,182,95,0.5)", border: "1px solid rgba(75,35,5,0.25)", borderRadius: 4, padding: "1.15rem", display: "flex", flexDirection: "column" as const, gap: "0.8rem" },
+  charSelectTitle: { fontSize: "0.62rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.16em", margin: 0, fontFamily: C.ui },
   charCheckList: { display: "flex", flexWrap: "wrap" as const, gap: "0.4rem" },
-  charCheckItem: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.72rem", border: `1px solid ${C.border}`, borderRadius: 20, fontSize: "0.84rem", cursor: "pointer", color: C.textSub, userSelect: "none" as const },
-  charCheckItemOn: { borderColor: "rgba(124,58,237,0.5)", background: C.accentGlow, color: C.accentLight },
+  charCheckItem: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.72rem", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 20, fontSize: "0.84rem", cursor: "pointer", color: C.textSub, userSelect: "none" as const },
+  charCheckItemOn: { background: "rgba(60,30,106,0.1)", borderColor: "rgba(60,30,106,0.4)", color: C.accent },
   checkbox: { width: 13, height: 13, accentColor: C.accent, cursor: "pointer" },
   charCheckRole: { fontSize: "0.71rem", color: C.textMuted },
 
   // Image banner
-  imageBanner: { position: "relative", borderRadius: 12, height: 240, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", padding: "2rem" },
-  imageBannerGrid: { position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)", backgroundSize: "32px 32px" },
-  imageBannerTitle: { position: "relative", fontSize: "1.4rem", fontWeight: 700, color: "rgba(255,255,255,0.93)", textShadow: "0 2px 24px rgba(0,0,0,0.95)", textAlign: "center" as const, fontFamily: C.serif },
-  imageBannerChars: { position: "relative", fontSize: "0.77rem", color: "rgba(255,255,255,0.4)", marginTop: "0.45rem", letterSpacing: "0.06em" },
-  sceneImg: { width: "100%", borderRadius: 12, display: "block" },
+  imageBanner: { position: "relative" as const, borderRadius: 4, height: 240, overflow: "hidden", display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "flex-end", padding: "2rem", boxShadow: "0 4px 20px rgba(75,35,5,0.3)" },
+  imageBannerGrid: { position: "absolute" as const, inset: 0, backgroundImage: "linear-gradient(rgba(75,35,5,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(75,35,5,0.03) 1px, transparent 1px)", backgroundSize: "32px 32px" },
+  imageBannerTitle: { position: "relative" as const, fontSize: "1.5rem", fontWeight: 700, color: "rgba(255,240,190,0.95)", textShadow: "0 2px 24px rgba(0,0,0,0.9)", textAlign: "center" as const, fontFamily: C.display },
+  imageBannerChars: { position: "relative" as const, fontSize: "0.77rem", color: "rgba(255,230,160,0.6)", marginTop: "0.45rem", letterSpacing: "0.08em", fontFamily: C.ui },
+  sceneImg: { width: "100%", borderRadius: 4, display: "block" },
 
   // View toggle
-  viewToggleBar: { display: "flex", background: C.elevated, borderRadius: 9, padding: "0.25rem", gap: "0.2rem", width: "fit-content", border: `1px solid ${C.border}` },
-  viewToggleBtn: { padding: "0.35rem 1rem", border: "none", borderRadius: 7, background: "transparent", color: C.textMuted, fontSize: "0.81rem", cursor: "pointer" },
-  viewToggleBtnActive: { padding: "0.35rem 1rem", border: "none", borderRadius: 7, background: C.surface, color: C.text, fontSize: "0.81rem", cursor: "pointer", fontWeight: 500, boxShadow: "0 1px 4px rgba(0,0,0,0.5)" },
+  viewToggleBar: { display: "flex", background: "rgba(75,35,5,0.08)", borderRadius: 4, padding: "0.25rem", gap: "0.2rem", width: "fit-content", border: "1px solid rgba(75,35,5,0.2)" },
+  viewToggleBtn: { padding: "0.35rem 0.95rem", border: "none", borderRadius: 3, background: "transparent", color: C.textMuted, fontSize: "0.68rem", cursor: "pointer", letterSpacing: "0.1em", textTransform: "uppercase" as const, fontFamily: C.ui },
+  viewToggleBtnActive: { padding: "0.35rem 0.95rem", border: "none", borderRadius: 3, background: "rgba(75,35,5,0.14)", color: C.text, fontSize: "0.68rem", cursor: "pointer", fontWeight: 600, fontFamily: C.ui, letterSpacing: "0.1em", textTransform: "uppercase" as const },
 
-  // Contributions — style manuscrit
-  contributionsList: { display: "flex", flexDirection: "column" },
-  contribBubble: { display: "flex", gap: "1rem", padding: "1.35rem 0", borderBottom: `1px solid ${C.border}` },
+  // Contributions — CSS gère papier ligné + guillemet via .contrib-bubble
+  contributionsList: { display: "flex", flexDirection: "column" as const },
+  contribBubble: { display: "flex", gap: "1rem", padding: "1.4rem 1rem 1.4rem 1.15rem", borderBottom: "1px solid rgba(75,35,5,0.1)" },
   contribBody: { flex: 1, minWidth: 0 },
-  contribMeta: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.55rem" },
-  contribAuthor: { fontSize: "0.83rem", fontWeight: 600, color: C.emberLight, letterSpacing: "0.01em" },
-  contribTime: { fontSize: "0.72rem", color: C.textMuted },
+  contribMeta: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" },
+  contribAuthor: { fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", fontFamily: C.ui, textTransform: "uppercase" as const },
+  contribTime: { fontSize: "0.68rem", color: C.textMuted, fontFamily: C.ui },
   contribDelete: { marginLeft: "auto", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.75rem", opacity: 0.35, padding: "0.1rem 0.3rem" },
-  contribText: { margin: 0, color: C.text, lineHeight: 1.95, fontFamily: C.serif, fontSize: "0.98rem", whiteSpace: "pre-wrap" as const },
-  contribEmpty: { padding: "3rem 0", color: C.textMuted, fontSize: "0.9rem", fontStyle: "italic", textAlign: "center" as const, fontFamily: C.serif },
+  contribText: { margin: 0, color: C.text, lineHeight: 2.05, fontFamily: C.serif, fontStyle: "italic", fontSize: "1.02rem", whiteSpace: "pre-wrap" as const },
+  contribEmpty: { padding: "3rem 0", color: C.textMuted, fontSize: "0.92rem", fontStyle: "italic", textAlign: "center" as const, fontFamily: C.serif },
 
-  // Divider ornement entre contributions et zone d'écriture
+  // Divider
   sceneDivider: { display: "flex", alignItems: "center", gap: "1rem", padding: "0.1rem 0" },
-  sceneDividerLine: { flex: 1, height: 1, background: C.border },
-  sceneDividerOrn: { fontSize: "0.55rem", color: C.textMuted, flexShrink: 0, opacity: 0.6 },
+  sceneDividerLine: { flex: 1, height: 1, background: "rgba(75,35,5,0.15)" },
+  sceneDividerOrn: { fontSize: "0.55rem", color: C.textMuted, flexShrink: 0, opacity: 0.5, fontFamily: C.display },
 
-  // Avatars
-  avatar: { width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", fontWeight: 700, color: "#fff", flexShrink: 0 },
-  avatarSm: { width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.88rem", fontWeight: 700, color: "#fff", flexShrink: 0 },
-  avatarXs: { width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.63rem", fontWeight: 700, color: "#fff", flexShrink: 0 },
+  // Avatars — style médaillon
+  avatar: { width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem", fontWeight: 700, color: "rgba(255,240,190,0.9)", flexShrink: 0, boxShadow: "0 0 0 2px rgba(255,235,170,0.4), 0 2px 8px rgba(0,0,0,0.15)" },
+  avatarSm: { width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.88rem", fontWeight: 700, color: "rgba(255,240,190,0.9)", flexShrink: 0 },
+  avatarXs: { width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.62rem", fontWeight: 700, color: "rgba(255,240,190,0.9)", flexShrink: 0 },
 
-  // Write area — "bureau d'écriture"
-  writeArea: { background: "#11100e", border: `1px solid ${C.borderMid}`, borderRadius: 14, padding: "1.35rem", display: "flex", flexDirection: "column", gap: "0.9rem", boxShadow: "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,240,200,0.04)" },
-  charSelect: { padding: "0.45rem 0.8rem", fontSize: "0.86rem", background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 8, color: C.textSub, width: "100%", maxWidth: 280 },
-  writeTextarea: { width: "100%", padding: "1rem 1.05rem", fontSize: "1rem", fontFamily: C.serif, background: "#0d0c0a", border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.9 },
+  // Write area — espace de plume
+  writeArea: { background: "rgba(252,240,192,0.68)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 4, padding: "1.4rem", display: "flex", flexDirection: "column" as const, gap: "0.95rem", boxShadow: "0 4px 20px rgba(75,35,5,0.12), inset 0 1px 0 rgba(255,252,232,0.7)" },
+  charSelect: { padding: "0.45rem 0.8rem", fontSize: "0.8rem", background: "rgba(245,225,152,0.62)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.text, width: "100%", maxWidth: 280, fontFamily: C.ui },
+  writeTextarea: { width: "100%", padding: "1rem 1.1rem", fontSize: "1.05rem", fontFamily: C.serif, fontStyle: "italic", background: "rgba(255,248,212,0.78)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 3, color: "#180b01", resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 2.05 },
   writeActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" as const },
-  writeHint: { fontSize: "0.71rem", color: C.textMuted, margin: 0 },
+  writeHint: { fontSize: "0.66rem", color: C.textMuted, margin: 0, letterSpacing: "0.06em", fontFamily: C.ui },
 
   // Suggestion
-  suggestion: { background: C.emberBg, border: `1px solid ${C.emberBorder}`, borderRadius: 9, padding: "0.8rem 0.95rem", display: "flex", gap: "0.5rem", alignItems: "flex-start" },
+  suggestion: { background: "rgba(122,76,8,0.09)", border: "1px solid rgba(122,76,8,0.28)", borderRadius: 3, padding: "0.8rem 0.95rem", display: "flex", gap: "0.5rem", alignItems: "flex-start" },
   suggestionIcon: { flexShrink: 0 },
-  suggestionText: { fontSize: "0.93rem", color: C.emberLight, flex: 1, fontFamily: C.serif, lineHeight: 1.7 },
-  suggestionClose: { background: "transparent", border: "none", color: "rgba(212,165,58,0.4)", cursor: "pointer", fontSize: "0.85rem", flexShrink: 0 },
+  suggestionText: { fontSize: "0.95rem", color: C.textSub, flex: 1, fontFamily: C.serif, lineHeight: 1.7, fontStyle: "italic" },
+  suggestionClose: { background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.85rem", flexShrink: 0 },
 
   // Status banners
-  closedBanner: { background: C.elevated, border: `1px solid ${C.borderMid}`, borderRadius: 10, padding: "0.9rem 1.2rem", fontSize: "0.86rem", color: C.textMuted, textAlign: "center" as const },
-  draftBanner: { background: C.warningBg, borderColor: C.warningBorder, color: C.warning },
-  settingsBox: { background: C.elevated, border: `1px solid ${C.border}`, borderRadius: 12, padding: "1.15rem", display: "flex", flexDirection: "column", gap: "0.85rem" },
-  settingsTitle: { fontSize: "0.7rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.14em", margin: 0 },
+  closedBanner: { background: "rgba(75,35,5,0.08)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 3, padding: "0.85rem 1.1rem", fontSize: "0.88rem", color: C.textSub, textAlign: "center" as const, fontFamily: C.serif, fontStyle: "italic" },
+  draftBanner: { background: "rgba(122,76,8,0.08)", borderColor: "rgba(122,76,8,0.28)", color: "#7a4c08" },
+  settingsBox: { background: "rgba(218,182,95,0.45)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.15rem", display: "flex", flexDirection: "column" as const, gap: "0.85rem" },
+  settingsTitle: { fontSize: "0.62rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.18em", margin: 0, fontFamily: C.ui },
   settingsRow: { display: "flex", alignItems: "center", gap: "0.75rem" },
   settingsLabel: { fontSize: "0.84rem", color: C.textSub, minWidth: 160, flexShrink: 0 },
 
-  // Characters tab
-  charGrid: { display: "flex", flexDirection: "column", gap: "0.85rem" },
-  charCard: { background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "1.15rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.65rem", boxShadow: "0 2px 10px rgba(0,0,0,0.35)" },
+  // Characters
+  charGrid: { display: "flex", flexDirection: "column" as const, gap: "0.85rem" },
+  charCard: { background: "rgba(232,200,110,0.44)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 4, padding: "1.1rem 1.2rem", display: "flex", flexDirection: "column" as const, gap: "0.65rem", boxShadow: "0 2px 8px rgba(75,35,5,0.1), inset 0 1px 0 rgba(255,248,220,0.42)" },
   charCardTop: { display: "flex", gap: "0.9rem", alignItems: "flex-start" },
   charInfo: { flex: 1, minWidth: 0 },
   charName: { fontSize: "1.02rem", fontWeight: 600, color: C.text, fontFamily: C.serif },
   charBadges: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem", marginTop: "0.3rem" },
-  badge: { fontSize: "0.71rem", fontWeight: 600, background: C.accentGlow, color: C.accentLight, border: `1px solid rgba(124,58,237,0.28)`, borderRadius: 4, padding: "0.15rem 0.5rem" },
-  badgeGreen: { background: C.successBg, color: C.success, border: `1px solid ${C.successBorder}` },
-  badgeGold: { background: C.goldBg, color: C.goldLight, border: `1px solid rgba(196,145,46,0.3)` },
-  charDesc: { fontSize: "0.84rem", color: C.textSub, margin: "0.35rem 0 0", lineHeight: 1.6, fontStyle: "italic" },
+  badge: { fontSize: "0.64rem", fontWeight: 600, background: "rgba(60,30,106,0.1)", color: "#3c1e6a", border: "1px solid rgba(60,30,106,0.3)", borderRadius: 2, padding: "0.15rem 0.5rem", fontFamily: C.ui, letterSpacing: "0.05em" },
+  badgeGreen: { background: "rgba(25,72,32,0.1)", color: "#194820", border: "1px solid rgba(45,115,55,0.3)" },
+  badgeGold: { background: "rgba(122,76,8,0.1)", color: "#7a4c08", border: "1px solid rgba(160,100,20,0.3)" },
+  charDesc: { fontSize: "0.84rem", color: C.textSub, margin: "0.35rem 0 0", lineHeight: 1.6, fontStyle: "italic", fontFamily: C.serif },
   charActions: { display: "flex", gap: "0.4rem", flexShrink: 0 },
-  charScenes: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem", alignItems: "center", paddingTop: "0.55rem", borderTop: `1px solid ${C.border}` },
-  charScenesLabel: { fontSize: "0.72rem", color: C.textMuted },
-  charSheet: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", paddingTop: "0.9rem", borderTop: `1px solid ${C.border}` },
-  fieldGroup: { display: "flex", flexDirection: "column", gap: "0.28rem" },
-  fieldLabel: { fontSize: "0.72rem", color: C.textMuted, fontWeight: 500 },
+  charScenes: { display: "flex", flexWrap: "wrap" as const, gap: "0.35rem", alignItems: "center", paddingTop: "0.55rem", borderTop: "1px solid rgba(75,35,5,0.15)" },
+  charScenesLabel: { fontSize: "0.68rem", color: C.textMuted, fontFamily: C.ui },
+  charSheet: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.7rem", paddingTop: "0.9rem", borderTop: "1px solid rgba(75,35,5,0.15)" },
+  fieldGroup: { display: "flex", flexDirection: "column" as const, gap: "0.28rem" },
+  fieldLabel: { fontSize: "0.66rem", color: C.textMuted, fontWeight: 500, fontFamily: C.ui, letterSpacing: "0.07em", textTransform: "uppercase" as const },
 
-  // Buttons
+  // Buttons — style gravure
   row: { display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" as const },
-  btnAccent: { padding: "0.52rem 1.2rem", fontSize: "0.87rem", cursor: "pointer", background: C.accent, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, whiteSpace: "nowrap" as const, letterSpacing: "0.01em" },
-  btnGhost: { padding: "0.52rem 1rem", fontSize: "0.85rem", cursor: "pointer", background: "transparent", color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 8, whiteSpace: "nowrap" as const },
-  btnMicro: { padding: "0.28rem 0.65rem", fontSize: "0.76rem", cursor: "pointer", background: C.elevated, color: C.textSub, border: `1px solid ${C.border}`, borderRadius: 6, whiteSpace: "nowrap" as const },
-  btnDanger: { padding: "0.28rem 0.6rem", fontSize: "0.78rem", cursor: "pointer", background: C.dangerBg, color: C.danger, border: `1px solid ${C.dangerBorder}`, borderRadius: 6 },
+  btnAccent: { padding: "0.48rem 1.15rem", fontSize: "0.68rem", cursor: "pointer", background: "rgba(60,30,106,0.12)", color: "#3c1e6a", border: "1px solid rgba(60,30,106,0.4)", borderRadius: 3, fontFamily: C.ui, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const },
+  btnGhost: { padding: "0.48rem 1rem", fontSize: "0.68rem", cursor: "pointer", background: "transparent", color: C.textSub, border: "1px solid rgba(75,35,5,0.3)", borderRadius: 3, fontFamily: C.ui, letterSpacing: "0.1em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const },
+  btnMicro: { padding: "0.28rem 0.65rem", fontSize: "0.62rem", cursor: "pointer", background: "rgba(75,35,5,0.08)", color: C.textSub, border: "1px solid rgba(75,35,5,0.2)", borderRadius: 2, fontFamily: C.ui, letterSpacing: "0.08em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const },
+  btnDanger: { padding: "0.28rem 0.6rem", fontSize: "0.62rem", cursor: "pointer", background: "rgba(139,26,10,0.1)", color: "#8b1a0a", border: "1px solid rgba(180,60,20,0.35)", borderRadius: 2, fontFamily: C.ui },
 
   // Inputs
-  inputDark: { padding: "0.52rem 0.8rem", fontSize: "0.87rem", background: "#0a0905", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, flex: 1, minWidth: 0 },
-  textareaDark: { width: "100%", padding: "0.72rem 0.82rem", fontSize: "0.87rem", background: "#0a0905", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.65, fontFamily: C.sans },
-  selectDark: { padding: "0.42rem 0.68rem", fontSize: "0.85rem", background: "#0a0905", border: `1px solid ${C.border}`, borderRadius: 7, color: C.textSub },
+  inputDark: { padding: "0.52rem 0.82rem", fontSize: "0.88rem", background: "rgba(245,222,150,0.58)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.text, flex: 1, minWidth: 0 },
+  textareaDark: { width: "100%", padding: "0.7rem 0.82rem", fontSize: "0.88rem", background: "rgba(245,222,150,0.58)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.text, resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 1.7, fontFamily: C.sans },
+  selectDark: { padding: "0.42rem 0.68rem", fontSize: "0.85rem", background: "rgba(245,222,150,0.58)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.textSub },
 };

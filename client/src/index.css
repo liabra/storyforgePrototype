@@ -1,99 +1,152 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400;1,600&display=swap');
+/* ─── Polices grimoire ───────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Jost:wght@300;400;500;600&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; }
 
-:root { --ease: cubic-bezier(0.4, 0, 0.2, 1); }
-
+/* ─── Fond parchemin avec zones de bougie ───────────────────────────────── */
 body {
   margin: 0;
-  background: #0e0d0b;
-  color: #f2ede4;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #180b01;
+  font-family: 'Jost', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 15px;
-  line-height: 1.5;
+  background-color: #c9a45a;
+  background-image:
+    radial-gradient(ellipse 75% 55% at 22% 32%, rgba(255,246,185,0.44) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 45% at 78% 68%, rgba(195,140,45,0.32) 0%, transparent 58%),
+    radial-gradient(ellipse 45% 38% at 52% 12%, rgba(255,242,165,0.28) 0%, transparent 52%),
+    radial-gradient(ellipse 65% 42% at  8% 88%, rgba(155,100,22,0.22) 0%, transparent 52%),
+    radial-gradient(ellipse 40% 35% at 90% 20%, rgba(175,120,30,0.18) 0%, transparent 48%),
+    repeating-linear-gradient(180deg, transparent, transparent 22px, rgba(100,55,8,0.038) 23px, transparent 24px),
+    repeating-linear-gradient( 90deg, transparent, transparent 44px, rgba(100,55,8,0.018) 45px, transparent 46px);
+}
+
+/* ─── Bords brûlés (overlay fixe) ──────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background:
+    radial-gradient(ellipse 55% 30% at   0%   0%, rgba(48,14,2,0.62) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 30% at 100%   0%, rgba(48,14,2,0.56) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 30% at   0% 100%, rgba(48,14,2,0.56) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 30% at 100% 100%, rgba(48,14,2,0.62) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(32,10,2,0.42) 0%, transparent 7%),
+    linear-gradient(  0deg, rgba(32,10,2,0.42) 0%, transparent 7%),
+    linear-gradient( 90deg, rgba(32,10,2,0.22) 0%, transparent 5%),
+    linear-gradient(270deg, rgba(32,10,2,0.22) 0%, transparent 5%);
+}
+
+/* ─── Cachet de cire bas-droite ─────────────────────────────────────────── */
+body::after {
+  content: '✦';
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 36%, #c85a30 0%, #8b2010 48%, #4d0d05 100%);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 3px rgba(140,50,15,0.32), 0 0 0 6px rgba(140,50,15,0.12);
+  color: rgba(255,215,175,0.55);
+  font-size: 1rem;
+  line-height: 52px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 9998;
 }
 
 #root { width: 100%; min-height: 100svh; }
 
-h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.25; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.2; }
 p { margin: 0; }
 ul, li { margin: 0; padding: 0; }
 input, textarea, select, button { font-family: inherit; font-size: inherit; }
 
 input:focus, textarea:focus, select:focus {
   outline: none;
-  border-color: rgba(124,58,237,0.5) !important;
-  box-shadow: 0 0 0 3px rgba(124,58,237,0.08);
+  border-color: rgba(75,35,5,0.55) !important;
+  box-shadow: 0 0 0 3px rgba(75,35,5,0.09);
 }
-
 textarea { resize: vertical; }
 button:disabled { opacity: 0.38; cursor: not-allowed; }
 button {
-  transition: filter 0.14s ease, background 0.14s ease,
-              border-color 0.14s ease, color 0.14s ease;
+  transition: filter 0.13s ease, background 0.13s ease,
+              border-color 0.13s ease, opacity 0.13s ease;
 }
-button:not(:disabled):hover { filter: brightness(1.14); }
+button:not(:disabled):hover { filter: brightness(0.88); }
 
-/* ── Chapter cards ── */
+/* ── Chapter card hover ── */
 .chapter-card {
-  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease),
-              border-color 0.2s var(--ease);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   will-change: transform;
 }
 .chapter-card:hover {
   transform: translateY(-2px);
-  box-shadow: inset 3px 0 0 rgba(124,58,237,0.8),
-              0 12px 36px rgba(0,0,0,0.65) !important;
-  border-color: rgba(255,240,200,0.16) !important;
+  box-shadow: inset 3px 0 0 rgba(60,30,106,0.7),
+              0 12px 36px rgba(75,35,5,0.22),
+              inset 0 1px 0 rgba(255,248,220,0.6) !important;
+  border-color: rgba(75,35,5,0.35) !important;
 }
 
-/* ── Scene list items ── */
+/* ── Scene item hover ── */
 .scene-item {
-  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease),
-              border-color 0.18s var(--ease);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
   will-change: transform;
 }
-.scene-item:hover {
-  transform: translateX(5px);
-  border-color: rgba(124,58,237,0.35) !important;
-}
+.scene-item:hover { transform: translateX(4px); }
 
-/* ── Story items ── */
-.story-item { transition: background 0.12s ease, border-color 0.12s ease; }
-.story-item:not(.is-active):hover {
-  background: rgba(255,240,200,0.04) !important;
-  border-color: rgba(255,240,200,0.1) !important;
-}
+/* ── Story item hover ── */
+.story-item { transition: background 0.12s ease; }
+.story-item:not(.is-active):hover { background: rgba(75,35,5,0.07) !important; }
 
-/* ── Write area (focus glow) ── */
-.write-area { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+/* ── Write area focus ── */
+.write-area { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
 .write-area:focus-within {
-  border-color: rgba(124,58,237,0.45) !important;
-  box-shadow: 0 0 0 3px rgba(124,58,237,0.07),
-              0 10px 32px rgba(0,0,0,0.6) !important;
+  border-color: rgba(75,35,5,0.38) !important;
+  box-shadow: 0 0 0 3px rgba(75,35,5,0.07),
+              0 8px 28px rgba(75,35,5,0.18) !important;
 }
 
-/* ── Contribution entrance animation ── */
+/* ── Contribution — papier ligné + guillemet décoratif ── */
 @keyframes contribEnter {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .contrib-bubble {
-  animation: contribEnter 0.3s var(--ease);
+  animation: contribEnter 0.3s ease;
   animation-fill-mode: both;
+  position: relative;
+  background-image: repeating-linear-gradient(
+    transparent, transparent 34px,
+    rgba(75,35,5,0.05) 35px
+  );
+}
+.contrib-bubble::before {
+  content: '❝';
+  position: absolute;
+  top: 0.5rem;
+  left: 3.5rem;
+  font-size: 3rem;
+  line-height: 1;
+  color: rgba(75,35,5,0.07);
+  font-family: 'EB Garamond', Georgia, serif;
+  pointer-events: none;
 }
 
-/* ── Empty state ornament ── */
+/* ── Empty state ornement ── */
 @keyframes softPulse {
-  0%, 100% { opacity: 0.22; transform: scale(1); }
-  50%       { opacity: 0.5;  transform: scale(1.06); }
+  0%, 100% { opacity: 0.28; transform: scale(1); }
+  50%       { opacity: 0.65; transform: scale(1.04); }
 }
-.empty-orn { animation: softPulse 4s ease-in-out infinite; }
+.empty-orn { animation: softPulse 4.5s ease-in-out infinite; }
 
 /* ── Sidebar ── */
-.app-sidebar { background: #0a0908 !important; }
+.app-sidebar { background: rgba(175,130,40,0.4) !important; }
 
 /* ── Mobile ── */
 @media (max-width: 720px) {
@@ -108,5 +161,5 @@ button:not(:disabled):hover { filter: brightness(1.14); }
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,240,200,0.07); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,240,200,0.14); }
+::-webkit-scrollbar-thumb { background: rgba(75,35,5,0.22); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(75,35,5,0.38); }
