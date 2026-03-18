@@ -961,9 +961,9 @@ export default function App() {
 
 const C = {
   bg: "transparent",
-  surface: "rgba(225,190,105,0.38)",
-  elevated: "rgba(205,168,78,0.45)",
-  overlay: "rgba(188,150,62,0.52)",
+  surface: "rgba(252,244,215,0.90)",
+  elevated: "rgba(248,238,200,0.93)",
+  overlay: "rgba(244,232,188,0.96)",
   border: "rgba(75,35,5,0.18)",
   borderMid: "rgba(75,35,5,0.28)",
   borderStrong: "rgba(75,35,5,0.45)",
@@ -981,7 +981,7 @@ const C = {
   dangerBorder: "rgba(180,60,20,0.34)",
   text: "#180b01",
   textSub: "#2a1003",
-  textMuted: "rgba(75,35,5,0.50)",
+  textMuted: "rgba(75,35,5,0.58)",
   sans: "'Jost', system-ui, sans-serif",
   serif: "'EB Garamond', Georgia, serif",
   display: "'Cinzel Decorative', 'Cinzel', serif",
@@ -1018,7 +1018,7 @@ const s: Record<string, React.CSSProperties> = {
   sidebarHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" },
   sidebarLabel: { fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase" as const, color: C.textMuted, margin: 0, fontFamily: C.ui },
   sidebarClose: { background: "transparent", border: "none", color: C.textMuted, fontSize: "1rem", cursor: "pointer" },
-  storyForm: { display: "flex", flexDirection: "column" as const, gap: "0.5rem", marginBottom: "1rem", padding: "0.9rem", background: "rgba(200,165,80,0.42)", borderRadius: 3, border: `1px solid ${C.borderMid}` },
+  storyForm: { display: "flex", flexDirection: "column" as const, gap: "0.5rem", marginBottom: "1rem", padding: "0.9rem", background: "rgba(248,238,200,0.90)", borderRadius: 3, border: `1px solid ${C.borderMid}`, boxShadow: "0 2px 10px rgba(75,35,5,0.1)" },
   storyList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column" as const, gap: 2 },
   storyItem: { display: "flex", gap: "0.6rem", alignItems: "flex-start", padding: "0.65rem 0.7rem", borderRadius: 3, cursor: "pointer", border: "1px solid transparent" },
   storyItemActive: { background: "rgba(75,35,5,0.12)", borderColor: "rgba(75,35,5,0.32)" },
@@ -1028,7 +1028,7 @@ const s: Record<string, React.CSSProperties> = {
   mutedSmall: { fontSize: "0.82rem", color: C.textMuted, padding: "0.5rem 0" },
 
   // Main
-  main: { flex: 1, paddingLeft: "2.25rem", paddingTop: "1.75rem", minWidth: 0 },
+  main: { flex: 1, paddingLeft: "2.25rem", paddingRight: "1.5rem", paddingTop: "1.75rem", paddingBottom: "3rem", minWidth: 0, background: "rgba(252,248,228,0.55)", borderRadius: "0 3px 3px 0" },
 
   // Empty state
   emptyState: { display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", minHeight: "65vh", gap: "1.25rem", textAlign: "center" as const },
@@ -1049,14 +1049,14 @@ const s: Record<string, React.CSSProperties> = {
 
   // Forms
   addBtn: { width: "100%", padding: "0.7rem", border: "1px dashed rgba(75,35,5,0.3)", borderRadius: 3, background: "transparent", color: C.textMuted, fontSize: "0.68rem", cursor: "pointer", marginBottom: "1.25rem", letterSpacing: "0.1em", textTransform: "uppercase" as const, fontFamily: C.ui },
-  inlineForm: { background: "rgba(230,200,115,0.38)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.4rem", marginBottom: "1.75rem", display: "flex", flexDirection: "column" as const, gap: "0.85rem", boxShadow: "0 2px 12px rgba(75,35,5,0.1), inset 0 1px 0 rgba(255,248,220,0.5)" },
+  inlineForm: { background: "rgba(248,238,200,0.90)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 4, padding: "1.4rem", marginBottom: "1.75rem", display: "flex", flexDirection: "column" as const, gap: "0.85rem", boxShadow: "0 3px 16px rgba(75,35,5,0.12), inset 0 1px 0 rgba(255,255,240,0.75)" },
   formTitle: { fontSize: "0.62rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.18em", margin: 0, fontFamily: C.ui },
   mutedCenter: { color: C.textMuted, fontSize: "0.9rem", textAlign: "center" as const, padding: "2.5rem 0", fontStyle: "italic", fontFamily: C.serif },
   hint: { fontSize: "0.76rem", color: C.textMuted, margin: 0 },
 
   // Chapter cards
   chapterList: { display: "flex", flexDirection: "column" as const, gap: "0.85rem" },
-  chapterCard: { background: "rgba(232,200,110,0.44)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.2rem 1.4rem 1.2rem 1.55rem", cursor: "pointer", boxShadow: "inset 3px 0 0 rgba(60,30,106,0.38), 0 2px 10px rgba(75,35,5,0.1), inset 0 1px 0 rgba(255,248,220,0.42)" },
+  chapterCard: { background: "rgba(252,244,215,0.92)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 4, padding: "1.2rem 1.4rem 1.2rem 1.55rem", cursor: "pointer", boxShadow: "inset 3px 0 0 rgba(60,30,106,0.38), 0 3px 14px rgba(75,35,5,0.14), 0 1px 3px rgba(75,35,5,0.07), inset 0 1px 0 rgba(255,255,240,0.8)" },
   chapterCardHeader: { display: "flex", alignItems: "flex-start", gap: "0.9rem" },
   chapterOrder: { width: 32, height: 32, borderRadius: "50%", background: "rgba(75,35,5,0.14)", border: "2px solid rgba(75,35,5,0.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, color: C.text, flexShrink: 0, marginTop: 1, fontFamily: C.ui, letterSpacing: "0.05em", boxShadow: "0 0 0 2px rgba(255,240,185,0.3)" },
   chapterCardBody: { flex: 1, minWidth: 0 },
@@ -1073,7 +1073,7 @@ const s: Record<string, React.CSSProperties> = {
 
   // Scene list
   sceneList: { display: "flex", flexDirection: "column" as const, gap: "0.55rem" },
-  sceneListItem: { display: "flex", alignItems: "center", gap: "0.95rem", background: "rgba(232,200,110,0.42)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 3, padding: "0.95rem 1.15rem", cursor: "pointer" },
+  sceneListItem: { display: "flex", alignItems: "center", gap: "0.95rem", background: "rgba(252,244,215,0.90)", border: "1px solid rgba(75,35,5,0.16)", borderRadius: 3, padding: "0.95rem 1.15rem", cursor: "pointer", boxShadow: "0 2px 8px rgba(75,35,5,0.1), 0 1px 2px rgba(75,35,5,0.06)" },
   sceneListOrder: { width: 28, height: 28, borderRadius: "50%", background: "rgba(75,35,5,0.1)", border: "1px solid rgba(75,35,5,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 600, color: C.textSub, flexShrink: 0, fontFamily: C.ui, boxShadow: "0 0 0 2px rgba(255,240,185,0.2)" },
   sceneListBody: { flex: 1, minWidth: 0 },
   sceneListTitle: { display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.96rem", fontWeight: 600, color: C.text, fontFamily: C.serif },
@@ -1095,7 +1095,7 @@ const s: Record<string, React.CSSProperties> = {
   addPersonnageBtn: { background: "transparent", border: "1px dashed rgba(75,35,5,0.3)", borderRadius: 20, color: C.textMuted, fontSize: "0.8rem", cursor: "pointer", padding: "0.3rem 0.9rem", alignSelf: "flex-start" as const },
 
   // Character select
-  charSelectBox: { background: "rgba(218,182,95,0.5)", border: "1px solid rgba(75,35,5,0.25)", borderRadius: 4, padding: "1.15rem", display: "flex", flexDirection: "column" as const, gap: "0.8rem" },
+  charSelectBox: { background: "rgba(248,238,200,0.92)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 4, padding: "1.15rem", display: "flex", flexDirection: "column" as const, gap: "0.8rem", boxShadow: "0 2px 10px rgba(75,35,5,0.1)" },
   charSelectTitle: { fontSize: "0.62rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.16em", margin: 0, fontFamily: C.ui },
   charCheckList: { display: "flex", flexWrap: "wrap" as const, gap: "0.4rem" },
   charCheckItem: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.72rem", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 20, fontSize: "0.84rem", cursor: "pointer", color: C.textSub, userSelect: "none" as const },
@@ -1116,7 +1116,7 @@ const s: Record<string, React.CSSProperties> = {
   viewToggleBtnActive: { padding: "0.35rem 0.95rem", border: "none", borderRadius: 3, background: "rgba(75,35,5,0.14)", color: C.text, fontSize: "0.68rem", cursor: "pointer", fontWeight: 600, fontFamily: C.ui, letterSpacing: "0.1em", textTransform: "uppercase" as const },
 
   // Contributions — CSS gère papier ligné + guillemet via .contrib-bubble
-  contributionsList: { display: "flex", flexDirection: "column" as const },
+  contributionsList: { display: "flex", flexDirection: "column" as const, background: "rgba(252,248,228,0.82)", borderRadius: 4, border: "1px solid rgba(75,35,5,0.12)", boxShadow: "0 2px 12px rgba(75,35,5,0.08), inset 0 1px 0 rgba(255,255,240,0.8)" },
   contribBubble: { display: "flex", gap: "1rem", padding: "1.4rem 1rem 1.4rem 1.15rem", borderBottom: "1px solid rgba(75,35,5,0.1)" },
   contribBody: { flex: 1, minWidth: 0 },
   contribMeta: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" },
@@ -1137,9 +1137,9 @@ const s: Record<string, React.CSSProperties> = {
   avatarXs: { width: 20, height: 20, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.62rem", fontWeight: 700, color: "rgba(255,240,190,0.9)", flexShrink: 0 },
 
   // Write area — espace de plume
-  writeArea: { background: "rgba(252,240,192,0.68)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 4, padding: "1.4rem", display: "flex", flexDirection: "column" as const, gap: "0.95rem", boxShadow: "0 4px 20px rgba(75,35,5,0.12), inset 0 1px 0 rgba(255,252,232,0.7)" },
-  charSelect: { padding: "0.45rem 0.8rem", fontSize: "0.8rem", background: "rgba(245,225,152,0.62)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.text, width: "100%", maxWidth: 280, fontFamily: C.ui },
-  writeTextarea: { width: "100%", padding: "1rem 1.1rem", fontSize: "1.05rem", fontFamily: C.serif, fontStyle: "italic", background: "rgba(255,248,212,0.78)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 3, color: "#180b01", resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 2.05 },
+  writeArea: { background: "rgba(255,253,240,0.97)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 4, padding: "1.6rem 1.4rem", display: "flex", flexDirection: "column" as const, gap: "0.95rem", boxShadow: "0 6px 28px rgba(75,35,5,0.16), 0 2px 6px rgba(75,35,5,0.08), inset 0 1px 0 rgba(255,255,255,0.9)" },
+  charSelect: { padding: "0.45rem 0.8rem", fontSize: "0.8rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.text, width: "100%", maxWidth: 280, fontFamily: C.ui },
+  writeTextarea: { width: "100%", padding: "1rem 1.1rem", fontSize: "1.05rem", fontFamily: C.serif, fontStyle: "italic", background: "rgba(255,255,250,0.99)", border: "1px solid rgba(75,35,5,0.15)", borderRadius: 3, color: "#180b01", resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 2.05, boxShadow: "inset 0 1px 4px rgba(75,35,5,0.05)" },
   writeActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" as const },
   writeHint: { fontSize: "0.66rem", color: C.textMuted, margin: 0, letterSpacing: "0.06em", fontFamily: C.ui },
 
@@ -1152,14 +1152,14 @@ const s: Record<string, React.CSSProperties> = {
   // Status banners
   closedBanner: { background: "rgba(75,35,5,0.08)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 3, padding: "0.85rem 1.1rem", fontSize: "0.88rem", color: C.textSub, textAlign: "center" as const, fontFamily: C.serif, fontStyle: "italic" },
   draftBanner: { background: "rgba(122,76,8,0.08)", borderColor: "rgba(122,76,8,0.28)", color: "#7a4c08" },
-  settingsBox: { background: "rgba(218,182,95,0.45)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.15rem", display: "flex", flexDirection: "column" as const, gap: "0.85rem" },
+  settingsBox: { background: "rgba(248,238,200,0.92)", border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "1.15rem", display: "flex", flexDirection: "column" as const, gap: "0.85rem", boxShadow: "0 2px 10px rgba(75,35,5,0.1)" },
   settingsTitle: { fontSize: "0.62rem", fontWeight: 700, color: C.textMuted, textTransform: "uppercase" as const, letterSpacing: "0.18em", margin: 0, fontFamily: C.ui },
   settingsRow: { display: "flex", alignItems: "center", gap: "0.75rem" },
   settingsLabel: { fontSize: "0.84rem", color: C.textSub, minWidth: 160, flexShrink: 0 },
 
   // Characters
   charGrid: { display: "flex", flexDirection: "column" as const, gap: "0.85rem" },
-  charCard: { background: "rgba(232,200,110,0.44)", border: "1px solid rgba(75,35,5,0.18)", borderRadius: 4, padding: "1.1rem 1.2rem", display: "flex", flexDirection: "column" as const, gap: "0.65rem", boxShadow: "0 2px 8px rgba(75,35,5,0.1), inset 0 1px 0 rgba(255,248,220,0.42)" },
+  charCard: { background: "rgba(252,244,215,0.92)", border: "1px solid rgba(75,35,5,0.16)", borderRadius: 4, padding: "1.1rem 1.2rem", display: "flex", flexDirection: "column" as const, gap: "0.65rem", boxShadow: "0 3px 12px rgba(75,35,5,0.12), 0 1px 3px rgba(75,35,5,0.06), inset 0 1px 0 rgba(255,255,240,0.8)" },
   charCardTop: { display: "flex", gap: "0.9rem", alignItems: "flex-start" },
   charInfo: { flex: 1, minWidth: 0 },
   charName: { fontSize: "1.02rem", fontWeight: 600, color: C.text, fontFamily: C.serif },
@@ -1183,7 +1183,7 @@ const s: Record<string, React.CSSProperties> = {
   btnDanger: { padding: "0.28rem 0.6rem", fontSize: "0.62rem", cursor: "pointer", background: "rgba(139,26,10,0.1)", color: "#8b1a0a", border: "1px solid rgba(180,60,20,0.35)", borderRadius: 2, fontFamily: C.ui },
 
   // Inputs
-  inputDark: { padding: "0.52rem 0.82rem", fontSize: "0.88rem", background: "rgba(245,222,150,0.58)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.text, flex: 1, minWidth: 0 },
-  textareaDark: { width: "100%", padding: "0.7rem 0.82rem", fontSize: "0.88rem", background: "rgba(245,222,150,0.58)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.text, resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 1.7, fontFamily: C.sans },
-  selectDark: { padding: "0.42rem 0.68rem", fontSize: "0.85rem", background: "rgba(245,222,150,0.58)", border: "1px solid rgba(75,35,5,0.22)", borderRadius: 3, color: C.textSub },
+  inputDark: { padding: "0.52rem 0.82rem", fontSize: "0.88rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.text, flex: 1, minWidth: 0 },
+  textareaDark: { width: "100%", padding: "0.7rem 0.82rem", fontSize: "0.88rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.text, resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 1.7, fontFamily: C.sans },
+  selectDark: { padding: "0.42rem 0.68rem", fontSize: "0.85rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.textSub },
 };

@@ -12,15 +12,15 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #c9a45a;
+  background-color: #b8935a;
   background-image:
-    radial-gradient(ellipse 75% 55% at 22% 32%, rgba(255,246,185,0.44) 0%, transparent 65%),
-    radial-gradient(ellipse 55% 45% at 78% 68%, rgba(195,140,45,0.32) 0%, transparent 58%),
-    radial-gradient(ellipse 45% 38% at 52% 12%, rgba(255,242,165,0.28) 0%, transparent 52%),
-    radial-gradient(ellipse 65% 42% at  8% 88%, rgba(155,100,22,0.22) 0%, transparent 52%),
-    radial-gradient(ellipse 40% 35% at 90% 20%, rgba(175,120,30,0.18) 0%, transparent 48%),
-    repeating-linear-gradient(180deg, transparent, transparent 22px, rgba(100,55,8,0.038) 23px, transparent 24px),
-    repeating-linear-gradient( 90deg, transparent, transparent 44px, rgba(100,55,8,0.018) 45px, transparent 46px);
+    radial-gradient(ellipse 75% 55% at 22% 32%, rgba(240,222,158,0.38) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 45% at 78% 68%, rgba(175,128,42,0.22) 0%, transparent 58%),
+    radial-gradient(ellipse 45% 38% at 52% 12%, rgba(235,215,145,0.22) 0%, transparent 52%),
+    radial-gradient(ellipse 65% 42% at  8% 88%, rgba(135,88,18,0.18) 0%, transparent 52%),
+    radial-gradient(ellipse 40% 35% at 90% 20%, rgba(155,108,28,0.14) 0%, transparent 48%),
+    repeating-linear-gradient(180deg, transparent, transparent 22px, rgba(80,40,5,0.032) 23px, transparent 24px),
+    repeating-linear-gradient( 90deg, transparent, transparent 44px, rgba(80,40,5,0.014) 45px, transparent 46px);
 }
 
 /* ─── Bords brûlés (overlay fixe) ──────────────────────────────────────── */
@@ -146,7 +146,10 @@ button:not(:disabled):hover { filter: brightness(0.88); }
 .empty-orn { animation: softPulse 4.5s ease-in-out infinite; }
 
 /* ── Sidebar ── */
-.app-sidebar { background: rgba(175,130,40,0.4) !important; }
+.app-sidebar {
+  background: rgba(138,105,38,0.58) !important;
+  box-shadow: 2px 0 16px rgba(60,30,5,0.18);
+}
 
 /* ── Mobile ── */
 @media (max-width: 720px) {
