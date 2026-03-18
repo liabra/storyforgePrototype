@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, tokenStore } from "./api";
 import type {
   Story,
   Chapter,
@@ -8,6 +8,7 @@ import type {
   Character,
   CharacterInput,
   SceneStatus,
+  AuthUser,
 } from "./api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +133,25 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
   const contribEndRef = useRef<HTMLDivElement>(null);
+
+  // Auth
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authView, setAuthView] = useState<"login" | "register" | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  // ── Restore session
+  useEffect(() => {
+    const token = tokenStore.get();
+    if (!token) { setAuthLoading(false); return; }
+    api.auth.me()
+      .then(setCurrentUser)
+      .catch(() => tokenStore.clear())
+      .finally(() => setAuthLoading(false));
+  }, []);
 
   // ── Load stories
   useEffect(() => {
@@ -369,6 +389,47 @@ export default function App() {
     if (expandedCharId === id) setExpandedCharId(null);
   };
 
+  // ── Auth
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSubmitting(true);
+    try {
+      const { token, user } = await api.auth.login(authEmail, authPassword);
+      tokenStore.set(token);
+      setCurrentUser(user);
+      setAuthView(null);
+      setAuthEmail(""); setAuthPassword("");
+    } catch (err: unknown) {
+      setAuthError((err as Error).message);
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSubmitting(true);
+    try {
+      const { token, user } = await api.auth.register(authEmail, authPassword);
+      tokenStore.set(token);
+      setCurrentUser(user);
+      setAuthView(null);
+      setAuthEmail(""); setAuthPassword("");
+    } catch (err: unknown) {
+      setAuthError((err as Error).message);
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    tokenStore.clear();
+    setCurrentUser(null);
+    setAuthView(null);
+  };
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   const totalContribs = (ch: Chapter) =>
@@ -421,11 +482,74 @@ export default function App() {
               )}
             </div>
           </div>
-          <button style={s.btnAccent} onClick={() => setShowStoryForm((v) => !v)}>
-            {showStoryForm ? "Annuler" : "+ Nouvelle histoire"}
-          </button>
+          <div style={s.headerRight}>
+            {!authLoading && (
+              currentUser ? (
+                <div style={s.userChip}>
+                  <span style={s.userEmail}>{currentUser.email}</span>
+                  <button style={s.btnGhost} onClick={handleLogout}>Déconnexion</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <button style={s.btnGhost} onClick={() => setAuthView(authView === "login" ? null : "login")}>Connexion</button>
+                  <button style={s.btnAccent} onClick={() => setAuthView(authView === "register" ? null : "register")}>S'inscrire</button>
+                </div>
+              )
+            )}
+            <button style={s.btnAccent} onClick={() => setShowStoryForm((v) => !v)}>
+              {showStoryForm ? "Annuler" : "+ Histoire"}
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* ══ Auth panel */}
+      {authView !== null && (
+        <>
+          <div style={s.authOverlay} onClick={() => setAuthView(null)} />
+          <div style={s.authPanel}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={s.authTitle}>{authView === "login" ? "Connexion" : "Créer un compte"}</p>
+              <button style={s.authClose} onClick={() => setAuthView(null)}>✕</button>
+            </div>
+            <form onSubmit={authView === "login" ? handleLogin : handleRegister} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+              <input
+                style={s.inputDark}
+                type="email"
+                placeholder="Email"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                required
+                autoFocus
+              />
+              <input
+                style={s.inputDark}
+                type="password"
+                placeholder="Mot de passe (8 caractères min.)"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+              {authError && <p style={s.authErrorMsg}>{authError}</p>}
+              <button style={s.btnAccent} type="submit" disabled={authSubmitting}>
+                {authSubmitting ? "…" : authView === "login" ? "Se connecter" : "Créer le compte"}
+              </button>
+            </form>
+            <p style={s.authSwitch}>
+              {authView === "login" ? (
+                <>Pas encore de compte ?{" "}
+                  <span style={s.authSwitchLink} onClick={() => { setAuthView("register"); setAuthError(null); }}>S'inscrire</span>
+                </>
+              ) : (
+                <>Déjà un compte ?{" "}
+                  <span style={s.authSwitchLink} onClick={() => { setAuthView("login"); setAuthError(null); }}>Se connecter</span>
+                </>
+              )}
+            </p>
+          </div>
+        </>
+      )}
 
       {error && <div style={s.errorBanner}>{error}<button style={s.errorClose} onClick={() => setError(null)}>✕</button></div>}
 
@@ -1186,4 +1310,16 @@ const s: Record<string, React.CSSProperties> = {
   inputDark: { padding: "0.52rem 0.82rem", fontSize: "0.88rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.text, flex: 1, minWidth: 0 },
   textareaDark: { width: "100%", padding: "0.7rem 0.82rem", fontSize: "0.88rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.text, resize: "vertical" as const, boxSizing: "border-box" as const, lineHeight: 1.7, fontFamily: C.sans },
   selectDark: { padding: "0.42rem 0.68rem", fontSize: "0.85rem", background: "rgba(252,245,215,0.88)", border: "1px solid rgba(75,35,5,0.20)", borderRadius: 3, color: C.textSub },
+
+  // Auth
+  headerRight: { display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 },
+  userChip: { display: "flex", alignItems: "center", gap: "0.55rem" },
+  userEmail: { fontSize: "0.7rem", color: C.textSub, fontFamily: C.ui, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
+  authOverlay: { position: "fixed" as const, inset: 0, zIndex: 39 },
+  authPanel: { position: "fixed" as const, top: 70, right: "1.5rem", zIndex: 40, width: 320, background: "rgba(252,244,215,0.99)", border: "1px solid rgba(75,35,5,0.25)", borderRadius: 6, padding: "1.6rem", boxShadow: "0 8px 32px rgba(75,35,5,0.22), 0 2px 8px rgba(75,35,5,0.12)", display: "flex", flexDirection: "column" as const, gap: "1rem" },
+  authTitle: { fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" as const, color: C.textMuted, margin: 0, fontFamily: C.ui },
+  authClose: { background: "transparent", border: "none", color: C.textMuted, fontSize: "0.9rem", cursor: "pointer", padding: "0.1rem 0.3rem" },
+  authErrorMsg: { fontSize: "0.78rem", color: C.danger, margin: 0, fontFamily: C.serif, fontStyle: "italic" as const },
+  authSwitch: { fontSize: "0.74rem", color: C.textMuted, textAlign: "center" as const, margin: 0, fontFamily: C.ui },
+  authSwitchLink: { color: C.accent, cursor: "pointer", textDecoration: "underline" },
 };

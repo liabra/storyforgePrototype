@@ -1,5 +1,13 @@
 const BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
+// ─── Token storage ─────────────────────────────────────────────────────────────
+const TOKEN_KEY = "sf_token";
+export const tokenStore = {
+  get: (): string | null => localStorage.getItem(TOKEN_KEY),
+  set: (t: string): void => { localStorage.setItem(TOKEN_KEY, t); },
+  clear: (): void => { localStorage.removeItem(TOKEN_KEY); },
+};
+
 export type SceneStatus = "DRAFT" | "ACTIVE" | "DONE";
 
 export interface Story {
@@ -84,10 +92,26 @@ export interface Character {
 
 export type CharacterInput = Omit<Partial<Character>, "id" | "storyId" | "scenes">;
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = tokenStore.get();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers as Record<string, string> | undefined),
+    },
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
   if (res.status === 204) return undefined as T;
@@ -95,6 +119,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  auth: {
+    register: (email: string, password: string) =>
+      request<AuthResponse>("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
+    login: (email: string, password: string) =>
+      request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    me: () => request<AuthUser>("/auth/me"),
+  },
   stories: {
     list: () => request<Story[]>("/stories"),
     create: (data: { title: string; description?: string }) =>
