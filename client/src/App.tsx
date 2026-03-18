@@ -880,7 +880,12 @@ export default function App() {
                       <p style={s.settingsTitle}>Paramètres de la scène</p>
                       <div style={s.settingsRow}>
                         <label style={s.settingsLabel}>Statut</label>
-                        <select style={s.selectDark} value={settingsEdit.status} onChange={(e) => setSettingsEdit((p) => ({ ...p, status: e.target.value }))}>
+                        <select style={s.selectDark} value={settingsEdit.status} onChange={(e) =>
+  setSettingsEdit((p) => ({
+    ...p,
+    status: e.target.value as SceneStatus,
+  }))
+}>
                           <option value="DRAFT">Brouillon</option>
                           <option value="ACTIVE">Active</option>
                           <option value="DONE">Terminée</option>
@@ -888,7 +893,7 @@ export default function App() {
                       </div>
                       <div style={s.settingsRow}>
                         <label style={s.settingsLabel}>Visible aux spectateurs</label>
-                        <select style={s.selectDark} value={settingsEdit.visibilityMode} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibilityMode: e.target.value }))}>
+                        <select style={s.selectDark} value={settingsEdit.visibilityMode} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibilityMode: e.target.value as any }))}>
                           <option value="last">Dernières contributions</option>
                           <option value="all">Toutes les contributions</option>
                           <option value="none">Rien (masqué)</option>
