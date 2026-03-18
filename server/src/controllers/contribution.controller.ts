@@ -32,6 +32,7 @@ export const create = async (req: Request, res: Response) => {
   const contribution = await contributionService.createContribution(sceneId, {
     content: content.trim(),
     characterId: characterId || undefined,
+    userId: req.user?.id,
   });
   return res.status(201).json(contribution);
 };

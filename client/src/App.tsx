@@ -9,6 +9,7 @@ import type {
   CharacterInput,
   SceneStatus,
   AuthUser,
+  UserProfileInput,
 } from "./api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,36 @@ function avatarHue(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
   return Math.abs(h) % 360;
+}
+
+type ContribOwner = { character?: CharacterFull | null; user?: { id: string; email: string; displayName?: string | null; color?: string | null } | null };
+
+function contribAuthor(contrib: ContribOwner): string {
+  if (contrib.character) return displayName(contrib.character);
+  if (contrib.user?.displayName) return contrib.user.displayName;
+  if (contrib.user?.email) return contrib.user.email.split("@")[0];
+  return "Anonyme";
+}
+
+function contribInitial(contrib: ContribOwner): string {
+  return contribAuthor(contrib).charAt(0).toUpperCase();
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return `rgba(75,35,5,${alpha})`;
+  const r = parseInt(m[1].slice(0, 2), 16);
+  const g = parseInt(m[1].slice(2, 4), 16);
+  const b = parseInt(m[1].slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function resolveInk(contrib: ContribOwner): { color: string; bg: string; border: string } {
+  if (!contrib.character && contrib.user?.color) {
+    const c = contrib.user.color;
+    return { color: c, bg: hexToRgba(c, 0.07), border: hexToRgba(c, 0.42) };
+  }
+  return characterInk(avatarHue(contribAuthor(contrib)));
 }
 
 function sceneGradient(title: string): string {
@@ -142,6 +173,12 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  // Profil
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileEdits, setProfileEdits] = useState<UserProfileInput>({});
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // ── Restore session
   useEffect(() => {
@@ -428,6 +465,36 @@ export default function App() {
     tokenStore.clear();
     setCurrentUser(null);
     setAuthView(null);
+    setShowProfile(false);
+  };
+
+  const handleOpenProfile = () => {
+    setProfileEdits({
+      displayName: currentUser?.displayName ?? "",
+      color: currentUser?.color ?? "",
+      bio: currentUser?.bio ?? "",
+    });
+    setProfileError(null);
+    setShowProfile(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileError(null);
+    try {
+      const updated = await api.users.updateProfile({
+        displayName: profileEdits.displayName || null,
+        color: profileEdits.color || null,
+        bio: profileEdits.bio || null,
+      });
+      setCurrentUser(updated);
+      setShowProfile(false);
+    } catch (err: unknown) {
+      setProfileError((err as Error).message);
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -486,7 +553,11 @@ export default function App() {
             {!authLoading && (
               currentUser ? (
                 <div style={s.userChip}>
-                  <span style={s.userEmail}>{currentUser.email}</span>
+                  {currentUser.color && (
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: currentUser.color, flexShrink: 0 }} />
+                  )}
+                  <span style={s.userEmail}>{currentUser.displayName || currentUser.email}</span>
+                  <button style={s.btnMicro} onClick={handleOpenProfile}>Profil</button>
                   <button style={s.btnGhost} onClick={handleLogout}>Déconnexion</button>
                 </div>
               ) : (
@@ -546,6 +617,69 @@ export default function App() {
                   <span style={s.authSwitchLink} onClick={() => { setAuthView("login"); setAuthError(null); }}>Se connecter</span>
                 </>
               )}
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* ══ Profile panel */}
+      {showProfile && currentUser && (
+        <>
+          <div style={s.authOverlay} onClick={() => setShowProfile(false)} />
+          <div style={s.authPanel}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={s.authTitle}>Mon profil</p>
+              <button style={s.authClose} onClick={() => setShowProfile(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={s.profileField}>
+                <label style={s.profileLabel}>Nom d'affichage</label>
+                <input
+                  style={s.inputDark}
+                  placeholder={currentUser.email.split("@")[0]}
+                  value={profileEdits.displayName ?? ""}
+                  onChange={(e) => setProfileEdits((p) => ({ ...p, displayName: e.target.value }))}
+                  maxLength={40}
+                />
+              </div>
+              <div style={s.profileField}>
+                <label style={s.profileLabel}>Couleur d'encre</label>
+                <div style={s.colorPalette}>
+                  {PROFILE_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setProfileEdits((p) => ({ ...p, color: p.color === c ? null : c }))}
+                      style={{
+                        width: 26, height: 26, borderRadius: "50%", background: c, border: "none",
+                        cursor: "pointer", flexShrink: 0,
+                        boxShadow: profileEdits.color === c
+                          ? `0 0 0 2px rgba(255,240,185,0.6), 0 0 0 4px ${c}`
+                          : "0 1px 4px rgba(0,0,0,0.2)",
+                      }}
+                      aria-label={c}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div style={s.profileField}>
+                <label style={s.profileLabel}>Bio</label>
+                <textarea
+                  style={{ ...s.textareaDark, fontFamily: C.serif, fontStyle: "italic", lineHeight: 1.7 }}
+                  placeholder="Quelques mots sur toi…"
+                  value={profileEdits.bio ?? ""}
+                  onChange={(e) => setProfileEdits((p) => ({ ...p, bio: e.target.value }))}
+                  rows={3}
+                  maxLength={200}
+                />
+              </div>
+              {profileError && <p style={s.authErrorMsg}>{profileError}</p>}
+              <button style={s.btnAccent} type="submit" disabled={savingProfile}>
+                {savingProfile ? "Sauvegarde…" : "Enregistrer →"}
+              </button>
+            </form>
+            <p style={{ ...s.authSwitch, textAlign: "left" as const, color: C.textMuted }}>
+              {currentUser.email}
             </p>
           </div>
         </>
@@ -938,16 +1072,15 @@ export default function App() {
                   }
 
                   return visible.map((contrib) => {
-                    const hue = avatarHue(displayName(contrib.character));
-                    const ink = characterInk(hue);
+                    const ink = resolveInk(contrib);
                     return (
                       <div key={contrib.id} style={{ ...s.contribBubble, borderLeft: `3px solid ${ink.border}`, background: ink.bg }} className="contrib-bubble">
                         <div style={{ ...s.avatarSm, background: ink.color, border: `2px solid ${ink.border}`, boxShadow: "0 0 0 2px rgba(255,235,170,0.3), 0 2px 8px rgba(0,0,0,0.15)" }}>
-                          {initial(contrib.character)}
+                          {contribInitial(contrib)}
                         </div>
                         <div style={s.contribBody}>
                           <div style={s.contribMeta}>
-                            <span style={{ ...s.contribAuthor, color: ink.color }}>{displayName(contrib.character)}</span>
+                            <span style={{ ...s.contribAuthor, color: ink.color }}>{contribAuthor(contrib)}</span>
                             <span style={s.contribTime}>{formatTime(contrib.createdAt)}</span>
                             {!spectatorView && (
                               <button style={s.contribDelete} onClick={() => handleDeleteContrib(contrib.id)} title="Supprimer">✕</button>
@@ -1080,6 +1213,12 @@ export default function App() {
     </div>
   );
 }
+
+// ─── Palette couleurs profil ──────────────────────────────────────────────────
+const PROFILE_COLORS = [
+  "#3c1e6a", "#194820", "#662205", "#1a3a5c",
+  "#4a2800", "#5a1e40", "#1e4a3a", "#2e1a00",
+];
 
 // ─── Design system ────────────────────────────────────────────────────────────
 
@@ -1322,4 +1461,9 @@ const s: Record<string, React.CSSProperties> = {
   authErrorMsg: { fontSize: "0.78rem", color: C.danger, margin: 0, fontFamily: C.serif, fontStyle: "italic" as const },
   authSwitch: { fontSize: "0.74rem", color: C.textMuted, textAlign: "center" as const, margin: 0, fontFamily: C.ui },
   authSwitchLink: { color: C.accent, cursor: "pointer", textDecoration: "underline" },
+
+  // Profil
+  profileField: { display: "flex", flexDirection: "column" as const, gap: "0.3rem" },
+  profileLabel: { fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: C.textMuted, fontFamily: C.ui },
+  colorPalette: { display: "flex", gap: "0.5rem", flexWrap: "wrap" as const, padding: "0.2rem 0" },
 };

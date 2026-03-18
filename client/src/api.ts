@@ -53,6 +53,8 @@ export interface Contribution {
   sceneId: string;
   characterId?: string | null;
   character?: CharacterFull | null;
+  userId?: string | null;
+  user?: { id: string; email: string; displayName?: string | null; color?: string | null } | null;
   modStatus: string;
   createdAt: string;
 }
@@ -95,7 +97,16 @@ export type CharacterInput = Omit<Partial<Character>, "id" | "storyId" | "scenes
 export interface AuthUser {
   id: string;
   email: string;
+  displayName?: string | null;
+  color?: string | null;
+  bio?: string | null;
   createdAt: string;
+}
+
+export interface UserProfileInput {
+  displayName?: string | null;
+  color?: string | null;
+  bio?: string | null;
 }
 
 export interface AuthResponse {
@@ -125,6 +136,11 @@ export const api = {
     login: (email: string, password: string) =>
       request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
     me: () => request<AuthUser>("/auth/me"),
+  },
+  users: {
+    getProfile: () => request<AuthUser>("/users/me"),
+    updateProfile: (data: UserProfileInput) =>
+      request<AuthUser>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
   },
   stories: {
     list: () => request<Story[]>("/stories"),

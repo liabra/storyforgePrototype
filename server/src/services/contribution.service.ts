@@ -4,20 +4,29 @@ const characterSelect = {
   select: { id: true, name: true, nickname: true, avatarUrl: true },
 } as const;
 
+const userSelect = {
+  select: { id: true, email: true, displayName: true, color: true },
+} as const;
+
+const contribInclude = {
+  character: characterSelect,
+  user: userSelect,
+} as const;
+
 export const getContributionsByScene = (sceneId: string) =>
   prisma.contribution.findMany({
     where: { sceneId, modStatus: { not: "BLOCKED" } },
     orderBy: { createdAt: "asc" },
-    include: { character: characterSelect },
+    include: contribInclude,
   });
 
 export const createContribution = (
   sceneId: string,
-  data: { content: string; characterId?: string }
+  data: { content: string; characterId?: string; userId?: string }
 ) =>
   prisma.contribution.create({
     data: { ...data, sceneId },
-    include: { character: characterSelect },
+    include: contribInclude,
   });
 
 export const deleteContribution = (id: string) =>
