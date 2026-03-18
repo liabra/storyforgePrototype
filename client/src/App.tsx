@@ -201,11 +201,11 @@ export default function App() {
       .finally(() => setAuthLoading(false));
   }, []);
 
-  // ── Load stories (after auth resolves)
+  // ── Load stories (uniquement si connecté)
   useEffect(() => {
-    if (authLoading) return;
+    if (!currentUser) { setStories([]); return; }
     api.stories.list().then(setStories).catch(() => setError("Impossible de charger les histoires."));
-  }, [authLoading]);
+  }, [currentUser]);
 
   // ── Scroll to latest contribution
   useEffect(() => {
@@ -457,7 +457,6 @@ export default function App() {
       setCurrentUser(user);
       setAuthView(null);
       setAuthEmail(""); setAuthPassword("");
-      api.stories.list().then(setStories).catch(() => {});
     } catch (err: unknown) {
       setAuthError((err as Error).message);
     } finally {
@@ -475,7 +474,6 @@ export default function App() {
       setCurrentUser(user);
       setAuthView(null);
       setAuthEmail(""); setAuthPassword("");
-      api.stories.list().then(setStories).catch(() => {});
     } catch (err: unknown) {
       setAuthError((err as Error).message);
     } finally {
