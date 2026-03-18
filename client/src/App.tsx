@@ -10,6 +10,8 @@ import type {
   SceneStatus,
   AuthUser,
   UserProfileInput,
+  Participant,
+  ParticipantRole,
 } from "./api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ export default function App() {
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
-  const [activeTab, setActiveTab] = useState<"chapters" | "characters">("chapters");
+  const [activeTab, setActiveTab] = useState<"chapters" | "characters" | "participants">("chapters");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Stories
@@ -180,6 +182,14 @@ export default function App() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  // Participants
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"EDITOR" | "VIEWER">("EDITOR");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
   // ── Restore session
   useEffect(() => {
     const token = tokenStore.get();
@@ -190,10 +200,11 @@ export default function App() {
       .finally(() => setAuthLoading(false));
   }, []);
 
-  // ── Load stories
+  // ── Load stories (after auth resolves)
   useEffect(() => {
+    if (authLoading) return;
     api.stories.list().then(setStories).catch(() => setError("Impossible de charger les histoires."));
-  }, []);
+  }, [authLoading]);
 
   // ── Scroll to latest contribution
   useEffect(() => {
@@ -209,12 +220,20 @@ export default function App() {
     setSelectedScene(null);
     setActiveTab("chapters");
     setSidebarOpen(false);
-    const [chapterData, charData] = await Promise.all([
+    setParticipants([]);
+    setMyRole(null);
+    const [chapterData, charData, participantData] = await Promise.all([
       api.chapters.list(story.id),
       api.characters.list(story.id),
+      api.participants.list(story.id),
     ]);
     setChapters(chapterData);
     setCharacters(charData);
+    setParticipants(participantData);
+    if (currentUser) {
+      const mine = participantData.find((p) => p.userId === currentUser.id);
+      setMyRole(mine?.role ?? null);
+    }
   };
 
   // ── Select chapter → show scene list
@@ -437,6 +456,7 @@ export default function App() {
       setCurrentUser(user);
       setAuthView(null);
       setAuthEmail(""); setAuthPassword("");
+      api.stories.list().then(setStories).catch(() => {});
     } catch (err: unknown) {
       setAuthError((err as Error).message);
     } finally {
@@ -454,6 +474,7 @@ export default function App() {
       setCurrentUser(user);
       setAuthView(null);
       setAuthEmail(""); setAuthPassword("");
+      api.stories.list().then(setStories).catch(() => {});
     } catch (err: unknown) {
       setAuthError((err as Error).message);
     } finally {
@@ -495,6 +516,35 @@ export default function App() {
     } finally {
       setSavingProfile(false);
     }
+  };
+
+  // ── Participants
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStory || !inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError(null);
+    try {
+      const participant = await api.participants.add(selectedStory.id, inviteEmail.trim(), inviteRole);
+      setParticipants((p) => [...p, participant]);
+      setInviteEmail("");
+    } catch (err: unknown) {
+      setInviteError((err as Error).message);
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleChangeRole = async (userId: string, role: "EDITOR" | "VIEWER") => {
+    if (!selectedStory) return;
+    const updated = await api.participants.updateRole(selectedStory.id, userId, role);
+    setParticipants((p) => p.map((x) => (x.userId === userId ? updated : x)));
+  };
+
+  const handleRemoveParticipant = async (userId: string) => {
+    if (!selectedStory) return;
+    await api.participants.remove(selectedStory.id, userId);
+    setParticipants((p) => p.filter((x) => x.userId !== userId));
   };
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -748,11 +798,15 @@ export default function App() {
 
               {/* Tabs */}
               <div style={s.tabs}>
-                {(["chapters", "characters"] as const).map((tab) => (
-                  <button key={tab} style={{ ...s.tab, ...(activeTab === tab ? s.tabActive : {}) }} onClick={() => setActiveTab(tab)}>
-                    {tab === "chapters" ? `Chapitres (${chapters.length})` : `Personnages (${characters.length})`}
-                  </button>
-                ))}
+                <button style={{ ...s.tab, ...(activeTab === "chapters" ? s.tabActive : {}) }} onClick={() => setActiveTab("chapters")}>
+                  Chapitres ({chapters.length})
+                </button>
+                <button style={{ ...s.tab, ...(activeTab === "characters" ? s.tabActive : {}) }} onClick={() => setActiveTab("characters")}>
+                  Personnages ({characters.length})
+                </button>
+                <button style={{ ...s.tab, ...(activeTab === "participants" ? s.tabActive : {}) }} onClick={() => setActiveTab("participants")}>
+                  Participants ({participants.length})
+                </button>
               </div>
 
               {/* ── Tab Chapitres */}
@@ -892,6 +946,82 @@ export default function App() {
                                 </button>
                               </div>
                             </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Tab Participants */}
+              {activeTab === "participants" && (
+                <div>
+                  {myRole === "OWNER" && (
+                    <form onSubmit={handleInvite} style={s.inlineForm}>
+                      <p style={s.formTitle}>Inviter un participant</p>
+                      <div style={s.row}>
+                        <input
+                          style={{ ...s.inputDark, flex: 1 }}
+                          type="email"
+                          placeholder="Email de l'utilisateur"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          required
+                        />
+                        <select
+                          style={{ ...s.inputDark, width: "auto" }}
+                          value={inviteRole}
+                          onChange={(e) => setInviteRole(e.target.value as "EDITOR" | "VIEWER")}
+                        >
+                          <option value="EDITOR">Éditeur</option>
+                          <option value="VIEWER">Lecteur</option>
+                        </select>
+                        <button style={s.btnAccent} type="submit" disabled={inviting}>
+                          {inviting ? "…" : "Inviter →"}
+                        </button>
+                      </div>
+                      {inviteError && <p style={s.authErrorMsg}>{inviteError}</p>}
+                    </form>
+                  )}
+
+                  {participants.length === 0 && <p style={s.mutedCenter}>Aucun participant chargé.</p>}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
+                    {participants.map((pt) => {
+                      const ink = pt.user.color
+                        ? { color: pt.user.color, bg: hexToRgba(pt.user.color, 0.07), border: hexToRgba(pt.user.color, 0.35) }
+                        : characterInk(avatarHue(pt.user.displayName || pt.user.email));
+                      const name = pt.user.displayName || pt.user.email.split("@")[0];
+                      const isMe = currentUser?.id === pt.userId;
+                      return (
+                        <div key={pt.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0.85rem", background: ink.bg, border: `1px solid ${ink.border}`, borderRadius: 6 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: ink.color, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "0.8rem", fontWeight: 700, flexShrink: 0 }}>
+                            {name.charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontFamily: C.serif, fontSize: "0.92rem", color: C.text, fontWeight: 600 }}>{name}</div>
+                            <div style={{ fontSize: "0.76rem", color: C.textMuted }}>{pt.user.email}</div>
+                          </div>
+                          {myRole === "OWNER" && pt.role !== "OWNER" ? (
+                            <select
+                              style={{ ...s.inputDark, width: "auto", padding: "0.2rem 0.4rem", fontSize: "0.78rem" }}
+                              value={pt.role}
+                              onChange={(e) => handleChangeRole(pt.userId, e.target.value as "EDITOR" | "VIEWER")}
+                            >
+                              <option value="EDITOR">Éditeur</option>
+                              <option value="VIEWER">Lecteur</option>
+                            </select>
+                          ) : (
+                            <span style={{ ...s.badge, ...(pt.role === "OWNER" ? s.badgeGold : pt.role === "EDITOR" ? s.badgeGreen : {}) }}>
+                              {pt.role === "OWNER" ? "Propriétaire" : pt.role === "EDITOR" ? "Éditeur" : "Lecteur"}
+                            </span>
+                          )}
+                          {myRole === "OWNER" && pt.role !== "OWNER" && (
+                            <button style={s.btnDanger} onClick={() => handleRemoveParticipant(pt.userId)}>✕</button>
+                          )}
+                          {isMe && pt.role !== "OWNER" && myRole !== "OWNER" && (
+                            <button style={s.btnGhost} onClick={() => handleRemoveParticipant(pt.userId)}>Quitter</button>
                           )}
                         </div>
                       );

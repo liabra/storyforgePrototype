@@ -7,27 +7,47 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ParticipantRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
+  id            String               @id @default(cuid())
+  email         String               @unique
   passwordHash  String
   displayName   String?
   color         String?
   bio           String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   characters    Character[]
   contributions Contribution[]
+  participations StoryParticipant[]
 }
 
 model Story {
-  id          String      @id @default(cuid())
-  title       String
-  description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  chapters    Chapter[]
-  characters  Character[]
+  id           String               @id @default(cuid())
+  title        String
+  description  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  chapters     Chapter[]
+  characters   Character[]
+  participants StoryParticipant[]
+}
+
+model StoryParticipant {
+  id        String          @id @default(cuid())
+  storyId   String
+  story     Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      ParticipantRole @default(VIEWER)
+  createdAt DateTime        @default(now())
+
+  @@unique([storyId, userId])
 }
 
 model Chapter {

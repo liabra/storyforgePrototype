@@ -9,9 +9,13 @@ const getSingleParam = (value: string | string[] | undefined): string => {
   return Array.isArray(value) ? value[0] : value;
 };
 
-export const getAll = async (_req: Request, res: Response) => {
+export const getAll = async (req: Request, res: Response) => {
+  if (req.user) {
+    const stories = await storyService.getUserStories(req.user.id);
+    return res.json(stories);
+  }
   const stories = await storyService.getAllStories();
-  res.json(stories);
+  return res.json(stories);
 };
 
 export const getById = async (req: Request, res: Response) => {
@@ -32,7 +36,11 @@ export const create = async (req: Request, res: Response) => {
     return res.status(400).json({ error: "title is required" });
   }
 
-  const story = await storyService.createStory({ title, description });
+  if (!req.user) {
+    return res.status(401).json({ error: "Authentification requise" });
+  }
+
+  const story = await storyService.createStory({ title, description }, req.user.id);
   return res.status(201).json(story);
 };
 

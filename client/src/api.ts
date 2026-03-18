@@ -94,6 +94,17 @@ export interface Character {
 
 export type CharacterInput = Omit<Partial<Character>, "id" | "storyId" | "scenes">;
 
+export type ParticipantRole = "OWNER" | "EDITOR" | "VIEWER";
+
+export interface Participant {
+  id: string;
+  storyId: string;
+  userId: string;
+  role: ParticipantRole;
+  createdAt: string;
+  user: { id: string; email: string; displayName?: string | null; color?: string | null };
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -188,6 +199,21 @@ export const api = {
         body: JSON.stringify(data),
       }),
     delete: (id: string) => request<void>(`/contributions/${id}`, { method: "DELETE" }),
+  },
+  participants: {
+    list: (storyId: string) => request<Participant[]>(`/stories/${storyId}/participants`),
+    add: (storyId: string, email: string, role: "EDITOR" | "VIEWER") =>
+      request<Participant>(`/stories/${storyId}/participants`, {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
+      }),
+    updateRole: (storyId: string, userId: string, role: "EDITOR" | "VIEWER") =>
+      request<Participant>(`/stories/${storyId}/participants/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      }),
+    remove: (storyId: string, userId: string) =>
+      request<void>(`/stories/${storyId}/participants/${userId}`, { method: "DELETE" }),
   },
   characters: {
     list: (storyId: string) => request<Character[]>(`/stories/${storyId}/characters`),

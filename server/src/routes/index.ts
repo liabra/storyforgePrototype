@@ -6,6 +6,7 @@ import characterRoutes from "./character.routes";
 import chapterRoutes from "./chapter.routes";
 import sceneRoutes from "./scene.routes";
 import contributionRoutes from "./contribution.routes";
+import participantRoutes from "./participant.routes";
 import devRoutes from "./dev.routes";
 
 const router = Router();
@@ -17,6 +18,7 @@ router.use(characterRoutes);
 router.use(chapterRoutes);
 router.use(sceneRoutes);
 router.use(contributionRoutes);
+router.use(participantRoutes);
 router.use(devRoutes);
 
 export default router;
