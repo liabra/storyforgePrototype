@@ -7,6 +7,7 @@ import type {
   Contribution,
   Character,
   CharacterInput,
+  SceneStatus,
 } from "./api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ export default function App() {
 
   // Scene settings
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsEdit, setSettingsEdit] = useState({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE" as string });
+  const [settingsEdit, setSettingsEdit] = useState<{ visibilityMode: string; visibleCount: number; status: SceneStatus }>({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE" });
   const [savingSettings, setSavingSettings] = useState(false);
 
   // Scene characters
