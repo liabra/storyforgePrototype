@@ -197,7 +197,7 @@ export default function App() {
     if (!token) { setAuthLoading(false); return; }
     api.auth.me()
       .then(setCurrentUser)
-      .catch(() => tokenStore.clear())
+      .catch(() => { tokenStore.clear(); setCurrentUser(null); })
       .finally(() => setAuthLoading(false));
   }, []);
 
@@ -266,7 +266,9 @@ export default function App() {
   const handleCreateStory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!storyTitle.trim()) return;
-    const story = await api.stories.create({ title: storyTitle.trim(), description: storyDesc.trim() || undefined });
+    const story = await api.stories
+      .create({ title: storyTitle.trim(), description: storyDesc.trim() || undefined })
+      .catch(handleAuthError);
     setStories((p) => [story, ...p]);
     setStoryTitle(""); setStoryDesc("");
     setShowStoryForm(false);
@@ -486,6 +488,20 @@ export default function App() {
     setCurrentUser(null);
     setAuthView(null);
     setShowProfile(false);
+    setSelectedStory(null);
+    setSelectedChapter(null);
+    setSelectedScene(null);
+  };
+
+  const handleAuthError = (err: unknown) => {
+    if ((err as Error).message.includes("401")) {
+      tokenStore.clear();
+      setCurrentUser(null);
+      setSelectedStory(null);
+      setSelectedChapter(null);
+      setSelectedScene(null);
+    }
+    throw err;
   };
 
   const handleOpenProfile = () => {
