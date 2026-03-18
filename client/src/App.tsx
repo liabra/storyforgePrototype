@@ -6,6 +6,7 @@ import type {
   Scene,
   Contribution,
   Character,
+  CharacterFull,
   CharacterInput,
   SceneStatus,
   AuthUser,
