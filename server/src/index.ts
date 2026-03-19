@@ -44,12 +44,20 @@ const io = new Server(httpServer, {
 initIO(io);
 
 io.on("connection", (socket) => {
+  console.log(`[socket] connected: ${socket.id}`);
+
   socket.on("scene:join", ({ sceneId }: { sceneId: string }) => {
     socket.join(`scene:${sceneId}`);
+    console.log(`[socket] ${socket.id} joined scene:${sceneId}`);
   });
 
   socket.on("scene:leave", ({ sceneId }: { sceneId: string }) => {
     socket.leave(`scene:${sceneId}`);
+    console.log(`[socket] ${socket.id} left scene:${sceneId}`);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log(`[socket] disconnected: ${socket.id} (${reason})`);
   });
 });
 

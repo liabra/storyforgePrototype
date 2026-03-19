@@ -168,6 +168,8 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
   const contribEndRef = useRef<HTMLDivElement>(null);
+  const navRestoredRef = useRef(false);
+  const selectedSceneIdRef = useRef<string | null>(null);
 
   // Auth
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -187,6 +189,9 @@ export default function App() {
   // Responsive
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
 
+  // Stories loaded flag (pour la restauration de nav)
+  const [storiesLoaded, setStoriesLoaded] = useState(false);
+
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
@@ -202,11 +207,29 @@ export default function App() {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
+  // ── Sync selectedSceneIdRef pour la reconnexion socket
+  useEffect(() => {
+    selectedSceneIdRef.current = selectedScene?.id ?? null;
+  }, [selectedScene?.id]);
+
   // ── Socket : connexion liée à l'authentification
   useEffect(() => {
     if (!currentUser) return;
+
+    // Re-émet scene:join après chaque (re)connexion
+    const onConnect = () => {
+      if (selectedSceneIdRef.current) {
+        socket.emit("scene:join", { sceneId: selectedSceneIdRef.current });
+      }
+    };
+
+    socket.on("connect", onConnect);
     socket.connect();
-    return () => { socket.disconnect(); };
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.disconnect();
+    };
   }, [currentUser]);
 
   // ── Socket : rejoindre/quitter la room de la scène ouverte
@@ -259,9 +282,70 @@ export default function App() {
 
   // ── Load stories (uniquement si connecté)
   useEffect(() => {
-    if (!currentUser) { setStories([]); return; }
-    api.stories.list().then(setStories).catch(() => setError("Impossible de charger les histoires."));
+    if (!currentUser) { setStories([]); setStoriesLoaded(false); return; }
+    api.stories.list()
+      .then((data) => { setStories(data); setStoriesLoaded(true); })
+      .catch(() => setError("Impossible de charger les histoires."));
   }, [currentUser]);
+
+  // ── Sauvegarde navigation courante
+  useEffect(() => {
+    if (!selectedStory) { localStorage.removeItem("sf_nav"); return; }
+    localStorage.setItem("sf_nav", JSON.stringify({
+      storyId: selectedStory.id,
+      chapterId: selectedChapter?.id ?? null,
+      sceneId: selectedScene?.id ?? null,
+    }));
+  }, [selectedStory?.id, selectedChapter?.id, selectedScene?.id]);
+
+  // ── Restauration navigation après refresh
+  useEffect(() => {
+    if (!currentUser || !storiesLoaded || navRestoredRef.current) return;
+    navRestoredRef.current = true;
+    const raw = localStorage.getItem("sf_nav");
+    if (!raw) return;
+    try {
+      const { storyId, chapterId, sceneId } = JSON.parse(raw) as {
+        storyId?: string; chapterId?: string; sceneId?: string;
+      };
+      if (!storyId) return;
+      const story = stories.find((s) => s.id === storyId);
+      if (!story) return;
+      Promise.all([
+        api.chapters.list(story.id),
+        api.characters.list(story.id),
+        api.participants.list(story.id),
+      ]).then(([chapterData, charData, participantData]) => {
+        setSelectedStory(story);
+        setChapters(chapterData);
+        setCharacters(charData);
+        setParticipants(participantData);
+        const mine = participantData.find((p) => p.userId === currentUser.id);
+        setMyRole(mine?.role ?? null);
+        setActiveTab("chapters");
+        if (!chapterId) return;
+        const chapter = chapterData.find((ch) => ch.id === chapterId);
+        if (!chapter) return;
+        setSelectedChapter(chapter);
+        if (!sceneId) return;
+        api.scenes.get(sceneId).then((scene) => {
+          setSelectedScene(scene);
+          setSettingsEdit({
+            visibilityMode: scene.visibilityMode,
+            visibleCount: scene.visibleCount,
+            status: scene.status,
+          });
+          setSceneCharEdits(scene.characters.map((c) => c.id));
+          setSpectatorView(false);
+          setShowSettings(false);
+          setShowCharSelect(false);
+          setSuggestion(null);
+          setContribContent("");
+          setContribCharId(charData[0]?.id ?? "");
+        }).catch(() => { /* scène supprimée ou inaccessible */ });
+      }).catch(() => { /* erreur de restauration */ });
+    } catch { /* JSON malformé */ }
+  }, [currentUser?.id, storiesLoaded]);
 
   // ── Scroll to latest contribution
   useEffect(() => {
@@ -552,6 +636,8 @@ export default function App() {
     setSelectedStory(null);
     setSelectedChapter(null);
     setSelectedScene(null);
+    navRestoredRef.current = false;
+    localStorage.removeItem("sf_nav");
   };
 
   const handleAuthError = (err: unknown) => {
@@ -561,6 +647,8 @@ export default function App() {
       setSelectedStory(null);
       setSelectedChapter(null);
       setSelectedScene(null);
+      navRestoredRef.current = false;
+      localStorage.removeItem("sf_nav");
     }
     throw err;
   };
