@@ -275,14 +275,19 @@ export default function App() {
   // ── Create story
   const handleCreateStory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!storyTitle.trim()) return;
-    const story = await api.stories
-      .create({ title: storyTitle.trim(), description: storyDesc.trim() || undefined })
-      .catch(handleAuthError);
-    setStories((p) => [story, ...p]);
-    setStoryTitle(""); setStoryDesc("");
-    setShowStoryForm(false);
-    handleSelectStory(story);
+    if (!storyTitle.trim() || !currentUser) return;
+    try {
+      const story = await api.stories.create({
+        title: storyTitle.trim(),
+        description: storyDesc.trim() || undefined,
+      });
+      setStories((p) => [story, ...p]);
+      setStoryTitle(""); setStoryDesc("");
+      setShowStoryForm(false);
+      handleSelectStory(story);
+    } catch (err: unknown) {
+      handleAuthError(err);
+    }
   };
 
   // ── Create chapter
@@ -642,13 +647,15 @@ export default function App() {
                 </div>
               )
             )}
-            <button style={s.btnAccent} onClick={() => {
-              const next = !showStoryForm;
-              setShowStoryForm(next);
-              if (next && isMobile) setSidebarOpen(true);
-            }}>
-              {showStoryForm ? "Annuler" : "+ Histoire"}
-            </button>
+            {currentUser && (
+              <button style={s.btnAccent} onClick={() => {
+                const next = !showStoryForm;
+                setShowStoryForm(next);
+                if (next && isMobile) setSidebarOpen(true);
+              }}>
+                {showStoryForm ? "Annuler" : "+ Histoire"}
+              </button>
+            )}
           </div>
         </div>
       </header>

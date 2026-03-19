@@ -40,10 +40,11 @@ export async function login(email: string, password: string) {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) throw httpError("Identifiants invalides", 401);
 
-  return {
-    token: signToken(user.id, user.email),
-    user: { id: user.id, email: user.email, createdAt: user.createdAt },
-  };
+  const profile = await prisma.user.findUniqueOrThrow({
+    where: { id: user.id },
+    select: USER_SELECT,
+  });
+  return { token: signToken(user.id, user.email), user: profile };
 }
 
 export async function getMe(userId: string) {
