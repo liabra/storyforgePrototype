@@ -183,6 +183,9 @@ export default function App() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  // Responsive
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
@@ -190,6 +193,13 @@ export default function App() {
   const [inviteRole, setInviteRole] = useState<"EDITOR" | "VIEWER">("EDITOR");
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // ── Responsive listener
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   // ── Restore session
   useEffect(() => {
@@ -581,7 +591,7 @@ export default function App() {
 
       {/* ══ Header */}
       <header style={s.header}>
-        <div style={s.headerInner}>
+        <div style={s.headerInner} className="app-header-inner">
           <div style={s.headerLeft}>
             <button style={s.menuBtn} onClick={() => setSidebarOpen((v) => !v)} aria-label="Menu">
               ☰
@@ -614,16 +624,16 @@ export default function App() {
               )}
             </div>
           </div>
-          <div style={s.headerRight}>
+          <div style={s.headerRight} className="app-header-right">
             {!authLoading && (
               currentUser ? (
                 <div style={s.userChip}>
                   {currentUser.color && (
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: currentUser.color, flexShrink: 0 }} />
                   )}
-                  <span style={s.userEmail}>{currentUser.displayName || currentUser.email}</span>
+                  <span style={s.userEmail} className="app-user-name">{currentUser.displayName || currentUser.email}</span>
                   <button style={s.btnMicro} onClick={handleOpenProfile}>Profil</button>
-                  <button style={s.btnGhost} onClick={handleLogout}>Déconnexion</button>
+                  <button style={s.btnGhost} onClick={handleLogout}>{isMobile ? "✕" : "Déconnexion"}</button>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -632,7 +642,11 @@ export default function App() {
                 </div>
               )
             )}
-            <button style={s.btnAccent} onClick={() => setShowStoryForm((v) => !v)}>
+            <button style={s.btnAccent} onClick={() => {
+              const next = !showStoryForm;
+              setShowStoryForm(next);
+              if (next && isMobile) setSidebarOpen(true);
+            }}>
               {showStoryForm ? "Annuler" : "+ Histoire"}
             </button>
           </div>
@@ -643,7 +657,7 @@ export default function App() {
       {authView !== null && (
         <>
           <div style={s.authOverlay} onClick={() => setAuthView(null)} />
-          <div style={s.authPanel}>
+          <div style={s.authPanel} className="app-auth-panel">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={s.authTitle}>{authView === "login" ? "Connexion" : "Créer un compte"}</p>
               <button style={s.authClose} onClick={() => setAuthView(null)}>✕</button>
@@ -691,7 +705,7 @@ export default function App() {
       {showProfile && currentUser && (
         <>
           <div style={s.authOverlay} onClick={() => setShowProfile(false)} />
-          <div style={s.authPanel}>
+          <div style={s.authPanel} className="app-auth-panel">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={s.authTitle}>Mon profil</p>
               <button style={s.authClose} onClick={() => setShowProfile(false)}>✕</button>
@@ -752,7 +766,7 @@ export default function App() {
 
       {error && <div style={s.errorBanner}>{error}<button style={s.errorClose} onClick={() => setError(null)}>✕</button></div>}
 
-      <div style={s.layout}>
+      <div style={s.layout} className="app-layout">
 
         {/* ══ Sidebar */}
         <aside className={`app-sidebar${sidebarOpen ? " is-open" : ""}`} style={{ ...s.sidebar, ...(sidebarOpen ? s.sidebarOpen : {}) }}>
@@ -789,7 +803,7 @@ export default function App() {
         {sidebarOpen && <div style={s.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
 
         {/* ══ Main */}
-        <main style={s.main}>
+        <main style={s.main} className="app-main">
 
           {/* ── Aucune histoire sélectionnée */}
           {!selectedStory && (
@@ -807,19 +821,19 @@ export default function App() {
           {selectedStory && !selectedChapter && !selectedScene && (
             <div>
               <div style={s.pageHeader}>
-                <h1 style={s.pageTitle}>{selectedStory.title}</h1>
+                <h1 style={s.pageTitle} className="app-page-title">{selectedStory.title}</h1>
                 {selectedStory.description && <p style={s.pageDesc}>{selectedStory.description}</p>}
               </div>
 
               {/* Tabs */}
-              <div style={s.tabs}>
-                <button style={{ ...s.tab, ...(activeTab === "chapters" ? s.tabActive : {}) }} onClick={() => setActiveTab("chapters")}>
+              <div style={s.tabs} className="app-tabs">
+                <button className="app-tab" style={{ ...s.tab, ...(activeTab === "chapters" ? s.tabActive : {}) }} onClick={() => setActiveTab("chapters")}>
                   Chapitres ({chapters.length})
                 </button>
-                <button style={{ ...s.tab, ...(activeTab === "characters" ? s.tabActive : {}) }} onClick={() => setActiveTab("characters")}>
+                <button className="app-tab" style={{ ...s.tab, ...(activeTab === "characters" ? s.tabActive : {}) }} onClick={() => setActiveTab("characters")}>
                   Personnages ({characters.length})
                 </button>
-                <button style={{ ...s.tab, ...(activeTab === "participants" ? s.tabActive : {}) }} onClick={() => setActiveTab("participants")}>
+                <button className="app-tab" style={{ ...s.tab, ...(activeTab === "participants" ? s.tabActive : {}) }} onClick={() => setActiveTab("participants")}>
                   Participants ({participants.length})
                 </button>
               </div>
@@ -935,7 +949,7 @@ export default function App() {
                           )}
 
                           {isExpanded && (
-                            <div style={s.charSheet}>
+                            <div style={s.charSheet} className="app-char-sheet">
                               {(
                                 [
                                   ["name", "Nom"], ["nickname", "Pseudo"],
@@ -1110,7 +1124,7 @@ export default function App() {
                   Chapitre {selectedChapter.order} — {selectedChapter.title}
                 </div>
                 <div style={s.sceneViewTitleRow}>
-                  <h2 style={s.sceneViewTitle}>{selectedScene.title}</h2>
+                  <h2 style={s.sceneViewTitle} className="app-scene-title">{selectedScene.title}</h2>
                   <span style={{ ...s.statusBadge, ...statusBadgeStyle(selectedScene.status) }}>
                     {statusLabel(selectedScene.status)}
                   </span>
@@ -1219,7 +1233,7 @@ export default function App() {
                   return visible.map((contrib) => {
                     const ink = resolveInk(contrib);
                     return (
-                      <div key={contrib.id} style={{ ...s.contribBubble, borderLeft: `3px solid ${ink.border}`, background: ink.bg }} className="contrib-bubble">
+                      <div key={contrib.id} style={{ ...s.contribBubble, borderLeft: `3px solid ${ink.border}`, background: ink.bg }} className="contrib-bubble app-contrib-bubble">
                         <div style={{ ...s.avatarSm, background: ink.color, border: `2px solid ${ink.border}`, boxShadow: "0 0 0 2px rgba(255,235,170,0.3), 0 2px 8px rgba(0,0,0,0.15)" }}>
                           {contribInitial(contrib)}
                         </div>
@@ -1263,7 +1277,7 @@ export default function App() {
 
               {/* ── Zone d'écriture (auteur, scène ACTIVE seulement) */}
               {!spectatorView && selectedScene.status === "ACTIVE" && (
-                <div style={s.writeArea} className="write-area">
+                <div style={s.writeArea} className="write-area app-write-area">
                   {suggestion && (
                     <div style={s.suggestion}>
                       <span style={s.suggestionIcon}>💡</span>
@@ -1318,7 +1332,7 @@ export default function App() {
                     <div style={s.settingsBox}>
                       <p style={s.settingsTitle}>Paramètres de la scène</p>
                       <div style={s.settingsRow}>
-                        <label style={s.settingsLabel}>Statut</label>
+                        <label style={s.settingsLabel} className="app-settings-label">Statut</label>
                         <select style={s.selectDark} value={settingsEdit.status} onChange={(e) =>
   setSettingsEdit((p) => ({
     ...p,
@@ -1331,7 +1345,7 @@ export default function App() {
                         </select>
                       </div>
                       <div style={s.settingsRow}>
-                        <label style={s.settingsLabel}>Visible aux spectateurs</label>
+                        <label style={s.settingsLabel} className="app-settings-label">Visible aux spectateurs</label>
                         <select style={s.selectDark} value={settingsEdit.visibilityMode} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibilityMode: e.target.value as any }))}>
                           <option value="last">Dernières contributions</option>
                           <option value="all">Toutes les contributions</option>
@@ -1340,7 +1354,7 @@ export default function App() {
                       </div>
                       {settingsEdit.visibilityMode === "last" && (
                         <div style={s.settingsRow}>
-                          <label style={s.settingsLabel}>Nombre visible</label>
+                          <label style={s.settingsLabel} className="app-settings-label">Nombre visible</label>
                           <input type="number" min={1} max={20} style={{ ...s.inputDark, maxWidth: 70 }} value={settingsEdit.visibleCount} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibleCount: Number(e.target.value) || 1 }))} />
                         </div>
                       )}

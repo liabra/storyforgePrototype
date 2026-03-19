@@ -29,7 +29,10 @@ export const getSceneWithContributions = (sceneId: string) =>
       contributions: {
         where: { modStatus: { not: "BLOCKED" } },
         orderBy: { createdAt: "asc" },
-        include: { character: charFullSelect },
+        include: {
+          character: charFullSelect,
+          user: { select: { id: true, email: true, displayName: true, color: true } },
+        },
       },
     },
   });

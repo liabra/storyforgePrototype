@@ -161,6 +161,89 @@ button:not(:disabled):hover { filter: brightness(0.88); }
   }
 }
 
+@media (max-width: 640px) {
+  /* Header */
+  .app-header-inner {
+    padding: 0 0.65rem !important;
+    gap: 0.4rem !important;
+  }
+  .app-header-right {
+    gap: 0.3rem !important;
+  }
+  /* Cache le nom/email dans le chip utilisateur */
+  .app-user-name {
+    display: none !important;
+  }
+
+  /* Layout — retire le padding horizontal du wrapper */
+  .app-layout {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 4rem !important;
+  }
+  /* Main — padding réduit, adapté à l'absence de sidebar */
+  .app-main {
+    padding-left: 0.9rem !important;
+    padding-right: 0.8rem !important;
+    padding-top: 1.2rem !important;
+    border-radius: 0 !important;
+  }
+
+  /* Panel auth / profil — pleine largeur horizontale */
+  .app-auth-panel {
+    right: 0.6rem !important;
+    left: 0.6rem !important;
+    width: auto !important;
+  }
+
+  /* Tabs — wrappables et plus compacts */
+  .app-tabs {
+    flex-wrap: wrap !important;
+    gap: 0.18rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+  .app-tab {
+    font-size: 0.6rem !important;
+    padding: 0.3rem 0.55rem !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  /* Fiche personnage — 1 colonne */
+  .app-char-sheet {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Paramètres — label moins large */
+  .app-settings-label {
+    min-width: 100px !important;
+    font-size: 0.78rem !important;
+  }
+
+  /* Bulles de contribution — plus compactes */
+  .app-contrib-bubble {
+    gap: 0.55rem !important;
+    padding: 0.9rem 0.7rem !important;
+  }
+
+  /* Zone d'écriture */
+  .app-write-area {
+    padding: 1rem 0.85rem !important;
+  }
+
+  /* Titres de page */
+  .app-page-title {
+    font-size: 1.3rem !important;
+  }
+  .app-scene-title {
+    font-size: 1.3rem !important;
+  }
+
+  /* Sceau de cire bas-droite caché sur mobile */
+  body::after {
+    display: none;
+  }
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
