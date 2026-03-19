@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as contributionService from "../services/contribution.service";
 import * as participantService from "../services/participant.service";
+import { getIO } from "../socket";
 import prisma from "../prisma/client";
 import { SceneStatus, ParticipantRole } from "../generated/prisma/client";
 
@@ -45,6 +46,10 @@ export const create = async (req: Request, res: Response) => {
     characterId: characterId || undefined,
     userId: req.user?.id,
   });
+
+  // Diffuse aux autres clients de la même scène
+  getIO()?.to(`scene:${sceneId}`).emit("contribution:new", contribution);
+
   return res.status(201).json(contribution);
 };
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, tokenStore } from "./api";
+import { socket } from "./socket";
 import type {
   Story,
   Chapter,
@@ -200,6 +201,51 @@ export default function App() {
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+
+  // ── Socket : connexion liée à l'authentification
+  useEffect(() => {
+    if (!currentUser) return;
+    socket.connect();
+    return () => { socket.disconnect(); };
+  }, [currentUser]);
+
+  // ── Socket : rejoindre/quitter la room de la scène ouverte
+  useEffect(() => {
+    if (!selectedScene) return;
+
+    socket.emit("scene:join", { sceneId: selectedScene.id });
+
+    const onContribNew = (contrib: Contribution) => {
+      setSelectedScene((s) => {
+        if (!s || s.id !== contrib.sceneId) return s;
+        // dédup : ignore si déjà présent (auteur local)
+        if ((s.contributions ?? []).some((c) => c.id === contrib.id)) return s;
+        return {
+          ...s,
+          contributions: [...(s.contributions ?? []), contrib],
+          _count: { contributions: (s._count?.contributions ?? 0) + 1 },
+        };
+      });
+      // Synchronise le compteur dans la liste des scènes du chapitre
+      setChapters((p) =>
+        p.map((ch) => ({
+          ...ch,
+          scenes: ch.scenes.map((sc) =>
+            sc.id === contrib.sceneId
+              ? { ...sc, _count: { contributions: sc._count.contributions + 1 } }
+              : sc
+          ),
+        }))
+      );
+    };
+
+    socket.on("contribution:new", onContribNew);
+
+    return () => {
+      socket.emit("scene:leave", { sceneId: selectedScene.id });
+      socket.off("contribution:new", onContribNew);
+    };
+  }, [selectedScene?.id]);
 
   // ── Restore session
   useEffect(() => {
