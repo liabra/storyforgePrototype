@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import * as chapterService from "../services/chapter.service";
+import * as participantService from "../services/participant.service";
+import { ParticipantRole } from "../generated/prisma/client";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -16,6 +18,14 @@ export const create = async (req: Request, res: Response) => {
   const storyId = getSingleParam(req.params.storyId);
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
+
+  if (req.user) {
+    const role = await participantService.getUserRole(storyId, req.user.id);
+    if (role !== ParticipantRole.OWNER && role !== ParticipantRole.EDITOR) {
+      return res.status(403).json({ error: "Vous devez être OWNER ou EDITOR pour créer un chapitre" });
+    }
+  }
+
   const chapter = await chapterService.createChapter(storyId, { title, description, order });
   return res.status(201).json(chapter);
 };

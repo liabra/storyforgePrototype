@@ -289,7 +289,10 @@ export default function App() {
   }, [currentUser]);
 
   // ── Sauvegarde navigation courante
+  // Ne s'exécute qu'après que la restauration a été tentée pour ne pas effacer
+  // sf_nav au mount avant de l'avoir lu.
   useEffect(() => {
+    if (!navRestoredRef.current) return;
     if (!selectedStory) { localStorage.removeItem("sf_nav"); return; }
     localStorage.setItem("sf_nav", JSON.stringify({
       storyId: selectedStory.id,
@@ -982,7 +985,7 @@ export default function App() {
               {/* ── Tab Chapitres */}
               {activeTab === "chapters" && (
                 <div>
-                  {!showChapterForm ? (
+                  {myRole !== "VIEWER" && (!showChapterForm ? (
                     <button style={s.addBtn} onClick={() => setShowChapterForm(true)}>+ Ajouter un chapitre</button>
                   ) : (
                     <form onSubmit={handleCreateChapter} style={s.inlineForm}>
@@ -994,7 +997,7 @@ export default function App() {
                         <button style={s.btnGhost} type="button" onClick={() => setShowChapterForm(false)}>Annuler</button>
                       </div>
                     </form>
-                  )}
+                  ))}
 
                   {chapters.length === 0 && <p style={s.mutedCenter}>Aucun chapitre. Commence par en créer un.</p>}
 
@@ -1211,7 +1214,7 @@ export default function App() {
                 {selectedChapter.description && <p style={s.pageDesc}>{selectedChapter.description}</p>}
               </div>
 
-              {!showSceneForm ? (
+              {myRole !== "VIEWER" && (!showSceneForm ? (
                 <button style={s.addBtn} onClick={() => setShowSceneForm(true)}>+ Ajouter une scène</button>
               ) : (
                 <form onSubmit={handleCreateScene} style={s.inlineForm}>
@@ -1223,7 +1226,7 @@ export default function App() {
                     <button style={s.btnGhost} type="button" onClick={() => setShowSceneForm(false)}>Annuler</button>
                   </div>
                 </form>
-              )}
+              ))}
 
               {selectedChapter.scenes.length === 0 && <p style={s.mutedCenter}>Aucune scène dans ce chapitre.</p>}
 
@@ -1416,8 +1419,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* ── Zone d'écriture (auteur, scène ACTIVE seulement) */}
-              {!spectatorView && selectedScene.status === "ACTIVE" && (
+              {/* ── Bandeau lecture seule */}
+              {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
+                <div style={{ padding: "12px 16px", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 8, color: "#7a4c08", fontSize: 14, textAlign: "center" }}>
+                  Vous êtes en mode lecture seule sur cette histoire.
+                </div>
+              )}
+
+              {/* ── Zone d'écriture (OWNER / EDITOR, scène ACTIVE seulement) */}
+              {!spectatorView && selectedScene.status === "ACTIVE" && (myRole === "OWNER" || myRole === "EDITOR") && (
                 <div style={s.writeArea} className="write-area app-write-area">
                   {suggestion && (
                     <div style={s.suggestion}>
