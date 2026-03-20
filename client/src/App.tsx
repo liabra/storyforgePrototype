@@ -1167,7 +1167,15 @@ export default function App() {
                   {chapters.length === 0 && <p style={s.mutedCenter}>Aucun chapitre. Commence par en créer un.</p>}
 
                   <div style={s.chapterList}>
-                    {chapters.map((ch) => (
+                    {chapters.map((ch) => {
+                      const chUsers = Array.from(
+                        new Map(
+                          (ch.scenes ?? [])
+                            .flatMap((sc) => allScenePresence[sc.id] ?? [])
+                            .map((u) => [u.userId, u])
+                        ).values()
+                      );
+                      return (
                       <div key={ch.id} style={s.chapterCard} className="chapter-card" onClick={() => handleSelectChapter(ch)}>
                         <div style={s.chapterCardHeader}>
                           <div style={s.chapterOrder}>{ch.order}</div>
@@ -1178,6 +1186,14 @@ export default function App() {
                               <span>{(ch.scenes ?? []).length} scène{(ch.scenes ?? []).length !== 1 ? "s" : ""}</span>
                               <span style={s.metaDot}>·</span>
                               <span>{totalContribs(ch)} contribution{totalContribs(ch) !== 1 ? "s" : ""}</span>
+                              {chUsers.length > 0 && (
+                                <>
+                                  <span style={s.metaDot}>·</span>
+                                  <span style={{ color: "#2e7d32" }}>
+                                    {chUsers.length} présent{chUsers.length !== 1 ? "s" : ""}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                           <span style={s.chapterArrow}>→</span>
@@ -1193,7 +1209,8 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               )}
@@ -1391,32 +1408,14 @@ export default function App() {
                 <h2 style={s.pageTitle}>{selectedChapter.title}</h2>
                 {selectedChapter.description && <p style={s.pageDesc}>{selectedChapter.description}</p>}
                 {(() => {
-                  const chapterUsers = Array.from(
-                    new Map(
-                      selectedChapter.scenes
-                        .flatMap((sc) => allScenePresence[sc.id] ?? [])
-                        .map((u) => [u.userId, u])
-                    ).values()
-                  );
-                  if (chapterUsers.length === 0) return null;
+                  const n = new Set(
+                    selectedChapter.scenes.flatMap((sc) => (allScenePresence[sc.id] ?? []).map((u) => u.userId))
+                  ).size;
+                  if (n === 0) return null;
                   return (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "rgba(75,35,5,0.55)", fontStyle: "italic" }}>
-                      <div style={{ display: "flex" }}>
-                        {chapterUsers.slice(0, 5).map((u, i) => (
-                          <div key={u.userId} style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 5 - i }}>
-                            <PresenceAvatar user={u} size={20} />
-                          </div>
-                        ))}
-                        {chapterUsers.length > 5 && (
-                          <div style={{ marginLeft: -6, zIndex: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "1px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
-                            +{chapterUsers.length - 5}
-                          </div>
-                        )}
-                      </div>
-                      {chapterUsers.length === 1
-                        ? `${chapterUsers[0].username} est présent dans ce chapitre`
-                        : `${chapterUsers.length} personnes présentes dans ce chapitre`}
-                    </div>
+                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#2e7d32", fontStyle: "italic" }}>
+                      {n} présent{n !== 1 ? "s" : ""} dans ce chapitre
+                    </p>
                   );
                 })()}
               </div>
