@@ -15,6 +15,9 @@ import type {
   Participant,
   ParticipantRole,
 } from "./api";
+import type { PresenceUser } from "./presence";
+import { scenePresenceLabel } from "./presence";
+import { PresenceAvatar } from "./PresenceAvatar";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -207,6 +210,10 @@ export default function App() {
   // Stories loaded flag (pour la restauration de nav)
   const [storiesLoaded, setStoriesLoaded] = useState(false);
 
+  // Présence en ligne
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [scenePresence, setScenePresence] = useState<PresenceUser[]>([]);
+
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
@@ -231,18 +238,32 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
 
-    // Re-émet scene:join après chaque (re)connexion
+    const username = currentUser.displayName ?? currentUser.email.split("@")[0];
+
+    // Ré-identifie et ré-rejoint la scène après chaque (re)connexion
     const onConnect = () => {
+      socket.emit("presence:identify", {
+        userId: currentUser.id,
+        username,
+        color: currentUser.color,
+      });
       if (selectedSceneIdRef.current) {
         socket.emit("scene:join", { sceneId: selectedSceneIdRef.current });
+        socket.emit("presence:scene:join", { sceneId: selectedSceneIdRef.current });
       }
     };
 
+    const onPresenceUpdate = ({ count }: { count: number }) => {
+      setOnlineCount(count);
+    };
+
     socket.on("connect", onConnect);
+    socket.on("presence:update", onPresenceUpdate);
     socket.connect();
 
     return () => {
       socket.off("connect", onConnect);
+      socket.off("presence:update", onPresenceUpdate);
       socket.disconnect();
     };
   }, [currentUser]);
@@ -252,6 +273,7 @@ export default function App() {
     if (!selectedScene) return;
 
     socket.emit("scene:join", { sceneId: selectedScene.id });
+    socket.emit("presence:scene:join", { sceneId: selectedScene.id });
 
     const onContribNew = (contrib: Contribution) => {
       setSelectedScene((s) => {
@@ -296,19 +318,33 @@ export default function App() {
       setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
     };
 
+    const onScenePresenceUpdate = ({
+      sceneId,
+      users,
+    }: {
+      sceneId: string;
+      users: PresenceUser[];
+    }) => {
+      if (sceneId === selectedScene.id) setScenePresence(users);
+    };
+
     socket.on("contribution:new", onContribNew);
     socket.on("typing:start", onTypingStart);
     socket.on("typing:stop", onTypingStop);
+    socket.on("scene:presence:update", onScenePresenceUpdate);
 
     return () => {
+      socket.emit("presence:scene:leave", { sceneId: selectedScene.id });
       socket.emit("scene:leave", { sceneId: selectedScene.id });
       socket.off("contribution:new", onContribNew);
       socket.off("typing:start", onTypingStart);
       socket.off("typing:stop", onTypingStop);
+      socket.off("scene:presence:update", onScenePresenceUpdate);
       // Nettoyer les timers d'auto-expiration
       Object.values(typingTimersRef.current).forEach(clearTimeout);
       typingTimersRef.current = {};
       setTypingUsers([]);
+      setScenePresence([]);
       // Arrêter notre propre indicateur si on quitte la scène en cours de frappe
       if (isTypingRef.current) {
         socket.emit("typing:stop", { sceneId: selectedScene.id, userId: currentUser?.id });
@@ -852,6 +888,12 @@ export default function App() {
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: currentUser.color, flexShrink: 0 }} />
                   )}
                   <span style={s.userEmail} className="app-user-name">{currentUser.displayName || currentUser.email}</span>
+                  {onlineCount > 1 && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.5, whiteSpace: "nowrap" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4caf50", display: "inline-block", flexShrink: 0 }} />
+                      {onlineCount} en ligne
+                    </span>
+                  )}
                   <button style={s.btnMicro} onClick={handleOpenProfile}>Profil</button>
                   <button style={s.btnGhost} onClick={handleLogout}>{isMobile ? "✕" : "Déconnexion"}</button>
                 </div>
@@ -1414,6 +1456,27 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* ── Présence dans la scène */}
+              {scenePresence.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0 12px", borderBottom: "1px solid rgba(75,35,5,0.1)", marginBottom: 4 }}>
+                  <div style={{ display: "flex" }}>
+                    {scenePresence.slice(0, 6).map((u, i) => (
+                      <div key={u.userId} style={{ marginLeft: i > 0 ? -8 : 0, zIndex: 6 - i }}>
+                        <PresenceAvatar user={u} size={26} />
+                      </div>
+                    ))}
+                    {scenePresence.length > 6 && (
+                      <div style={{ marginLeft: -8, zIndex: 0, width: 26, height: 26, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "2px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
+                        +{scenePresence.length - 6}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>
+                    {scenePresenceLabel(scenePresence)}
+                  </span>
+                </div>
+              )}
 
               {/* Image */}
               {selectedScene.imageUrl && IS_PLACEHOLDER(selectedScene.imageUrl) && (
