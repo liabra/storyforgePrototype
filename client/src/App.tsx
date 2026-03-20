@@ -1036,14 +1036,22 @@ export default function App() {
               {/* ── Tab Personnages */}
               {activeTab === "characters" && (
                 <div>
-                  <form onSubmit={handleCreateChar} style={s.inlineForm}>
-                    <div style={s.row}>
-                      <input style={s.inputDark} placeholder="Nom" value={newChar.name ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, name: e.target.value }))} />
-                      <input style={s.inputDark} placeholder="Pseudo / surnom" value={newChar.nickname ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, nickname: e.target.value }))} />
-                      <button style={s.btnAccent} type="submit">+ Ajouter</button>
-                    </div>
-                    <p style={s.hint}>Un nom ou un pseudo suffit pour commencer.</p>
-                  </form>
+                  {myRole === "OWNER" ? (
+                    <form onSubmit={handleCreateChar} style={s.inlineForm}>
+                      <div style={s.row}>
+                        <input style={s.inputDark} placeholder="Nom" value={newChar.name ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, name: e.target.value }))} />
+                        <input style={s.inputDark} placeholder="Pseudo / surnom" value={newChar.nickname ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, nickname: e.target.value }))} />
+                        <button style={s.btnAccent} type="submit">+ Ajouter</button>
+                      </div>
+                      <p style={s.hint}>Un nom ou un pseudo suffit pour commencer.</p>
+                    </form>
+                  ) : (
+                    <p style={{ ...s.hint, marginBottom: 12 }}>
+                      {myRole === "VIEWER"
+                        ? "Vous pouvez simplement apprécier et lire l'histoire en direct. Si vous souhaitez collaborer, demandez au propriétaire 😉"
+                        : "Seul le propriétaire peut créer ou modifier les personnages."}
+                    </p>
+                  )}
 
                   {characters.length === 0 && <p style={s.mutedCenter}>Aucun personnage dans cette histoire.</p>}
 
@@ -1077,7 +1085,9 @@ export default function App() {
                               }}>
                                 {isExpanded ? "Fermer" : "Fiche"}
                               </button>
-                              <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
+                              {myRole === "OWNER" && (
+                                <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
+                              )}
                             </div>
                           </div>
 
@@ -1107,17 +1117,20 @@ export default function App() {
                                 <div key={field} style={s.fieldGroup}>
                                   <label style={s.fieldLabel}>{label}</label>
                                   <input
-                                    style={s.inputDark}
+                                    style={{ ...s.inputDark, ...(myRole !== "OWNER" ? { opacity: 0.7, cursor: "default" } : {}) }}
                                     value={(charEdits[char.id]?.[field] as string) ?? ""}
                                     onChange={(e) => setCharEdits((p) => ({ ...p, [char.id]: { ...p[char.id], [field]: e.target.value } }))}
+                                    readOnly={myRole !== "OWNER"}
                                   />
                                 </div>
                               ))}
-                              <div style={{ gridColumn: "1 / -1" }}>
-                                <button style={s.btnAccent} onClick={() => handleSaveChar(char)} disabled={savingChar === char.id}>
-                                  {savingChar === char.id ? "Sauvegarde…" : "Sauvegarder →"}
-                                </button>
-                              </div>
+                              {myRole === "OWNER" && (
+                                <div style={{ gridColumn: "1 / -1" }}>
+                                  <button style={s.btnAccent} onClick={() => handleSaveChar(char)} disabled={savingChar === char.id}>
+                                    {savingChar === char.id ? "Sauvegarde…" : "Sauvegarder →"}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1422,7 +1435,7 @@ export default function App() {
               {/* ── Bandeau lecture seule */}
               {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
                 <div style={{ padding: "12px 16px", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 8, color: "#7a4c08", fontSize: 14, textAlign: "center" }}>
-                  Vous êtes en mode lecture seule sur cette histoire.
+                  Vous pouvez simplement apprécier et lire l'histoire en direct. Si vous souhaitez collaborer, demandez au propriétaire 😉
                 </div>
               )}
 

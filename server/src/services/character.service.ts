@@ -34,3 +34,11 @@ export const updateCharacter = (id: string, data: CharacterData) =>
 
 export const deleteCharacter = (id: string) =>
   prisma.character.delete({ where: { id } });
+
+export const getStoryIdByCharacter = async (characterId: string): Promise<string | null> => {
+  const char = await prisma.character.findUnique({
+    where: { id: characterId },
+    select: { storyId: true },
+  });
+  return char?.storyId ?? null;
+};
