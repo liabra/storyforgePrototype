@@ -214,7 +214,7 @@ export default function App() {
 
   // Présence en ligne
   const [onlineCount, setOnlineCount] = useState(0);
-  const [scenePresence, setScenePresence] = useState<PresenceUser[]>([]);
+  const [allScenePresence, setAllScenePresence] = useState<Record<string, PresenceUser[]>>({});
 
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -258,7 +258,7 @@ export default function App() {
       }
       if (selectedSceneIdRef.current) {
         socket.emit("scene:join", { sceneId: selectedSceneIdRef.current });
-        socket.emit("presence:scene:join", { sceneId: selectedSceneIdRef.current });
+        socket.emit("presence:scene:join", { sceneId: selectedSceneIdRef.current, storyId: selectedStoryIdRef.current });
       }
     };
 
@@ -282,7 +282,7 @@ export default function App() {
     if (!selectedScene) return;
 
     socket.emit("scene:join", { sceneId: selectedScene.id });
-    socket.emit("presence:scene:join", { sceneId: selectedScene.id });
+    socket.emit("presence:scene:join", { sceneId: selectedScene.id, storyId: selectedStory?.id });
 
     const onContribNew = (contrib: Contribution) => {
       setSelectedScene((s) => {
@@ -327,20 +327,9 @@ export default function App() {
       setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
     };
 
-    const onScenePresenceUpdate = ({
-      sceneId,
-      users,
-    }: {
-      sceneId: string;
-      users: PresenceUser[];
-    }) => {
-      if (sceneId === selectedScene.id) setScenePresence(users);
-    };
-
     socket.on("contribution:new", onContribNew);
     socket.on("typing:start", onTypingStart);
     socket.on("typing:stop", onTypingStop);
-    socket.on("scene:presence:update", onScenePresenceUpdate);
 
     return () => {
       socket.emit("presence:scene:leave", { sceneId: selectedScene.id });
@@ -348,12 +337,10 @@ export default function App() {
       socket.off("contribution:new", onContribNew);
       socket.off("typing:start", onTypingStart);
       socket.off("typing:stop", onTypingStop);
-      socket.off("scene:presence:update", onScenePresenceUpdate);
       // Nettoyer les timers d'auto-expiration
       Object.values(typingTimersRef.current).forEach(clearTimeout);
       typingTimersRef.current = {};
       setTypingUsers([]);
-      setScenePresence([]);
       // Arrêter notre propre indicateur si on quitte la scène en cours de frappe
       if (isTypingRef.current) {
         socket.emit("typing:stop", { sceneId: selectedScene.id, userId: currentUser?.id });
@@ -366,14 +353,13 @@ export default function App() {
     };
   }, [selectedScene?.id]);
 
-  // ── Socket : room story — mises à jour de structure narrative en live
+  // ── Socket : room story — structure narrative + présence multi-scènes
   useEffect(() => {
     if (!selectedStory) return;
 
     socket.emit("story:join", { storyId: selectedStory.id });
 
     const onChapterNew = (chapter: Chapter) => {
-      // Dédup : ignorer si déjà dans le state (le créateur reçoit l'event aussi)
       setChapters((prev) =>
         prev.some((c) => c.id === chapter.id) ? prev : [...prev, chapter]
       );
@@ -387,7 +373,6 @@ export default function App() {
             : ch
         )
       );
-      // Mettre à jour le chapitre sélectionné si c'est le bon
       setSelectedChapter((ch) =>
         ch && ch.id === chapterId && !ch.scenes.some((s) => s.id === scene.id)
           ? { ...ch, scenes: [...ch.scenes, scene] }
@@ -395,13 +380,26 @@ export default function App() {
       );
     };
 
+    const onScenePresenceUpdate = ({ sceneId, users }: { sceneId: string; users: PresenceUser[] }) => {
+      setAllScenePresence((prev) => ({ ...prev, [sceneId]: users }));
+    };
+
+    const onStoryPresenceSnapshot = ({ snapshot }: { storyId: string; snapshot: Record<string, PresenceUser[]> }) => {
+      setAllScenePresence(snapshot);
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
+    socket.on("scene:presence:update", onScenePresenceUpdate);
+    socket.on("story:presence:snapshot", onStoryPresenceSnapshot);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
       socket.off("chapter:new", onChapterNew);
       socket.off("scene:new", onSceneNew);
+      socket.off("scene:presence:update", onScenePresenceUpdate);
+      socket.off("story:presence:snapshot", onStoryPresenceSnapshot);
+      setAllScenePresence({});
     };
   }, [selectedStory?.id]);
 
@@ -1392,6 +1390,35 @@ export default function App() {
                 <button style={s.backBtn} onClick={() => setSelectedChapter(null)}>← Chapitres</button>
                 <h2 style={s.pageTitle}>{selectedChapter.title}</h2>
                 {selectedChapter.description && <p style={s.pageDesc}>{selectedChapter.description}</p>}
+                {(() => {
+                  const chapterUsers = Array.from(
+                    new Map(
+                      selectedChapter.scenes
+                        .flatMap((sc) => allScenePresence[sc.id] ?? [])
+                        .map((u) => [u.userId, u])
+                    ).values()
+                  );
+                  if (chapterUsers.length === 0) return null;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "rgba(75,35,5,0.55)", fontStyle: "italic" }}>
+                      <div style={{ display: "flex" }}>
+                        {chapterUsers.slice(0, 5).map((u, i) => (
+                          <div key={u.userId} style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 5 - i }}>
+                            <PresenceAvatar user={u} size={20} />
+                          </div>
+                        ))}
+                        {chapterUsers.length > 5 && (
+                          <div style={{ marginLeft: -6, zIndex: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "1px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
+                            +{chapterUsers.length - 5}
+                          </div>
+                        )}
+                      </div>
+                      {chapterUsers.length === 1
+                        ? `${chapterUsers[0].username} est présent dans ce chapitre`
+                        : `${chapterUsers.length} personnes présentes dans ce chapitre`}
+                    </div>
+                  );
+                })()}
               </div>
 
               {myRole !== "VIEWER" && (!showSceneForm ? (
@@ -1411,28 +1438,47 @@ export default function App() {
               {selectedChapter.scenes.length === 0 && <p style={s.mutedCenter}>Aucune scène dans ce chapitre.</p>}
 
               <div style={s.sceneList}>
-                {selectedChapter.scenes.map((sc) => (
-                  <div key={sc.id} style={{ ...s.sceneListItem, ...sceneItemStyle(sc.status) }} className="scene-item" onClick={() => handleSelectScene(sc.id)}>
-                    <div style={s.sceneListOrder}>{sc.order}</div>
-                    <div style={s.sceneListBody}>
-                      <div style={s.sceneListTitle}>
-                        {sc.title}
-                        <span style={{ ...s.statusBadge, ...statusBadgeStyle(sc.status) }}>
-                          {statusLabel(sc.status)}
-                        </span>
-                      </div>
-                      <div style={s.sceneListMeta}>
-                        {sc._count.contributions} contribution{sc._count.contributions !== 1 ? "s" : ""}
-                        {sc.characters.length > 0 && (
-                          <span style={s.sceneListChars}>
-                            {sc.characters.map((c) => displayName(c)).join(" · ")}
+                {selectedChapter.scenes.map((sc) => {
+                  const sp = allScenePresence[sc.id] ?? [];
+                  return (
+                    <div key={sc.id} style={{ ...s.sceneListItem, ...sceneItemStyle(sc.status) }} className="scene-item" onClick={() => handleSelectScene(sc.id)}>
+                      <div style={s.sceneListOrder}>{sc.order}</div>
+                      <div style={s.sceneListBody}>
+                        <div style={s.sceneListTitle}>
+                          {sc.title}
+                          <span style={{ ...s.statusBadge, ...statusBadgeStyle(sc.status) }}>
+                            {statusLabel(sc.status)}
                           </span>
-                        )}
+                        </div>
+                        <div style={s.sceneListMeta}>
+                          {sc._count.contributions} contribution{sc._count.contributions !== 1 ? "s" : ""}
+                          {sc.characters.length > 0 && (
+                            <span style={s.sceneListChars}>
+                              {sc.characters.map((c) => displayName(c)).join(" · ")}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      {sp.length > 0 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 6 }}>
+                          <div style={{ display: "flex" }}>
+                            {sp.slice(0, 4).map((u, i) => (
+                              <div key={u.userId} style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 4 - i }}>
+                                <PresenceAvatar user={u} size={20} />
+                              </div>
+                            ))}
+                            {sp.length > 4 && (
+                              <div style={{ marginLeft: -6, zIndex: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "1px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
+                                +{sp.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <span style={s.chapterArrow}>→</span>
                     </div>
-                    <span style={s.chapterArrow}>→</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1505,25 +1551,29 @@ export default function App() {
               </div>
 
               {/* ── Présence dans la scène */}
-              {scenePresence.length > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0 12px", borderBottom: "1px solid rgba(75,35,5,0.1)", marginBottom: 4 }}>
-                  <div style={{ display: "flex" }}>
-                    {scenePresence.slice(0, 6).map((u, i) => (
-                      <div key={u.userId} style={{ marginLeft: i > 0 ? -8 : 0, zIndex: 6 - i }}>
-                        <PresenceAvatar user={u} size={26} />
-                      </div>
-                    ))}
-                    {scenePresence.length > 6 && (
-                      <div style={{ marginLeft: -8, zIndex: 0, width: 26, height: 26, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "2px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
-                        +{scenePresence.length - 6}
-                      </div>
-                    )}
+              {(() => {
+                const sp = allScenePresence[selectedScene.id] ?? [];
+                if (sp.length === 0) return null;
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0 12px", borderBottom: "1px solid rgba(75,35,5,0.1)", marginBottom: 4 }}>
+                    <div style={{ display: "flex" }}>
+                      {sp.slice(0, 6).map((u, i) => (
+                        <div key={u.userId} style={{ marginLeft: i > 0 ? -8 : 0, zIndex: 6 - i }}>
+                          <PresenceAvatar user={u} size={26} />
+                        </div>
+                      ))}
+                      {sp.length > 6 && (
+                        <div style={{ marginLeft: -8, zIndex: 0, width: 26, height: 26, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "2px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
+                          +{sp.length - 6}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>
+                      {scenePresenceLabel(sp)}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 12, opacity: 0.5, fontStyle: "italic" }}>
-                    {scenePresenceLabel(scenePresence)}
-                  </span>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Image */}
               {selectedScene.imageUrl && IS_PLACEHOLDER(selectedScene.imageUrl) && (

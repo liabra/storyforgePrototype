@@ -19,6 +19,10 @@ const socketMeta = new Map<string, SocketMeta>();
 const onlineUsers = new Map<string, OnlineEntry>();
 const scenePresence = new Map<string, Map<string, UserMeta>>();
 
+// sceneToStory : permet de retrouver la storyId d'une scène pour broadcaster
+// les mises à jour de présence à toute la room story.
+const sceneToStory = new Map<string, string>();
+
 // ── Identification ─────────────────────────────────────────────────────────────
 
 export function identify(
@@ -41,9 +45,11 @@ export function identify(
 
 // ── Scène ──────────────────────────────────────────────────────────────────────
 
-export function joinScene(socketId: string, sceneId: string): void {
+export function joinScene(socketId: string, sceneId: string, storyId?: string): void {
   const meta = socketMeta.get(socketId);
   if (!meta) return;
+
+  if (storyId) sceneToStory.set(sceneId, storyId);
 
   if (!scenePresence.has(sceneId)) {
     scenePresence.set(sceneId, new Map());
@@ -73,6 +79,10 @@ export function leaveScene(socketId: string, sceneId: string): void {
  * - le retire de toutes les scènes où il était présent
  * Retourne les scènes impactées pour permettre au caller de les re-broadcaster.
  */
+export function getStoryIdForScene(sceneId: string): string | undefined {
+  return sceneToStory.get(sceneId);
+}
+
 export function disconnect(socketId: string): { sceneIds: string[] } {
   const meta = socketMeta.get(socketId);
   if (!meta) return { sceneIds: [] };
@@ -123,4 +133,17 @@ export function getScenePresence(sceneId: string): PresenceUserData[] {
     username: data.username,
     color: data.color,
   }));
+}
+
+/**
+ * Retourne un snapshot complet de la présence pour toutes les scènes d'une story.
+ * Format : { [sceneId]: PresenceUserData[] }
+ */
+export function getStoryPresenceSnapshot(storyId: string): Record<string, PresenceUserData[]> {
+  const result: Record<string, PresenceUserData[]> = {};
+  for (const [sceneId, sid] of sceneToStory.entries()) {
+    if (sid !== storyId) continue;
+    result[sceneId] = getScenePresence(sceneId);
+  }
+  return result;
 }

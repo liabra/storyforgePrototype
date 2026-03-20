@@ -47,9 +47,12 @@ initIO(io);
 io.on("connection", (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
 
-  // ── Room story (structure narrative en live)
+  // ── Room story (structure narrative en live + présence snapshot)
   socket.on("story:join", ({ storyId }: { storyId: string }) => {
     socket.join(`story:${storyId}`);
+    // Envoyer le snapshot de présence au socket qui rejoint
+    const snapshot = presence.getStoryPresenceSnapshot(storyId);
+    socket.emit("story:presence:snapshot", { storyId, snapshot });
   });
 
   socket.on("story:leave", ({ storyId }: { storyId: string }) => {
@@ -86,20 +89,23 @@ io.on("connection", (socket) => {
   );
 
   // ── Présence par scène
-  socket.on("presence:scene:join", ({ sceneId }: { sceneId: string }) => {
-    presence.joinScene(socket.id, sceneId);
-    io.to(`scene:${sceneId}`).emit("scene:presence:update", {
-      sceneId,
-      users: presence.getScenePresence(sceneId),
-    });
+  socket.on("presence:scene:join", ({ sceneId, storyId }: { sceneId: string; storyId?: string }) => {
+    presence.joinScene(socket.id, sceneId, storyId);
+    const users = presence.getScenePresence(sceneId);
+    const payload = { sceneId, users };
+    io.to(`scene:${sceneId}`).emit("scene:presence:update", payload);
+    // Propager aussi à la room story pour les badges sur les cartes
+    const sid = storyId ?? presence.getStoryIdForScene(sceneId);
+    if (sid) io.to(`story:${sid}`).emit("scene:presence:update", payload);
   });
 
   socket.on("presence:scene:leave", ({ sceneId }: { sceneId: string }) => {
     presence.leaveScene(socket.id, sceneId);
-    io.to(`scene:${sceneId}`).emit("scene:presence:update", {
-      sceneId,
-      users: presence.getScenePresence(sceneId),
-    });
+    const users = presence.getScenePresence(sceneId);
+    const payload = { sceneId, users };
+    io.to(`scene:${sceneId}`).emit("scene:presence:update", payload);
+    const sid = presence.getStoryIdForScene(sceneId);
+    if (sid) io.to(`story:${sid}`).emit("scene:presence:update", payload);
   });
 
   // ── Déconnexion
@@ -113,10 +119,11 @@ io.on("connection", (socket) => {
 
     // Mettre à jour la présence dans chaque scène affectée
     for (const sceneId of sceneIds) {
-      io.to(`scene:${sceneId}`).emit("scene:presence:update", {
-        sceneId,
-        users: presence.getScenePresence(sceneId),
-      });
+      const users = presence.getScenePresence(sceneId);
+      const payload = { sceneId, users };
+      io.to(`scene:${sceneId}`).emit("scene:presence:update", payload);
+      const storyId = presence.getStoryIdForScene(sceneId);
+      if (storyId) io.to(`story:${storyId}`).emit("scene:presence:update", payload);
     }
   });
 });
