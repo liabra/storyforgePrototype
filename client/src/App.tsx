@@ -1573,12 +1573,10 @@ export default function App() {
                 </div>
               )}
 
-              {/* ── Indicateur "en train d'écrire…" */}
-              {typingUsers.length > 0 && (
-                <p style={{ margin: "0 0 8px", fontSize: 12, fontStyle: "italic", opacity: 0.5, color: "inherit", minHeight: 18 }}>
-                  {typingLabel(typingUsers)}
-                </p>
-              )}
+              {/* ── Indicateur "en train d'écrire…" — toujours dans le DOM pour éviter le layout shift */}
+              <p style={{ margin: "0 0 8px", minHeight: 18, fontSize: 12, fontStyle: "italic", opacity: typingUsers.length > 0 ? 0.5 : 0, color: "inherit", transition: "opacity 0.15s ease" }}>
+                {typingLabel(typingUsers)}
+              </p>
 
               {/* ── Bandeau lecture seule */}
               {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
