@@ -4,6 +4,7 @@ import { socket } from "./socket";
 import type {
   Story,
   Chapter,
+  ChapterSceneItem,
   Scene,
   Contribution,
   Character,
