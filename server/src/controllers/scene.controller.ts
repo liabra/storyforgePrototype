@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import * as sceneService from "../services/scene.service";
+import * as chapterService from "../services/chapter.service";
+import { getIO } from "../socket";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -23,6 +25,10 @@ export const create = async (req: Request, res: Response) => {
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
   const scene = await sceneService.createScene(chapterId, { title, description, order });
+  const storyId = await chapterService.getStoryIdByChapter(chapterId);
+  if (storyId) {
+    getIO()?.to(`story:${storyId}`).emit("scene:new", { chapterId, scene });
+  }
   return res.status(201).json(scene);
 };
 

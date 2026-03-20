@@ -187,6 +187,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const contribEndRef = useRef<HTMLDivElement>(null);
   const navRestoredRef = useRef(false);
+  const selectedStoryIdRef = useRef<string | null>(null);
   const selectedSceneIdRef = useRef<string | null>(null);
 
   // Auth
@@ -229,7 +230,11 @@ export default function App() {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  // ── Sync selectedSceneIdRef pour la reconnexion socket
+  // ── Sync refs pour la reconnexion socket
+  useEffect(() => {
+    selectedStoryIdRef.current = selectedStory?.id ?? null;
+  }, [selectedStory?.id]);
+
   useEffect(() => {
     selectedSceneIdRef.current = selectedScene?.id ?? null;
   }, [selectedScene?.id]);
@@ -240,13 +245,16 @@ export default function App() {
 
     const username = currentUser.displayName ?? currentUser.email.split("@")[0];
 
-    // Ré-identifie et ré-rejoint la scène après chaque (re)connexion
+    // Ré-identifie et ré-rejoint story/scène après chaque (re)connexion
     const onConnect = () => {
       socket.emit("presence:identify", {
         userId: currentUser.id,
         username,
         color: currentUser.color,
       });
+      if (selectedStoryIdRef.current) {
+        socket.emit("story:join", { storyId: selectedStoryIdRef.current });
+      }
       if (selectedSceneIdRef.current) {
         socket.emit("scene:join", { sceneId: selectedSceneIdRef.current });
         socket.emit("presence:scene:join", { sceneId: selectedSceneIdRef.current });
@@ -356,6 +364,45 @@ export default function App() {
       }
     };
   }, [selectedScene?.id]);
+
+  // ── Socket : room story — mises à jour de structure narrative en live
+  useEffect(() => {
+    if (!selectedStory) return;
+
+    socket.emit("story:join", { storyId: selectedStory.id });
+
+    const onChapterNew = (chapter: Chapter) => {
+      // Dédup : ignorer si déjà dans le state (le créateur reçoit l'event aussi)
+      setChapters((prev) =>
+        prev.some((c) => c.id === chapter.id) ? prev : [...prev, chapter]
+      );
+    };
+
+    const onSceneNew = ({ chapterId, scene }: { chapterId: string; scene: ChapterSceneItem }) => {
+      setChapters((prev) =>
+        prev.map((ch) =>
+          ch.id === chapterId && !ch.scenes.some((s) => s.id === scene.id)
+            ? { ...ch, scenes: [...ch.scenes, scene] }
+            : ch
+        )
+      );
+      // Mettre à jour le chapitre sélectionné si c'est le bon
+      setSelectedChapter((ch) =>
+        ch && ch.id === chapterId && !ch.scenes.some((s) => s.id === scene.id)
+          ? { ...ch, scenes: [...ch.scenes, scene] }
+          : ch
+      );
+    };
+
+    socket.on("chapter:new", onChapterNew);
+    socket.on("scene:new", onSceneNew);
+
+    return () => {
+      socket.emit("story:leave", { storyId: selectedStory.id });
+      socket.off("chapter:new", onChapterNew);
+      socket.off("scene:new", onSceneNew);
+    };
+  }, [selectedStory?.id]);
 
   // ── Restore session
   useEffect(() => {

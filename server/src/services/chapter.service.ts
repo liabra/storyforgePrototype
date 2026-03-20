@@ -48,3 +48,11 @@ export const updateChapter = (id: string, data: Partial<ChapterData>) =>
 
 export const deleteChapter = (id: string) =>
   prisma.chapter.delete({ where: { id } });
+
+export const getStoryIdByChapter = async (chapterId: string): Promise<string | null> => {
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+    select: { storyId: true },
+  });
+  return chapter?.storyId ?? null;
+};

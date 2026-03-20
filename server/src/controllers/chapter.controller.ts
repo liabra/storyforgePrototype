@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as chapterService from "../services/chapter.service";
 import * as participantService from "../services/participant.service";
 import { ParticipantRole } from "../generated/prisma/client";
+import { getIO } from "../socket";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -27,6 +28,7 @@ export const create = async (req: Request, res: Response) => {
   }
 
   const chapter = await chapterService.createChapter(storyId, { title, description, order });
+  getIO()?.to(`story:${storyId}`).emit("chapter:new", chapter);
   return res.status(201).json(chapter);
 };
 

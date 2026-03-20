@@ -47,6 +47,15 @@ initIO(io);
 io.on("connection", (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
 
+  // ── Room story (structure narrative en live)
+  socket.on("story:join", ({ storyId }: { storyId: string }) => {
+    socket.join(`story:${storyId}`);
+  });
+
+  socket.on("story:leave", ({ storyId }: { storyId: string }) => {
+    socket.leave(`story:${storyId}`);
+  });
+
   // ── Rooms scènes
   socket.on("scene:join", ({ sceneId }: { sceneId: string }) => {
     socket.join(`scene:${sceneId}`);
