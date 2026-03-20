@@ -569,7 +569,8 @@ export default function App() {
         description: newChapter.description.trim() || undefined,
         order: chapters.length + 1,
       });
-      setChapters((p) => [...p, created]);
+      // Dédup : le socket event peut être arrivé avant la réponse HTTP
+      setChapters((p) => p.some((c) => c.id === created.id) ? p : [...p, created]);
       setNewChapter({ title: "", description: "" });
       setShowChapterForm(false);
     } finally {
@@ -588,16 +589,19 @@ export default function App() {
         description: newScene.description.trim() || undefined,
         order: (selectedChapter.scenes?.length ?? 0) + 1,
       });
-      // Update chapter scenes list
+      // Dédup : le socket event peut être arrivé avant la réponse HTTP
+      const sceneItem = { id: created.id, title: created.title, order: created.order, status: created.status, _count: { contributions: 0 }, characters: [] };
       setChapters((p) =>
         p.map((ch) =>
-          ch.id === selectedChapter.id
-            ? { ...ch, scenes: [...ch.scenes, { id: created.id, title: created.title, order: created.order, status: created.status, _count: { contributions: 0 }, characters: [] }] }
+          ch.id === selectedChapter.id && !ch.scenes.some((s) => s.id === created.id)
+            ? { ...ch, scenes: [...ch.scenes, sceneItem] }
             : ch
         )
       );
       setSelectedChapter((ch) =>
-        ch ? { ...ch, scenes: [...ch.scenes, { id: created.id, title: created.title, order: created.order, status: created.status, _count: { contributions: 0 }, characters: [] }] } : ch
+        ch && !ch.scenes.some((s) => s.id === created.id)
+          ? { ...ch, scenes: [...ch.scenes, sceneItem] }
+          : ch
       );
       setNewScene({ title: "", description: "" });
       setShowSceneForm(false);
@@ -642,18 +646,13 @@ export default function App() {
         content: contribContent.trim(),
         characterId: contribCharId || undefined,
       });
-      setSelectedScene((s) =>
-        s ? { ...s, contributions: [...(s.contributions ?? []), contrib], _count: { contributions: (s._count?.contributions ?? 0) + 1 } } : s
-      );
-      // Update chapter contribution count
-      setChapters((p) =>
-        p.map((ch) => ({
-          ...ch,
-          scenes: ch.scenes.map((sc) =>
-            sc.id === selectedScene.id ? { ...sc, _count: { contributions: sc._count.contributions + 1 } } : sc
-          ),
-        }))
-      );
+      // Dédup : le socket event contribution:new peut précéder la réponse HTTP.
+      // onContribNew (socket) est la source de vérité pour le compteur de chapitre.
+      setSelectedScene((s) => {
+        if (!s) return s;
+        if ((s.contributions ?? []).some((c) => c.id === contrib.id)) return s;
+        return { ...s, contributions: [...(s.contributions ?? []), contrib], _count: { contributions: (s._count?.contributions ?? 0) + 1 } };
+      });
       setContribContent("");
     } finally {
       setSubmittingContrib(false);
