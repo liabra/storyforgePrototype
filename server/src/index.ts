@@ -56,6 +56,14 @@ io.on("connection", (socket) => {
     console.log(`[socket] ${socket.id} left scene:${sceneId}`);
   });
 
+  socket.on("typing:start", ({ sceneId, userId, username }: { sceneId: string; userId: string; username: string }) => {
+    socket.to(`scene:${sceneId}`).emit("typing:start", { sceneId, userId, username });
+  });
+
+  socket.on("typing:stop", ({ sceneId, userId }: { sceneId: string; userId: string }) => {
+    socket.to(`scene:${sceneId}`).emit("typing:stop", { sceneId, userId });
+  });
+
   socket.on("disconnect", (reason) => {
     console.log(`[socket] disconnected: ${socket.id} (${reason})`);
   });

@@ -113,6 +113,15 @@ function characterInk(hue: number): { color: string; bg: string; border: string 
   return palette[Math.floor(hue / 60) % 6];
 }
 
+type TypingUser = { userId: string; username: string };
+
+function typingLabel(users: TypingUser[]): string {
+  if (users.length === 0) return "";
+  if (users.length === 1) return `${users[0].username} est en train d'écrire…`;
+  if (users.length === 2) return `${users[0].username} et ${users[1].username} écrivent…`;
+  return `${users.length} personnes écrivent…`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -165,6 +174,12 @@ export default function App() {
   const [expandedCharId, setExpandedCharId] = useState<string | null>(null);
   const [charEdits, setCharEdits] = useState<Record<string, CharacterInput>>({});
   const [savingChar, setSavingChar] = useState<string | null>(null);
+
+  // Typing indicator
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const isTypingRef = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [error, setError] = useState<string | null>(null);
   const contribEndRef = useRef<HTMLDivElement>(null);
@@ -262,11 +277,47 @@ export default function App() {
       );
     };
 
+    const onTypingStart = ({ userId, username }: { userId: string; username: string }) => {
+      if (userId === currentUser?.id) return;
+      setTypingUsers((prev) =>
+        prev.some((u) => u.userId === userId) ? prev : [...prev, { userId, username }]
+      );
+      // Auto-expiration si typing:stop non reçu (ex : déconnexion)
+      clearTimeout(typingTimersRef.current[userId]);
+      typingTimersRef.current[userId] = setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+        delete typingTimersRef.current[userId];
+      }, 5000);
+    };
+
+    const onTypingStop = ({ userId }: { userId: string }) => {
+      clearTimeout(typingTimersRef.current[userId]);
+      delete typingTimersRef.current[userId];
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+    };
+
     socket.on("contribution:new", onContribNew);
+    socket.on("typing:start", onTypingStart);
+    socket.on("typing:stop", onTypingStop);
 
     return () => {
       socket.emit("scene:leave", { sceneId: selectedScene.id });
       socket.off("contribution:new", onContribNew);
+      socket.off("typing:start", onTypingStart);
+      socket.off("typing:stop", onTypingStop);
+      // Nettoyer les timers d'auto-expiration
+      Object.values(typingTimersRef.current).forEach(clearTimeout);
+      typingTimersRef.current = {};
+      setTypingUsers([]);
+      // Arrêter notre propre indicateur si on quitte la scène en cours de frappe
+      if (isTypingRef.current) {
+        socket.emit("typing:stop", { sceneId: selectedScene.id, userId: currentUser?.id });
+        isTypingRef.current = false;
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
     };
   }, [selectedScene?.id]);
 
@@ -471,9 +522,36 @@ export default function App() {
     }
   };
 
+  // ── Typing indicator : émettre typing:start / typing:stop avec debounce
+  const handleTyping = () => {
+    if (!selectedScene || !currentUser) return;
+    const username = currentUser.displayName ?? currentUser.email.split("@")[0];
+
+    if (!isTypingRef.current) {
+      socket.emit("typing:start", { sceneId: selectedScene.id, userId: currentUser.id, username });
+      isTypingRef.current = true;
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("typing:stop", { sceneId: selectedScene.id, userId: currentUser.id });
+      isTypingRef.current = false;
+      typingTimeoutRef.current = null;
+    }, 2500);
+  };
+
   // ── Submit contribution
   const handleSubmitContrib = async () => {
     if (!selectedScene || !contribContent.trim()) return;
+
+    // Arrêter l'indicateur de frappe immédiatement à l'envoi
+    if (isTypingRef.current && currentUser) {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      socket.emit("typing:stop", { sceneId: selectedScene.id, userId: currentUser.id });
+      isTypingRef.current = false;
+      typingTimeoutRef.current = null;
+    }
+
     setSubmittingContrib(true);
     try {
       const contrib = await api.contributions.create(selectedScene.id, {
@@ -1432,6 +1510,13 @@ export default function App() {
                 </div>
               )}
 
+              {/* ── Indicateur "en train d'écrire…" */}
+              {typingUsers.length > 0 && (
+                <p style={{ margin: "0 0 8px", fontSize: 12, fontStyle: "italic", opacity: 0.5, color: "inherit", minHeight: 18 }}>
+                  {typingLabel(typingUsers)}
+                </p>
+              )}
+
               {/* ── Bandeau lecture seule */}
               {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
                 <div style={{ padding: "12px 16px", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 8, color: "#7a4c08", fontSize: 14, textAlign: "center" }}>
@@ -1467,7 +1552,7 @@ export default function App() {
                     style={s.writeTextarea}
                     placeholder="Écris ta contribution narrative ici…"
                     value={contribContent}
-                    onChange={(e) => setContribContent(e.target.value)}
+                    onChange={(e) => { setContribContent(e.target.value); handleTyping(); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmitContrib();
                     }}
