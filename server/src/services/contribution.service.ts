@@ -32,6 +32,13 @@ export const createContribution = (
 export const deleteContribution = (id: string) =>
   prisma.contribution.delete({ where: { id } });
 
+export const updateContribution = (id: string, content: string) =>
+  prisma.contribution.update({
+    where: { id },
+    data: { content },
+    include: contribInclude,
+  });
+
 export const flagContribution = (id: string) =>
   prisma.contribution.update({ where: { id }, data: { modStatus: "FLAGGED" } });
 

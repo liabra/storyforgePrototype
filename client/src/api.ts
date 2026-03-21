@@ -214,6 +214,11 @@ export const api = {
         body: JSON.stringify(data),
       }),
     delete: (id: string) => request<void>(`/contributions/${id}`, { method: "DELETE" }),
+    update: (id: string, content: string) =>
+      request<Contribution>(`/contributions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content }),
+      }),
   },
   participants: {
     list: (storyId: string) => request<Participant[]>(`/stories/${storyId}/participants`),

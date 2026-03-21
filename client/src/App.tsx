@@ -180,6 +180,8 @@ export default function App() {
   const [contribContent, setContribContent] = useState("");
   const [contribCharId, setContribCharId] = useState<string>("");
   const [submittingContrib, setSubmittingContrib] = useState(false);
+  const [editingContribId, setEditingContribId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestingIdea, setSuggestingIdea] = useState(false);
 
@@ -371,7 +373,25 @@ export default function App() {
       setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
     };
 
+    const onContribDelete = ({ id }: { id: string }) => {
+      setSelectedScene((s) =>
+        s ? { ...s, contributions: (s.contributions ?? []).filter((c) => c.id !== id) } : s
+      );
+    };
+
+    const onContribUpdate = (updated: import("./api").Contribution) => {
+      setSelectedScene((s) => {
+        if (!s) return s;
+        return {
+          ...s,
+          contributions: (s.contributions ?? []).map((c) => (c.id === updated.id ? updated : c)),
+        };
+      });
+    };
+
     socket.on("contribution:new", onContribNew);
+    socket.on("contribution:delete", onContribDelete);
+    socket.on("contribution:update", onContribUpdate);
     socket.on("typing:start", onTypingStart);
     socket.on("typing:stop", onTypingStop);
 
@@ -379,6 +399,8 @@ export default function App() {
       socket.emit("presence:scene:leave", { sceneId: selectedScene.id });
       socket.emit("scene:leave", { sceneId: selectedScene.id });
       socket.off("contribution:new", onContribNew);
+      socket.off("contribution:delete", onContribDelete);
+      socket.off("contribution:update", onContribUpdate);
       socket.off("typing:start", onTypingStart);
       socket.off("typing:stop", onTypingStop);
       // Nettoyer les timers d'auto-expiration
@@ -719,9 +741,35 @@ export default function App() {
   const handleDeleteContrib = async (id: string) => {
     if (!selectedScene) return;
     await api.contributions.delete(id);
+    // Optimistic local update — socket event will sync other clients
     setSelectedScene((s) =>
       s ? { ...s, contributions: (s.contributions ?? []).filter((c) => c.id !== id) } : s
     );
+  };
+
+  // ── Edit contribution
+  const handleStartEdit = (contrib: import("./api").Contribution) => {
+    setEditingContribId(contrib.id);
+    setEditingContent(contrib.content);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingContribId || !editingContent.trim()) return;
+    const updated = await api.contributions.update(editingContribId, editingContent);
+    setSelectedScene((s) => {
+      if (!s) return s;
+      return {
+        ...s,
+        contributions: (s.contributions ?? []).map((c) => (c.id === updated.id ? updated : c)),
+      };
+    });
+    setEditingContribId(null);
+    setEditingContent("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingContribId(null);
+    setEditingContent("");
   };
 
   // ── Suggest idea
@@ -1777,6 +1825,8 @@ export default function App() {
 
                   return visible.map((contrib) => {
                     const ink = resolveInk(contrib);
+                    const isOwn = !!currentUser && contrib.userId === currentUser.id;
+                    const isEditing = editingContribId === contrib.id;
                     return (
                       <div key={contrib.id} style={{ ...s.contribBubble, borderLeft: `3px solid ${ink.border}`, background: ink.bg }} className="contrib-bubble app-contrib-bubble">
                         <div style={{ ...s.avatarSm, background: ink.color, border: `2px solid ${ink.border}`, boxShadow: "0 0 0 2px rgba(255,235,170,0.3), 0 2px 8px rgba(0,0,0,0.15)" }}>
@@ -1786,11 +1836,33 @@ export default function App() {
                           <div style={s.contribMeta}>
                             <span style={{ ...s.contribAuthor, color: ink.color }}>{contribAuthor(contrib)}</span>
                             <span style={s.contribTime}>{formatTime(contrib.createdAt)}</span>
+                            {!spectatorView && isOwn && !isEditing && (
+                              <button style={s.contribAction} onClick={() => handleStartEdit(contrib)} title="Modifier">✎</button>
+                            )}
                             {!spectatorView && (
                               <button style={s.contribDelete} onClick={() => handleDeleteContrib(contrib.id)} title="Supprimer">✕</button>
                             )}
                           </div>
-                          <p style={s.contribText}>{contrib.content}</p>
+                          {isEditing ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.3rem" }}>
+                              <textarea
+                                style={{ ...s.contribText, border: "1px solid rgba(75,35,5,0.25)", borderRadius: "4px", padding: "0.4rem 0.5rem", background: "rgba(255,248,220,0.5)", resize: "vertical" as const, minHeight: "4rem" }}
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSaveEdit();
+                                  if (e.key === "Escape") handleCancelEdit();
+                                }}
+                                autoFocus
+                              />
+                              <div style={{ display: "flex", gap: "0.4rem" }}>
+                                <button style={s.contribSaveBtn} onClick={handleSaveEdit}>Enregistrer</button>
+                                <button style={s.contribCancelBtn} onClick={handleCancelEdit}>Annuler</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p style={s.contribText}>{contrib.content}</p>
+                          )}
                         </div>
                       </div>
                     );
@@ -2126,7 +2198,10 @@ const s: Record<string, React.CSSProperties> = {
   contribMeta: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" },
   contribAuthor: { fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", fontFamily: C.ui, textTransform: "uppercase" as const },
   contribTime: { fontSize: "0.68rem", color: C.textMuted, fontFamily: C.ui },
-  contribDelete: { marginLeft: "auto", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.75rem", opacity: 0.35, padding: "0.1rem 0.3rem" },
+  contribDelete: { marginLeft: "0.1rem", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.75rem", opacity: 0.35, padding: "0.1rem 0.3rem" },
+  contribAction: { marginLeft: "auto", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.8rem", opacity: 0.45, padding: "0.1rem 0.3rem" },
+  contribSaveBtn: { fontSize: "0.72rem", padding: "0.25rem 0.65rem", background: "rgba(75,35,5,0.12)", border: "1px solid rgba(75,35,5,0.25)", borderRadius: "4px", cursor: "pointer", color: C.text, fontFamily: C.ui },
+  contribCancelBtn: { fontSize: "0.72rem", padding: "0.25rem 0.65rem", background: "transparent", border: "1px solid rgba(75,35,5,0.15)", borderRadius: "4px", cursor: "pointer", color: C.textMuted, fontFamily: C.ui },
   contribText: { margin: 0, color: C.text, lineHeight: 2.05, fontFamily: C.serif, fontStyle: "italic", fontSize: "1.02rem", whiteSpace: "pre-wrap" as const },
   contribEmpty: { padding: "3rem 0", color: C.textMuted, fontSize: "0.92rem", fontStyle: "italic", textAlign: "center" as const, fontFamily: C.serif },
 
