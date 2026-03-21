@@ -936,13 +936,13 @@ export default function App() {
               ☰
             </button>
             <div style={s.breadcrumb}>
-              <span style={s.logoMark} onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
+              <span style={s.logoMark} className="app-logo-mark" onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
                 ✦ StoryForge
               </span>
               {crumbStory && (
                 <>
                   <span style={s.crumbSep}>/</span>
-                  <span style={s.crumbItem} onClick={() => { setSelectedChapter(null); setSelectedScene(null); }}>
+                  <span style={s.crumbItem} className="app-crumb-item" onClick={() => { setSelectedChapter(null); setSelectedScene(null); }}>
                     {crumbStory}
                   </span>
                 </>
@@ -950,7 +950,7 @@ export default function App() {
               {crumbChapter && (
                 <>
                   <span style={s.crumbSep}>/</span>
-                  <span style={s.crumbItem} onClick={() => setSelectedScene(null)}>
+                  <span style={s.crumbItem} className="app-crumb-item" onClick={() => setSelectedScene(null)}>
                     {crumbChapter}
                   </span>
                 </>

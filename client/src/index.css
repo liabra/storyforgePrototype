@@ -104,6 +104,23 @@ button:not(:disabled):hover { filter: brightness(0.88); }
 .story-item { transition: background 0.12s ease; }
 .story-item:not(.is-active):hover { background: rgba(75,35,5,0.07) !important; }
 
+/* ── Logo / breadcrumb navigation ── */
+.app-logo-mark {
+  transition: opacity 0.13s ease;
+}
+.app-logo-mark:hover {
+  opacity: 0.62;
+}
+.app-crumb-item {
+  transition: color 0.13s ease;
+  text-decoration: none;
+}
+.app-crumb-item:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(75,35,5,0.35);
+}
+
 /* ── Write area focus ── */
 .write-area { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
 .write-area:focus-within {
