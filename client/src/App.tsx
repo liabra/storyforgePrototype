@@ -935,6 +935,16 @@ export default function App() {
             <button style={s.menuBtn} onClick={() => setSidebarOpen((v) => !v)} aria-label="Menu">
               ☰
             </button>
+            {/* Branding — cliquable, caché sur mobile */}
+            <span
+              style={s.headerBrand}
+              className="app-logo-mark app-header-brand"
+              title="Retour à l'accueil"
+              onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}
+            >
+              ✦ StoryForge
+            </span>
+            <span style={s.headerBrandSep} className="app-header-brand" aria-hidden="true" />
             <div style={s.breadcrumb}>
               <span style={s.logoMark} className="app-logo-mark" title="Retour à l'accueil" onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
                 ✦ Accueil
@@ -1939,6 +1949,8 @@ const s: Record<string, React.CSSProperties> = {
   menuBtn: { background: "transparent", border: "none", color: C.textSub, fontSize: "1.1rem", cursor: "pointer", padding: "0.3rem 0.4rem", flexShrink: 0, lineHeight: 1 },
   breadcrumb: { display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, overflow: "hidden" },
   logoMark: { fontSize: "0.82rem", fontWeight: 700, color: C.text, cursor: "pointer", letterSpacing: "0.1em", flexShrink: 0, fontFamily: C.display },
+  headerBrand: { fontSize: "0.85rem", fontWeight: 700, color: C.text, cursor: "pointer", letterSpacing: "0.1em", flexShrink: 0, fontFamily: C.display },
+  headerBrandSep: { width: 1, height: "1.1rem", background: "rgba(75,35,5,0.25)", flexShrink: 0, alignSelf: "center" },
   crumbSep: { color: C.textMuted, fontSize: "0.8rem" },
   crumbItem: { fontSize: "0.78rem", color: C.textSub, cursor: "pointer", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 140, fontFamily: C.ui },
   crumbCurrent: { fontSize: "0.78rem", color: C.text, whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180, fontFamily: C.ui },

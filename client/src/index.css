@@ -187,6 +187,10 @@ button:not(:disabled):hover { filter: brightness(0.88); }
   .app-header-right {
     gap: 0.3rem !important;
   }
+  /* Cache le branding StoryForge et son séparateur sur mobile */
+  .app-header-brand {
+    display: none !important;
+  }
   /* Cache le nom/email dans le chip utilisateur */
   .app-user-name {
     display: none !important;
