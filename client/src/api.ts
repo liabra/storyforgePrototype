@@ -132,6 +132,7 @@ export interface ActivityItem {
   sceneId: string;
   sceneTitle: string;
   username: string;
+  userId?: string;
   at: string;
 }
 

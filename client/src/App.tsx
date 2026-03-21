@@ -293,6 +293,8 @@ export default function App() {
         return prev;
       });
 
+      // Ne pas afficher de toast pour ses propres actions
+      if (item.userId && item.userId === currentUser?.id) return;
       // Ne pas afficher de toast si l'utilisateur est déjà dans la scène concernée
       if (item.type === "contribution" && selectedSceneIdRef.current === item.sceneId) return;
 

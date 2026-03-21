@@ -64,6 +64,7 @@ export const create = async (req: Request, res: Response) => {
     sceneId,
     sceneTitle: scene.title,
     username,
+    userId: req.user?.id,
     at: contribution.createdAt.toISOString(),
   });
 
