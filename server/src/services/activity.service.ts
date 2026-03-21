@@ -1,4 +1,6 @@
 import prisma from "../prisma/client";
+import { getIO } from "../socket";
+import { getStoryParticipantUserIds } from "./participant.service";
 
 export interface ActivityItem {
   type: "scene" | "contribution";
@@ -67,4 +69,26 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
   ];
 
   return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+}
+
+/**
+ * Diffuse un événement activity:new uniquement aux participants de l'histoire.
+ *
+ * Chaque utilisateur dispose d'une room personnelle "user:${userId}" rejointe
+ * automatiquement lors du presence:identify. Cela garantit qu'il reçoit les
+ * événements de toutes ses histoires, qu'il soit sur la homepage ou dans une histoire.
+ *
+ * Extension future : si une histoire est marquée "publique", émettre en plus
+ * à une room "public-activity" sans modifier la logique privée ci-dessous.
+ */
+export async function broadcastActivityToStory(
+  storyId: string,
+  payload: ActivityItem,
+): Promise<void> {
+  const io = getIO();
+  if (!io) return;
+  const userIds = await getStoryParticipantUserIds(storyId);
+  for (const userId of userIds) {
+    io.to(`user:${userId}`).emit("activity:new", payload);
+  }
 }

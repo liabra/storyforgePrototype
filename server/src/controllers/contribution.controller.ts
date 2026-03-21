@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as contributionService from "../services/contribution.service";
 import * as participantService from "../services/participant.service";
+import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 import prisma from "../prisma/client";
 import { SceneStatus, ParticipantRole } from "../generated/prisma/client";
@@ -54,16 +55,16 @@ export const create = async (req: Request, res: Response) => {
   const io = getIO();
   // Diffuse aux autres clients de la même scène
   io?.to(`scene:${sceneId}`).emit("contribution:new", contribution);
-  // Broadcast global pour le feed d'activité
+  // Diffuse le feed d'activité aux participants de l'histoire uniquement
   const username = req.user?.email?.split("@")[0] || "Anonyme";
-  io?.emit("activity:new", {
+  void activityService.broadcastActivityToStory(scene.chapter.storyId, {
     type: "contribution",
     storyId: scene.chapter.storyId,
     storyTitle: scene.chapter.story.title,
     sceneId,
     sceneTitle: scene.title,
     username,
-    at: contribution.createdAt,
+    at: contribution.createdAt.toISOString(),
   });
 
   return res.status(201).json(contribution);

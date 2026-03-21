@@ -41,6 +41,11 @@ export const getUserRole = async (
   return p?.role ?? null;
 };
 
+export const getStoryParticipantUserIds = (storyId: string): Promise<string[]> =>
+  prisma.storyParticipant
+    .findMany({ where: { storyId }, select: { userId: true } })
+    .then((rows) => rows.map((r) => r.userId));
+
 export const getStoryIdByScene = async (sceneId: string): Promise<string | null> => {
   const scene = await prisma.scene.findUnique({
     where: { id: sceneId },

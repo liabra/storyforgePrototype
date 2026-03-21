@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as sceneService from "../services/scene.service";
 import * as chapterService from "../services/chapter.service";
+import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
@@ -29,15 +30,16 @@ export const create = async (req: Request, res: Response) => {
   if (storyInfo) {
     const io = getIO();
     io?.to(`story:${storyInfo.id}`).emit("scene:new", { chapterId, scene });
+    // Diffuse le feed d'activité aux participants de l'histoire uniquement
     const username = req.user?.email?.split("@")[0] || "Anonyme";
-    io?.emit("activity:new", {
+    void activityService.broadcastActivityToStory(storyInfo.id, {
       type: "scene",
       storyId: storyInfo.id,
       storyTitle: storyInfo.title,
       sceneId: scene.id,
       sceneTitle: scene.title,
       username,
-      at: scene.createdAt,
+      at: scene.createdAt.toISOString(),
     });
   }
   return res.status(201).json(scene);

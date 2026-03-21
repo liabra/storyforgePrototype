@@ -84,6 +84,8 @@ io.on("connection", (socket) => {
     "presence:identify",
     ({ userId, username, color }: { userId: string; username: string; color?: string | null }) => {
       presence.identify(socket.id, userId, username, color);
+      // Room personnelle : permet de cibler ce user depuis n'importe quel contexte
+      socket.join(`user:${userId}`);
       io.emit("presence:update", { count: presence.getOnlineCount() });
     },
   );
