@@ -176,6 +176,10 @@ button:not(:disabled):hover { filter: brightness(0.88); }
     padding: 0 !important;
     border: none !important;
   }
+  /* Sceau de cire — masqué dès 720px pour ne jamais chevaucher le contenu */
+  body::after {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -259,10 +263,6 @@ button:not(:disabled):hover { filter: brightness(0.88); }
     font-size: 1.3rem !important;
   }
 
-  /* Sceau de cire bas-droite caché sur mobile */
-  body::after {
-    display: none;
-  }
 }
 
 /* ── Toasts ── */
