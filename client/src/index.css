@@ -176,9 +176,11 @@ button:not(:disabled):hover { filter: brightness(0.88); }
     padding: 0 !important;
     border: none !important;
   }
-  /* Sceau de cire — masqué dès 720px pour ne jamais chevaucher le contenu */
-  body::after {
-    display: none;
+  /* Sceaux décoratifs — masqués dès 720px pour ne jamais chevaucher le contenu */
+  body::after,
+  .app-seal-tl,
+  .app-seal-br {
+    display: none !important;
   }
 }
 
@@ -198,6 +200,21 @@ button:not(:disabled):hover { filter: brightness(0.88); }
   /* Cache le nom/email dans le chip utilisateur */
   .app-user-name {
     display: none !important;
+  }
+  /* Cache les crumbs intermédiaires (histoire, chapitre) — garde seulement Accueil + scène courante */
+  .app-crumb-mid {
+    display: none !important;
+  }
+  /* Compteur en ligne — masqué dans le header mobile */
+  .app-online-indicator {
+    display: none !important;
+  }
+  /* Bouton nouvelle histoire — compact (icône seulement via JSX) */
+  .app-new-story-btn {
+    padding: 0.38rem 0.6rem !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0 !important;
+    min-width: 0 !important;
   }
 
   /* Layout — retire le padding horizontal du wrapper */

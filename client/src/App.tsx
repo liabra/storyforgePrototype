@@ -999,8 +999,8 @@ export default function App() {
 
   return (
     <div style={s.root}>
-      <div style={s.sealTL} aria-hidden="true">✦</div>
-      <div style={s.sealBR} aria-hidden="true">✦</div>
+      <div style={s.sealTL} className="app-seal-tl" aria-hidden="true">✦</div>
+      <div style={s.sealBR} className="app-seal-br" aria-hidden="true">✦</div>
 
       {/* ══ Header */}
       <header style={s.header}>
@@ -1024,26 +1024,26 @@ export default function App() {
                 ✦ Accueil
               </span>
               {crumbStory && (
-                <>
+                <span className="app-crumb-mid">
                   <span style={s.crumbSep}>/</span>
                   <span style={s.crumbItem} className="app-crumb-item" onClick={() => { setSelectedChapter(null); setSelectedScene(null); }}>
                     {crumbStory}
                   </span>
-                </>
+                </span>
               )}
               {crumbChapter && (
-                <>
+                <span className="app-crumb-mid">
                   <span style={s.crumbSep}>/</span>
                   <span style={s.crumbItem} className="app-crumb-item" onClick={() => setSelectedScene(null)}>
                     {crumbChapter}
                   </span>
-                </>
+                </span>
               )}
               {crumbScene && (
-                <>
+                <span className="app-crumb-last">
                   <span style={s.crumbSep}>/</span>
                   <span style={s.crumbCurrent}>{crumbScene}</span>
-                </>
+                </span>
               )}
             </div>
           </div>
@@ -1056,7 +1056,7 @@ export default function App() {
                   )}
                   <span style={s.userEmail} className="app-user-name">{currentUser.displayName || currentUser.email}</span>
                   {onlineCount > 1 && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.5, whiteSpace: "nowrap" }}>
+                    <span className="app-online-indicator" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.5, whiteSpace: "nowrap" }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4caf50", display: "inline-block", flexShrink: 0 }} />
                       {onlineCount} en ligne
                     </span>
@@ -1072,7 +1072,7 @@ export default function App() {
               )
             )}
             {currentUser && (
-              <button style={s.btnAccent} onClick={() => {
+              <button className="app-new-story-btn" style={s.btnAccent} onClick={() => {
                 if (showStoryForm) {
                   closeStoryForm();
                 } else {
@@ -1080,7 +1080,7 @@ export default function App() {
                   if (isMobile) setSidebarOpen(true);
                 }
               }}>
-                {showStoryForm ? "Annuler" : "Nouvelle histoire"}
+                {showStoryForm ? "Annuler" : (isMobile ? "＋" : "Nouvelle histoire")}
               </button>
             )}
           </div>
