@@ -164,8 +164,8 @@ button:not(:disabled):hover { filter: brightness(0.88); }
 
 /* ── Sidebar ── */
 .app-sidebar {
-  background: rgba(138,105,38,0.58) !important;
-  box-shadow: 2px 0 16px rgba(60,30,5,0.18);
+  background: rgba(185,148,55,0.97) !important;
+  box-shadow: 2px 0 20px rgba(60,30,5,0.22);
 }
 
 /* ── Mobile ── */

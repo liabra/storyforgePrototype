@@ -933,6 +933,12 @@ export default function App() {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
+  const closeStoryForm = () => {
+    setShowStoryForm(false);
+    setStoryTitle("");
+    setStoryDesc("");
+  };
+
   const totalContribs = (ch: Chapter) =>
     (ch.scenes ?? []).reduce((sum, sc) => sum + sc._count.contributions, 0);
 
@@ -1019,11 +1025,14 @@ export default function App() {
             )}
             {currentUser && (
               <button style={s.btnAccent} onClick={() => {
-                const next = !showStoryForm;
-                setShowStoryForm(next);
-                if (next && isMobile) setSidebarOpen(true);
+                if (showStoryForm) {
+                  closeStoryForm();
+                } else {
+                  setShowStoryForm(true);
+                  if (isMobile) setSidebarOpen(true);
+                }
               }}>
-                {showStoryForm ? "Annuler" : "+ Histoire"}
+                {showStoryForm ? "Annuler" : "Nouvelle histoire"}
               </button>
             )}
           </div>
@@ -1149,14 +1158,17 @@ export default function App() {
         <aside className={`app-sidebar${sidebarOpen ? " is-open" : ""}`} style={{ ...s.sidebar, ...(sidebarOpen ? s.sidebarOpen : {}) }}>
           <div style={s.sidebarHead}>
             <p style={s.sidebarLabel}>Histoires</p>
-            <button style={s.sidebarClose} onClick={() => setSidebarOpen(false)}>✕</button>
+            <button style={s.sidebarClose} onClick={() => { setSidebarOpen(false); closeStoryForm(); }}>✕</button>
           </div>
 
           {showStoryForm && (
             <form onSubmit={handleCreateStory} style={s.storyForm}>
               <input style={s.inputDark} placeholder="Titre" value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} required autoFocus />
               <input style={s.inputDark} placeholder="Description (optionnelle)" value={storyDesc} onChange={(e) => setStoryDesc(e.target.value)} />
-              <button style={s.btnAccent} type="submit">Créer →</button>
+              <div style={{ display: "flex", gap: "0.4rem" }}>
+                <button style={s.btnAccent} type="submit">Créer →</button>
+                <button style={s.btnGhost} type="button" onClick={closeStoryForm}>Annuler</button>
+              </div>
             </form>
           )}
 
@@ -1177,7 +1189,7 @@ export default function App() {
           </ul>
         </aside>
 
-        {sidebarOpen && <div style={s.sidebarOverlay} onClick={() => setSidebarOpen(false)} />}
+        {sidebarOpen && <div style={s.sidebarOverlay} onClick={() => { setSidebarOpen(false); closeStoryForm(); }} />}
 
         {/* ══ Main */}
         <main style={s.main} className="app-main">
