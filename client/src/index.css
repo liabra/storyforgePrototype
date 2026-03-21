@@ -265,6 +265,15 @@ button:not(:disabled):hover { filter: brightness(0.88); }
   }
 }
 
+/* ── Toasts ── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sf-toast {
+  animation: toastIn 0.22s ease both;
+}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

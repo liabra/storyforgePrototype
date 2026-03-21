@@ -20,6 +20,8 @@ import type {
 import type { PresenceUser } from "./presence";
 import { scenePresenceLabel } from "./presence";
 import { PresenceAvatar } from "./PresenceAvatar";
+import { ToastContainer } from "./Toast";
+import type { ToastItem } from "./Toast";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -229,6 +231,10 @@ export default function App() {
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
   const [storyLastActivity, setStoryLastActivity] = useState<Record<string, number>>({});
 
+  // Toasts
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastIdRef = useRef(0);
+
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
@@ -285,6 +291,18 @@ export default function App() {
         const t = new Date(item.at).getTime();
         if ((prev[item.storyId] ?? 0) < t) return { ...prev, [item.storyId]: t };
         return prev;
+      });
+
+      // Ne pas afficher de toast si l'utilisateur est déjà dans la scène concernée
+      if (item.type === "contribution" && selectedSceneIdRef.current === item.sceneId) return;
+
+      const message = item.type === "contribution"
+        ? `${item.username} a écrit dans ${item.sceneTitle}`
+        : `Nouvelle scène : ${item.sceneTitle}`;
+
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: item.type, message }].slice(-5);
       });
     };
 
@@ -1894,6 +1912,11 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <ToastContainer
+        toasts={toasts}
+        onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
+      />
     </div>
   );
 }
