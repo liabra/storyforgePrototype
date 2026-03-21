@@ -936,8 +936,8 @@ export default function App() {
               ☰
             </button>
             <div style={s.breadcrumb}>
-              <span style={s.logoMark} className="app-logo-mark" onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
-                ✦ StoryForge
+              <span style={s.logoMark} className="app-logo-mark" title="Retour à l'accueil" onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
+                {selectedStory ? "✦ Accueil" : "✦ StoryForge"}
               </span>
               {crumbStory && (
                 <>
