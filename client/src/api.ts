@@ -125,6 +125,16 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+export interface ActivityItem {
+  type: "scene" | "contribution";
+  storyId: string;
+  storyTitle: string;
+  sceneId: string;
+  sceneTitle: string;
+  username: string;
+  at: string;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = tokenStore.get();
   const res = await fetch(`${BASE}${path}`, {
@@ -218,6 +228,9 @@ export const api = {
       }),
     remove: (storyId: string, userId: string) =>
       request<void>(`/stories/${storyId}/participants/${userId}`, { method: "DELETE" }),
+  },
+  activity: {
+    recent: () => request<ActivityItem[]>("/activity/recent"),
   },
   characters: {
     list: (storyId: string) => request<Character[]>(`/stories/${storyId}/characters`),

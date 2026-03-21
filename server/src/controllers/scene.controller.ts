@@ -25,9 +25,20 @@ export const create = async (req: Request, res: Response) => {
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
   const scene = await sceneService.createScene(chapterId, { title, description, order });
-  const storyId = await chapterService.getStoryIdByChapter(chapterId);
-  if (storyId) {
-    getIO()?.to(`story:${storyId}`).emit("scene:new", { chapterId, scene });
+  const storyInfo = await chapterService.getStoryInfoByChapter(chapterId);
+  if (storyInfo) {
+    const io = getIO();
+    io?.to(`story:${storyInfo.id}`).emit("scene:new", { chapterId, scene });
+    const username = req.user?.email?.split("@")[0] || "Anonyme";
+    io?.emit("activity:new", {
+      type: "scene",
+      storyId: storyInfo.id,
+      storyTitle: storyInfo.title,
+      sceneId: scene.id,
+      sceneTitle: scene.title,
+      username,
+      at: scene.createdAt,
+    });
   }
   return res.status(201).json(scene);
 };

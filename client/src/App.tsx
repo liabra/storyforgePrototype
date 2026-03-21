@@ -15,6 +15,7 @@ import type {
   UserProfileInput,
   Participant,
   ParticipantRole,
+  ActivityItem,
 } from "./api";
 import type { PresenceUser } from "./presence";
 import { scenePresenceLabel } from "./presence";
@@ -117,6 +118,14 @@ function characterInk(hue: number): { color: string; bg: string; border: string 
   return palette[Math.floor(hue / 60) % 6];
 }
 
+function timeAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return "à l'instant";
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
+  return `il y a ${Math.floor(diff / 86400)} j`;
+}
+
 type TypingUser = { userId: string; username: string };
 
 function typingLabel(users: TypingUser[]): string {
@@ -216,6 +225,10 @@ export default function App() {
   const [onlineCount, setOnlineCount] = useState(0);
   const [allScenePresence, setAllScenePresence] = useState<Record<string, PresenceUser[]>>({});
 
+  // Homepage vivante
+  const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
+  const [storyLastActivity, setStoryLastActivity] = useState<Record<string, number>>({});
+
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
@@ -266,13 +279,24 @@ export default function App() {
       setOnlineCount(count);
     };
 
+    const onActivityNew = (item: ActivityItem) => {
+      setActivityFeed((prev) => [item, ...prev].slice(0, 10));
+      setStoryLastActivity((prev) => {
+        const t = new Date(item.at).getTime();
+        if ((prev[item.storyId] ?? 0) < t) return { ...prev, [item.storyId]: t };
+        return prev;
+      });
+    };
+
     socket.on("connect", onConnect);
     socket.on("presence:update", onPresenceUpdate);
+    socket.on("activity:new", onActivityNew);
     socket.connect();
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("presence:update", onPresenceUpdate);
+      socket.off("activity:new", onActivityNew);
       socket.disconnect();
     };
   }, [currentUser]);
@@ -420,6 +444,20 @@ export default function App() {
       .then((data) => { setStories(data); setStoriesLoaded(true); })
       .catch(() => setError("Impossible de charger les histoires."));
   }, [currentUser]);
+
+  // ── Load activity feed (seed initial)
+  useEffect(() => {
+    if (!currentUser) { setActivityFeed([]); setStoryLastActivity({}); return; }
+    api.activity.recent().then((items) => {
+      setActivityFeed(items);
+      const activity: Record<string, number> = {};
+      for (const item of items) {
+        const t = new Date(item.at).getTime();
+        if (!activity[item.storyId] || t > activity[item.storyId]) activity[item.storyId] = t;
+      }
+      setStoryLastActivity(activity);
+    }).catch(() => {});
+  }, [currentUser?.id]);
 
   // ── Sauvegarde navigation courante
   // Ne s'exécute qu'après que la restauration a été tentée pour ne pas effacer
@@ -1115,7 +1153,7 @@ export default function App() {
         <main style={s.main} className="app-main">
 
           {/* ── Aucune histoire sélectionnée */}
-          {!selectedStory && (
+          {!selectedStory && !currentUser && (
             <div style={s.emptyState}>
               <div style={s.emptyOrn} className="empty-orn">✦</div>
               <p style={s.emptyTitle}>StoryForge</p>
@@ -1123,6 +1161,77 @@ export default function App() {
                 Chaque grande histoire commence<br />par une ligne.<br /><br />
                 Ouvre le menu pour choisir une histoire,<br />ou crée-en une nouvelle.
               </p>
+            </div>
+          )}
+
+          {/* ── Homepage vivante (connecté, pas d'histoire sélectionnée) */}
+          {!selectedStory && currentUser && (
+            <div style={s.homepage}>
+              {/* En-tête */}
+              <div style={s.homepageHead}>
+                <div style={s.emptyOrn} className="empty-orn">✦</div>
+                <p style={s.emptyTitle}>StoryForge</p>
+                {onlineCount > 0 && (
+                  <div style={s.homepagePulse}>
+                    <span style={s.pulseDot} />
+                    {onlineCount} personne{onlineCount !== 1 ? "s" : ""} en ligne
+                  </div>
+                )}
+              </div>
+
+              {/* Histoires triées par activité récente */}
+              {stories.length > 0 && (
+                <div style={s.homepageSection}>
+                  <p style={s.homepageSectionLabel}>Vos histoires</p>
+                  <div>
+                    {[...stories]
+                      .sort((a, b) => (storyLastActivity[b.id] ?? 0) - (storyLastActivity[a.id] ?? 0))
+                      .map((story) => (
+                        <div key={story.id} style={s.homepageStoryRow} className="story-item" onClick={() => handleSelectStory(story)}>
+                          <div style={{ flex: 1 }}>
+                            <div style={s.homepageStoryTitle}>{story.title}</div>
+                            {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
+                          </div>
+                          {storyLastActivity[story.id] && (
+                            <span style={s.homepageStoryTime}>{timeAgo(new Date(storyLastActivity[story.id]).toISOString())}</span>
+                          )}
+                          <span style={{ ...s.chapterArrow, marginTop: 0 }}>→</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Feed d'activité récente */}
+              {activityFeed.length > 0 && (
+                <div style={s.homepageSection}>
+                  <p style={s.homepageSectionLabel}>Activité récente</p>
+                  <div style={s.activityFeed}>
+                    {activityFeed.map((item, i) => (
+                      <div key={i} style={s.activityItem}>
+                        <span style={s.activityDot}>{item.type === "scene" ? "+" : "·"}</span>
+                        <span style={s.activityBody}>
+                          {item.type === "contribution" ? (
+                            <><strong>{item.username}</strong> <span style={{ color: C.textMuted }}>dans</span> {item.sceneTitle}</>
+                          ) : (
+                            <>Scène <strong>{item.sceneTitle}</strong></>
+                          )}
+                          <span style={s.activityMeta}> — {item.storyTitle}</span>
+                        </span>
+                        <span style={s.activityTime}>{timeAgo(item.at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback si aucune activité */}
+              {activityFeed.length === 0 && stories.length === 0 && (
+                <p style={s.emptyText}>
+                  Chaque grande histoire commence par une ligne.<br /><br />
+                  Ouvre le menu pour créer ta première histoire.
+                </p>
+              )}
             </div>
           )}
 
@@ -1863,6 +1972,24 @@ const s: Record<string, React.CSSProperties> = {
   emptyOrn: { fontSize: "2.8rem", color: C.text, fontFamily: C.display, lineHeight: 1 },
   emptyTitle: { fontSize: "1.6rem", fontWeight: 700, color: C.text, margin: 0, fontFamily: C.display, letterSpacing: "0.05em" },
   emptyText: { fontSize: "0.9rem", color: C.textSub, margin: 0, maxWidth: 280, lineHeight: 1.85, fontFamily: C.serif, fontStyle: "italic" },
+
+  // Homepage vivante
+  homepage: { maxWidth: 640, margin: "0 auto", padding: "2rem 0" },
+  homepageHead: { display: "flex", flexDirection: "column" as const, alignItems: "center", gap: "0.9rem", textAlign: "center" as const, marginBottom: "2.5rem" },
+  homepagePulse: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.success },
+  pulseDot: { width: 6, height: 6, borderRadius: "50%", background: "#4caf50", display: "inline-block", flexShrink: 0 },
+  homepageSection: { marginBottom: "2rem" },
+  homepageSectionLabel: { fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase" as const, color: C.textMuted, margin: "0 0 0.75rem", fontFamily: C.ui },
+  homepageStoryRow: { display: "flex", alignItems: "center", gap: 10, padding: "0.75rem 1rem", cursor: "pointer", borderRadius: 4, background: "rgba(75,35,5,0.04)", border: `1px solid ${C.border}`, marginBottom: "0.45rem", transition: "background 0.1s" },
+  homepageStoryTitle: { fontFamily: C.serif, fontSize: "1rem", color: C.text, fontWeight: 500, lineHeight: 1.3 },
+  homepageStoryDesc: { fontSize: "0.78rem", color: C.textMuted, marginTop: 2, lineHeight: 1.35 },
+  homepageStoryTime: { fontSize: 11, color: C.textMuted, flexShrink: 0, whiteSpace: "nowrap" as const },
+  activityFeed: { display: "flex", flexDirection: "column" as const },
+  activityItem: { display: "flex", alignItems: "baseline", gap: "0.5rem", fontSize: 13, padding: "0.5rem 0", borderBottom: `1px solid rgba(75,35,5,0.07)`, lineHeight: 1.5 },
+  activityDot: { color: C.textMuted, fontWeight: 700, flexShrink: 0, width: 12, textAlign: "center" as const },
+  activityBody: { flex: 1, color: C.textSub },
+  activityMeta: { color: C.textMuted, fontSize: 12 },
+  activityTime: { fontSize: 11, color: C.textMuted, flexShrink: 0, whiteSpace: "nowrap" as const },
 
   // Page header
   pageHeader: { marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "1px solid rgba(75,35,5,0.2)" },

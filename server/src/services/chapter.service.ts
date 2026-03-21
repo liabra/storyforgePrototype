@@ -56,3 +56,11 @@ export const getStoryIdByChapter = async (chapterId: string): Promise<string | n
   });
   return chapter?.storyId ?? null;
 };
+
+export const getStoryInfoByChapter = async (chapterId: string): Promise<{ id: string; title: string } | null> => {
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+    select: { story: { select: { id: true, title: true } } },
+  });
+  return chapter?.story ?? null;
+};

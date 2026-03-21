@@ -24,7 +24,11 @@ export const create = async (req: Request, res: Response) => {
 
   const scene = await prisma.scene.findUnique({
     where: { id: sceneId },
-    select: { status: true, chapter: { select: { storyId: true } } },
+    select: {
+      title: true,
+      status: true,
+      chapter: { select: { storyId: true, story: { select: { title: true } } } },
+    },
   });
   if (!scene) return res.status(404).json({ error: "Scene not found" });
   if (scene.status !== SceneStatus.ACTIVE) {
@@ -47,8 +51,20 @@ export const create = async (req: Request, res: Response) => {
     userId: req.user?.id,
   });
 
+  const io = getIO();
   // Diffuse aux autres clients de la même scène
-  getIO()?.to(`scene:${sceneId}`).emit("contribution:new", contribution);
+  io?.to(`scene:${sceneId}`).emit("contribution:new", contribution);
+  // Broadcast global pour le feed d'activité
+  const username = req.user?.email?.split("@")[0] || "Anonyme";
+  io?.emit("activity:new", {
+    type: "contribution",
+    storyId: scene.chapter.storyId,
+    storyTitle: scene.chapter.story.title,
+    sceneId,
+    sceneTitle: scene.title,
+    username,
+    at: contribution.createdAt,
+  });
 
   return res.status(201).json(contribution);
 };
