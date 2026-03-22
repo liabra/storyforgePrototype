@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as participantService from "../services/participant.service";
 import prisma from "../prisma/client";
 import { ParticipantRole } from "../generated/prisma/client";
+import { getIO } from "../socket";
 
 const ASSIGNABLE_ROLES: ParticipantRole[] = [ParticipantRole.EDITOR, ParticipantRole.VIEWER];
 
@@ -35,6 +36,18 @@ export const add = async (req: Request, res: Response): Promise<void> => {
 
   try {
     const participant = await participantService.addParticipant(storyId, targetUser.id, role as ParticipantRole);
+
+    // Notifier l'utilisateur invité via socket
+    const story = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
+    const io = getIO();
+    if (io && story) {
+      io.to(`user:${targetUser.id}`).emit("invitation:received", {
+        storyId,
+        storyTitle: story.title,
+        role: participant.role,
+      });
+    }
+
     res.status(201).json(participant);
   } catch (err: unknown) {
     const e = err as { code?: string };

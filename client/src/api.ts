@@ -136,6 +136,18 @@ export interface ActivityItem {
   at: string;
 }
 
+export type JoinRequestStatus = "PENDING" | "ACCEPTED" | "DECLINED";
+
+export interface JoinRequest {
+  id: string;
+  storyId: string;
+  userId: string;
+  status: JoinRequestStatus;
+  createdAt: string;
+  user: { id: string; email: string; displayName?: string | null; color?: string | null };
+  story: { id: string; title: string };
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = tokenStore.get();
   const res = await fetch(`${BASE}${path}`, {
@@ -237,6 +249,19 @@ export const api = {
   },
   activity: {
     recent: () => request<ActivityItem[]>("/activity/recent"),
+  },
+  joinRequests: {
+    create: (storyId: string) =>
+      request<JoinRequest>(`/stories/${storyId}/join-requests`, { method: "POST" }),
+    getMine: (storyId: string) =>
+      request<JoinRequest | null>(`/stories/${storyId}/join-requests/mine`),
+    list: (storyId: string) =>
+      request<JoinRequest[]>(`/stories/${storyId}/join-requests`),
+    respond: (storyId: string, requestId: string, action: "accept" | "decline") =>
+      request<JoinRequest>(`/stories/${storyId}/join-requests/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action }),
+      }),
   },
   characters: {
     list: (storyId: string) => request<Character[]>(`/stories/${storyId}/characters`),

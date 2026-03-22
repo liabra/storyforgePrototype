@@ -7,6 +7,7 @@ import chapterRoutes from "./chapter.routes";
 import sceneRoutes from "./scene.routes";
 import contributionRoutes from "./contribution.routes";
 import participantRoutes from "./participant.routes";
+import joinRequestRoutes from "./joinRequest.routes";
 import activityRoutes from "./activity.routes";
 import devRoutes from "./dev.routes";
 
@@ -20,6 +21,7 @@ router.use(chapterRoutes);
 router.use(sceneRoutes);
 router.use(contributionRoutes);
 router.use(participantRoutes);
+router.use(joinRequestRoutes);
 router.use(activityRoutes);
 router.use(devRoutes);
 

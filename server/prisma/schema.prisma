@@ -13,6 +13,12 @@ enum ParticipantRole {
   VIEWER
 }
 
+enum JoinRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id            String               @id @default(cuid())
   email         String               @unique
@@ -25,6 +31,7 @@ model User {
   characters    Character[]
   contributions Contribution[]
   participations StoryParticipant[]
+  joinRequests  JoinRequest[]
 }
 
 model Story {
@@ -36,6 +43,20 @@ model Story {
   chapters     Chapter[]
   characters   Character[]
   participants StoryParticipant[]
+  joinRequests JoinRequest[]
+}
+
+model JoinRequest {
+  id        String            @id @default(cuid())
+  storyId   String
+  story     Story             @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    JoinRequestStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([storyId, userId])
 }
 
 model StoryParticipant {

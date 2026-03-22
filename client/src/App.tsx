@@ -16,6 +16,7 @@ import type {
   Participant,
   ParticipantRole,
   ActivityItem,
+  JoinRequest,
 } from "./api";
 import type { PresenceUser } from "./presence";
 import { scenePresenceLabel } from "./presence";
@@ -245,6 +246,11 @@ export default function App() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
+  // Demandes de participation
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [myJoinRequest, setMyJoinRequest] = useState<JoinRequest | null>(null);
+  const [requestingJoin, setRequestingJoin] = useState(false);
+
   // ── Responsive listener
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 640);
@@ -310,15 +316,57 @@ export default function App() {
       });
     };
 
+    const onInvitationReceived = ({ storyTitle, role }: { storyId: string; storyTitle: string; role: string }) => {
+      const roleLabel = role === "EDITOR" ? "éditeur" : "lecteur";
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "contribution" as const, message: `Tu as été invité(e) à collaborer à "${storyTitle}" en tant que ${roleLabel}` }].slice(-5);
+      });
+      // Rafraîchir la liste des histoires pour afficher la nouvelle
+      api.stories.list().then(setStories).catch(() => {});
+    };
+
+    const onJoinRequestReceived = ({ storyId: reqStoryId, storyTitle, userDisplayName }: { requestId: string; storyId: string; storyTitle: string; userId: string; userDisplayName: string }) => {
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "scene" as const, message: `${userDisplayName} demande à participer à "${storyTitle}"` }].slice(-5);
+      });
+      // Si on est actuellement sur cette histoire, rafraîchir la liste des demandes
+      if (selectedStoryIdRef.current === reqStoryId) {
+        api.joinRequests.list(reqStoryId).then(setJoinRequests).catch(() => {});
+      }
+    };
+
+    const onJoinRequestResponse = ({ storyTitle, accepted }: { requestId: string; storyId: string; storyTitle: string; accepted: boolean }) => {
+      const message = accepted
+        ? `Ta demande a été acceptée ! Tu es maintenant éditeur de "${storyTitle}"`
+        : `Ta demande de participation à "${storyTitle}" a été refusée`;
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "contribution" as const, message }].slice(-5);
+      });
+      setMyJoinRequest((prev) => prev ? { ...prev, status: accepted ? "ACCEPTED" : "DECLINED" } : prev);
+      if (accepted) {
+        setMyRole("EDITOR");
+        api.stories.list().then(setStories).catch(() => {});
+      }
+    };
+
     socket.on("connect", onConnect);
     socket.on("presence:update", onPresenceUpdate);
     socket.on("activity:new", onActivityNew);
+    socket.on("invitation:received", onInvitationReceived);
+    socket.on("join-request:received", onJoinRequestReceived);
+    socket.on("join-request:response", onJoinRequestResponse);
     socket.connect();
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("presence:update", onPresenceUpdate);
       socket.off("activity:new", onActivityNew);
+      socket.off("invitation:received", onInvitationReceived);
+      socket.off("join-request:received", onJoinRequestReceived);
+      socket.off("join-request:response", onJoinRequestResponse);
       socket.disconnect();
     };
   }, [currentUser]);
@@ -537,7 +585,13 @@ export default function App() {
         setCharacters(charData);
         setParticipants(participantData);
         const mine = participantData.find((p) => p.userId === currentUser.id);
-        setMyRole(mine?.role ?? null);
+        const restoredRole = mine?.role ?? null;
+        setMyRole(restoredRole);
+        if (restoredRole === "OWNER") {
+          api.joinRequests.list(story.id).then(setJoinRequests).catch(() => {});
+        } else if (restoredRole === "VIEWER") {
+          api.joinRequests.getMine(story.id).then(setMyJoinRequest).catch(() => {});
+        }
         setActiveTab("chapters");
         if (!chapterId) return;
         const chapter = chapterData.find((ch) => ch.id === chapterId);
@@ -579,6 +633,8 @@ export default function App() {
     setSidebarOpen(false);
     setParticipants([]);
     setMyRole(null);
+    setJoinRequests([]);
+    setMyJoinRequest(null);
     const [chapterData, charData, participantData] = await Promise.all([
       api.chapters.list(story.id),
       api.characters.list(story.id),
@@ -589,7 +645,14 @@ export default function App() {
     setParticipants(participantData);
     if (currentUser) {
       const mine = participantData.find((p) => p.userId === currentUser.id);
-      setMyRole(mine?.role ?? null);
+      const role = mine?.role ?? null;
+      setMyRole(role);
+      // Charger les demandes selon le rôle
+      if (role === "OWNER") {
+        api.joinRequests.list(story.id).then(setJoinRequests).catch(() => {});
+      } else if (role === "VIEWER") {
+        api.joinRequests.getMine(story.id).then(setMyJoinRequest).catch(() => {});
+      }
     }
   };
 
@@ -977,6 +1040,41 @@ export default function App() {
     if (!selectedStory) return;
     await api.participants.remove(selectedStory.id, userId);
     setParticipants((p) => p.filter((x) => x.userId !== userId));
+  };
+
+  // ── Demandes de participation
+  const handleRequestJoin = async () => {
+    if (!selectedStory) return;
+    setRequestingJoin(true);
+    try {
+      const req = await api.joinRequests.create(selectedStory.id);
+      setMyJoinRequest(req);
+    } catch (err: unknown) {
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "contribution" as const, message: (err as Error).message }].slice(-5);
+      });
+    } finally {
+      setRequestingJoin(false);
+    }
+  };
+
+  const handleRespondToRequest = async (requestId: string, action: "accept" | "decline") => {
+    if (!selectedStory) return;
+    try {
+      const updated = await api.joinRequests.respond(selectedStory.id, requestId, action);
+      setJoinRequests((prev) => prev.filter((r) => r.id !== updated.id));
+      if (action === "accept") {
+        setParticipants((prev) =>
+          prev.map((p) => p.userId === updated.userId ? { ...p, role: "EDITOR" as ParticipantRole } : p)
+        );
+      }
+    } catch (err: unknown) {
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "contribution" as const, message: (err as Error).message }].slice(-5);
+      });
+    }
   };
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1552,6 +1650,63 @@ export default function App() {
                     </form>
                   )}
 
+                  {/* ── Demandes en attente (propriétaire) */}
+                  {myRole === "OWNER" && joinRequests.length > 0 && (
+                    <div style={{ marginBottom: "1rem" }}>
+                      <p style={{ ...s.formTitle, color: "#c0a060" }}>
+                        Demandes de participation ({joinRequests.length})
+                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        {joinRequests.map((req) => {
+                          const name = req.user.displayName || req.user.email.split("@")[0];
+                          return (
+                            <div key={req.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0.85rem", background: "rgba(192,160,96,0.08)", border: "1px solid rgba(192,160,96,0.3)", borderRadius: 6 }}>
+                              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#c0a060", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "0.8rem", fontWeight: 700, flexShrink: 0 }}>
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontFamily: C.serif, fontSize: "0.92rem", color: C.text, fontWeight: 600 }}>{name}</div>
+                                <div style={{ fontSize: "0.76rem", color: C.textMuted }}>{req.user.email} · demande à devenir éditeur</div>
+                              </div>
+                              <button style={{ ...s.btnAccent, padding: "0.25rem 0.6rem", fontSize: "0.8rem" }} onClick={() => handleRespondToRequest(req.id, "accept")}>
+                                Accepter
+                              </button>
+                              <button style={{ ...s.btnDanger, padding: "0.25rem 0.6rem", fontSize: "0.8rem" }} onClick={() => handleRespondToRequest(req.id, "decline")}>
+                                Refuser
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Bouton "Demander à participer" (VIEWER) */}
+                  {myRole === "VIEWER" && (
+                    <div style={{ marginBottom: "1rem", padding: "0.85rem", background: "rgba(122,76,8,0.06)", border: "1px solid rgba(122,76,8,0.2)", borderRadius: 8 }}>
+                      {!myJoinRequest || myJoinRequest.status === "DECLINED" ? (
+                        <>
+                          <p style={{ margin: "0 0 0.6rem", fontSize: "0.88rem", color: C.textMuted }}>
+                            {myJoinRequest?.status === "DECLINED"
+                              ? "Ta demande a été refusée. Tu peux en soumettre une nouvelle."
+                              : "Tu es lecteur de cette histoire. Tu peux demander à devenir éditeur."}
+                          </p>
+                          <button style={s.btnAccent} onClick={handleRequestJoin} disabled={requestingJoin}>
+                            {requestingJoin ? "Envoi…" : "Demander à participer →"}
+                          </button>
+                        </>
+                      ) : myJoinRequest.status === "PENDING" ? (
+                        <p style={{ margin: 0, fontSize: "0.88rem", color: "#c0a060" }}>
+                          Ta demande est en attente de validation par le propriétaire.
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: "0.88rem", color: "#2e7d32" }}>
+                          Ta demande a été acceptée ! Tu es maintenant éditeur.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {participants.length === 0 && <p style={s.mutedCenter}>Aucun participant chargé.</p>}
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
@@ -1900,7 +2055,22 @@ export default function App() {
               {/* ── Bandeau lecture seule */}
               {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
                 <div style={{ padding: "12px 16px", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 8, color: "#7a4c08", fontSize: 14, textAlign: "center" }}>
-                  Vous pouvez simplement apprécier et lire l'histoire en direct. Si vous souhaitez collaborer, demandez au propriétaire 😉
+                  {myJoinRequest?.status === "PENDING" ? (
+                    "Ta demande est en attente de validation par le propriétaire."
+                  ) : myJoinRequest?.status === "ACCEPTED" ? (
+                    "Ta demande a été acceptée ! Recharge la page pour écrire."
+                  ) : (
+                    <>
+                      Vous êtes en lecture seule.{" "}
+                      <button
+                        style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: 14, padding: 0 }}
+                        onClick={() => { setActiveTab("participants"); setSelectedScene(null); }}
+                        disabled={requestingJoin}
+                      >
+                        Demander à participer →
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
