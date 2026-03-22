@@ -111,6 +111,14 @@ button:not(:disabled):hover { filter: brightness(0.88); }
 .app-logo-mark:hover {
   opacity: 0.62;
 }
+/* Les groupes crumb (séparateur + label) restent alignés verticalement
+   même wrappés dans un span pour le responsive */
+.app-crumb-mid,
+.app-crumb-last {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .app-crumb-item {
   transition: color 0.13s ease;
   text-decoration: none;

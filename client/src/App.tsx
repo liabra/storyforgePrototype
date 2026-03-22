@@ -1080,7 +1080,7 @@ export default function App() {
                   if (isMobile) setSidebarOpen(true);
                 }
               }}>
-                {showStoryForm ? "Annuler" : (isMobile ? "＋" : "Nouvelle histoire")}
+                {showStoryForm ? "Annuler" : (isMobile ? "+ Histoire" : "Nouvelle histoire")}
               </button>
             )}
           </div>
