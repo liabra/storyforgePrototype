@@ -144,6 +144,16 @@ export const respond = async (req: Request, res: Response): Promise<void> => {
         storyTitle: request.story.title,
         accepted: action === "accept",
       });
+
+      // Si accepté : diffuser la mise à jour du rôle à tous les participants de la room story
+      // (y compris le demandeur s'il est connecté à cette story)
+      if (action === "accept") {
+        io.to(`story:${storyId}`).emit("participant:update", {
+          userId: request.userId,
+          storyId,
+          role: "EDITOR",
+        });
+      }
     }
 
     res.json(updated);

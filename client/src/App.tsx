@@ -345,10 +345,11 @@ export default function App() {
         const id = ++toastIdRef.current;
         return [...prev, { id, type: "contribution" as const, message }].slice(-5);
       });
-      setMyJoinRequest((prev) => prev ? { ...prev, status: accepted ? "ACCEPTED" : "DECLINED" } : prev);
-      if (accepted) {
-        setMyRole("EDITOR");
-        api.stories.list().then(setStories).catch(() => {});
+      // Pour le refus seulement : mettre à jour le statut de la demande localement.
+      // Pour l'acceptation, c'est participant:update (room story) qui met à jour myRole
+      // et la liste participants — plus fiable car lié à la story courante.
+      if (!accepted) {
+        setMyJoinRequest((prev) => prev ? { ...prev, status: "DECLINED" } : prev);
       }
     };
 
@@ -502,10 +503,19 @@ export default function App() {
       setAllScenePresence(snapshot);
     };
 
+    const onParticipantUpdate = ({ userId, role }: { userId: string; storyId: string; role: ParticipantRole }) => {
+      setParticipants((prev) => prev.map((p) => p.userId === userId ? { ...p, role } : p));
+      if (currentUser && userId === currentUser.id) {
+        setMyRole(role);
+        setMyJoinRequest((prev) => prev ? { ...prev, status: "ACCEPTED" } : prev);
+      }
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
     socket.on("story:presence:snapshot", onStoryPresenceSnapshot);
+    socket.on("participant:update", onParticipantUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -513,6 +523,7 @@ export default function App() {
       socket.off("scene:new", onSceneNew);
       socket.off("scene:presence:update", onScenePresenceUpdate);
       socket.off("story:presence:snapshot", onStoryPresenceSnapshot);
+      socket.off("participant:update", onParticipantUpdate);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -2119,15 +2130,17 @@ export default function App() {
                     <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
                       {generatingImage ? "…" : "🎨 Illustrer"}
                     </button>
-                    <button style={s.btnGhost} onClick={() => setShowSettings((v) => !v)}>
-                      ⚙ Paramètres
-                    </button>
+                    {myRole === "OWNER" && (
+                      <button style={s.btnGhost} onClick={() => setShowSettings((v) => !v)}>
+                        ⚙ Paramètres
+                      </button>
+                    )}
                   </div>
 
                   <p style={s.writeHint}>⌘↵ ou Ctrl+↵ pour envoyer</p>
 
-                  {/* Paramètres de visibilité */}
-                  {showSettings && (
+                  {/* Paramètres de visibilité — OWNER uniquement */}
+                  {myRole === "OWNER" && showSettings && (
                     <div style={s.settingsBox}>
                       <p style={s.settingsTitle}>Paramètres de la scène</p>
                       <div style={s.settingsRow}>

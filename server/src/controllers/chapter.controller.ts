@@ -34,12 +34,28 @@ export const create = async (req: Request, res: Response) => {
 
 export const update = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
+
+  const storyId = await chapterService.getStoryIdByChapter(id);
+  if (!storyId) return res.status(404).json({ error: "Chapitre introuvable" });
+  const role = await participantService.getUserRole(storyId, req.user!.id);
+  if (role !== ParticipantRole.OWNER && role !== ParticipantRole.EDITOR) {
+    return res.status(403).json({ error: "Vous devez être éditeur ou propriétaire pour modifier un chapitre" });
+  }
+
   const chapter = await chapterService.updateChapter(id, req.body);
   return res.json(chapter);
 };
 
 export const remove = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
+
+  const storyId = await chapterService.getStoryIdByChapter(id);
+  if (!storyId) return res.status(404).json({ error: "Chapitre introuvable" });
+  const role = await participantService.getUserRole(storyId, req.user!.id);
+  if (role !== ParticipantRole.OWNER) {
+    return res.status(403).json({ error: "Seul le propriétaire peut supprimer un chapitre" });
+  }
+
   await chapterService.deleteChapter(id);
   return res.status(204).send();
 };

@@ -9,18 +9,19 @@ import {
   generateImage,
   suggestIdea,
 } from "../controllers/scene.controller";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
 // Literal avant toute route avec :id
-router.post("/scenes/suggest-idea", suggestIdea);
+router.post("/scenes/suggest-idea", requireAuth, suggestIdea);
 
 router.get("/chapters/:chapterId/scenes", getByChapter);
 router.get("/scenes/:id", getOne);
-router.post("/chapters/:chapterId/scenes", create);
-router.put("/scenes/:id", update);
-router.put("/scenes/:id/characters", updateCharacters);
-router.delete("/scenes/:id", remove);
-router.post("/scenes/:id/generate-image", generateImage);
+router.post("/chapters/:chapterId/scenes", requireAuth, create);
+router.put("/scenes/:id", requireAuth, update);
+router.put("/scenes/:id/characters", requireAuth, updateCharacters);
+router.delete("/scenes/:id", requireAuth, remove);
+router.post("/scenes/:id/generate-image", requireAuth, generateImage);
 
 export default router;
