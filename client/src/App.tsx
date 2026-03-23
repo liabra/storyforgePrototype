@@ -1704,7 +1704,7 @@ export default function App() {
 
                   {/* ── Bouton "Demander à participer" (VIEWER) */}
                   {myRole === "VIEWER" && (
-                    <div style={{ marginBottom: "1rem", padding: "0.85rem", background: "rgba(122,76,8,0.06)", border: "1px solid rgba(122,76,8,0.2)", borderRadius: 8 }}>
+                    <div style={{ marginBottom: "1rem", padding: "0.85rem", background: "rgba(122,76,8,0.06)", border: "1px solid rgba(122,76,8,0.2)", borderRadius: 6 }}>
                       {!myJoinRequest || myJoinRequest.status === "DECLINED" ? (
                         <>
                           <p style={{ margin: "0 0 0.6rem", fontSize: "0.88rem", color: C.textMuted }}>
@@ -1730,6 +1730,7 @@ export default function App() {
 
                   {participants.length === 0 && <p style={s.mutedCenter}>Aucun participant chargé.</p>}
 
+                  {participants.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
                     {participants.map((pt) => {
                       const ink = pt.user.color
@@ -1770,6 +1771,7 @@ export default function App() {
                       );
                     })}
                   </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2075,7 +2077,7 @@ export default function App() {
 
               {/* ── Bandeau lecture seule */}
               {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
-                <div style={{ padding: "12px 16px", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 8, color: "#7a4c08", fontSize: 14, textAlign: "center" }}>
+                <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", textAlign: "center" }}>
                   {myJoinRequest?.status === "PENDING" ? (
                     "Ta demande est en attente de validation par le propriétaire."
                   ) : myJoinRequest?.status === "ACCEPTED" ? (
@@ -2084,7 +2086,7 @@ export default function App() {
                     <>
                       Vous êtes en lecture seule.{" "}
                       <button
-                        style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: 14, padding: 0 }}
+                        style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }}
                         onClick={() => { setActiveTab("participants"); setSelectedScene(null); }}
                         disabled={requestingJoin}
                       >

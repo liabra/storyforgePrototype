@@ -78,7 +78,7 @@ export function ToastContainer({
   return (
     <div style={{
       position: "fixed",
-      bottom: "1.5rem",
+      bottom: "8.5rem",
       right: "1.5rem",
       display: "flex",
       flexDirection: "column-reverse",
