@@ -145,14 +145,13 @@ export const respond = async (req: Request, res: Response): Promise<void> => {
         accepted: action === "accept",
       });
 
-      // Si accepté : diffuser la mise à jour du rôle à tous les participants de la room story
-      // (y compris le demandeur s'il est connecté à cette story)
+      // Si accepté : diffuser la mise à jour du rôle
       if (action === "accept") {
-        io.to(`story:${storyId}`).emit("participant:update", {
-          userId: request.userId,
-          storyId,
-          role: "EDITOR",
-        });
+        const payload = { userId: request.userId, storyId, role: "EDITOR" };
+        // Room story → met à jour la liste participants pour tous (y compris le owner)
+        io.to(`story:${storyId}`).emit("participant:update", payload);
+        // Room personnelle → canal de secours direct si le demandeur n'est pas dans la room story
+        io.to(`user:${request.userId}`).emit("participant:update", payload);
       }
     }
 

@@ -345,11 +345,29 @@ export default function App() {
         const id = ++toastIdRef.current;
         return [...prev, { id, type: "contribution" as const, message }].slice(-5);
       });
-      // Pour le refus seulement : mettre à jour le statut de la demande localement.
-      // Pour l'acceptation, c'est participant:update (room story) qui met à jour myRole
-      // et la liste participants — plus fiable car lié à la story courante.
       if (!accepted) {
         setMyJoinRequest((prev) => prev ? { ...prev, status: "DECLINED" } : prev);
+      }
+    };
+
+    // Mise à jour de rôle d'un participant — émis dans la room story ET la room personnelle.
+    // Géré ici (main effect, deps [currentUser]) pour garantir que currentUser est toujours frais,
+    // contrairement au story-room effect qui capture currentUser à la sélection de l'histoire.
+    const onParticipantUpdateGlobal = ({
+      userId,
+      storyId: eventStoryId,
+      role,
+    }: { userId: string; storyId: string; role: ParticipantRole }) => {
+      // N'appliquer que si c'est pour l'histoire actuellement ouverte
+      if (eventStoryId !== selectedStoryIdRef.current) return;
+
+      // Mise à jour de la liste des participants (visible dans l'onglet Participants)
+      setParticipants((prev) => prev.map((p) => p.userId === userId ? { ...p, role } : p));
+
+      // Mise à jour du rôle personnel si c'est notre propre userId
+      if (userId === currentUser.id) {
+        setMyRole(role);
+        setMyJoinRequest((prev) => prev ? { ...prev, status: "ACCEPTED" } : prev);
       }
     };
 
@@ -359,6 +377,7 @@ export default function App() {
     socket.on("invitation:received", onInvitationReceived);
     socket.on("join-request:received", onJoinRequestReceived);
     socket.on("join-request:response", onJoinRequestResponse);
+    socket.on("participant:update", onParticipantUpdateGlobal);
     socket.connect();
 
     return () => {
@@ -368,6 +387,7 @@ export default function App() {
       socket.off("invitation:received", onInvitationReceived);
       socket.off("join-request:received", onJoinRequestReceived);
       socket.off("join-request:response", onJoinRequestResponse);
+      socket.off("participant:update", onParticipantUpdateGlobal);
       socket.disconnect();
     };
   }, [currentUser]);
@@ -503,19 +523,10 @@ export default function App() {
       setAllScenePresence(snapshot);
     };
 
-    const onParticipantUpdate = ({ userId, role }: { userId: string; storyId: string; role: ParticipantRole }) => {
-      setParticipants((prev) => prev.map((p) => p.userId === userId ? { ...p, role } : p));
-      if (currentUser && userId === currentUser.id) {
-        setMyRole(role);
-        setMyJoinRequest((prev) => prev ? { ...prev, status: "ACCEPTED" } : prev);
-      }
-    };
-
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
     socket.on("story:presence:snapshot", onStoryPresenceSnapshot);
-    socket.on("participant:update", onParticipantUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -523,7 +534,6 @@ export default function App() {
       socket.off("scene:new", onSceneNew);
       socket.off("scene:presence:update", onScenePresenceUpdate);
       socket.off("story:presence:snapshot", onStoryPresenceSnapshot);
-      socket.off("participant:update", onParticipantUpdate);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
