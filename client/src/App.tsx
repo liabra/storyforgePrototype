@@ -2130,27 +2130,26 @@ export default function App() {
                     <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
                       {generatingImage ? "…" : "🎨 Illustrer"}
                     </button>
-                    {myRole === "OWNER" && (
-                      <button style={s.btnGhost} onClick={() => setShowSettings((v) => !v)}>
-                        ⚙ Paramètres
-                      </button>
-                    )}
                   </div>
 
                   <p style={s.writeHint}>⌘↵ ou Ctrl+↵ pour envoyer</p>
+                </div>
+              )}
 
-                  {/* Paramètres de visibilité — OWNER uniquement */}
-                  {myRole === "OWNER" && showSettings && (
-                    <div style={s.settingsBox}>
+              {/* ── Paramètres de la scène — OWNER toujours visible, quel que soit le statut */}
+              {!spectatorView && myRole === "OWNER" && (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <button style={s.btnGhost} onClick={() => setShowSettings((v) => !v)}>
+                    ⚙ Paramètres
+                  </button>
+                  {showSettings && (
+                    <div style={{ ...s.settingsBox, marginTop: "0.5rem" }}>
                       <p style={s.settingsTitle}>Paramètres de la scène</p>
                       <div style={s.settingsRow}>
                         <label style={s.settingsLabel} className="app-settings-label">Statut</label>
                         <select style={s.selectDark} value={settingsEdit.status} onChange={(e) =>
-  setSettingsEdit((p) => ({
-    ...p,
-    status: e.target.value as SceneStatus,
-  }))
-}>
+                          setSettingsEdit((p) => ({ ...p, status: e.target.value as SceneStatus }))
+                        }>
                           <option value="DRAFT">Brouillon</option>
                           <option value="ACTIVE">Active</option>
                           <option value="DONE">Terminée</option>
