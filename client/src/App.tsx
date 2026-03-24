@@ -1089,6 +1089,13 @@ export default function App() {
     if (!selectedStory) return;
     const updated = await api.participants.updateRole(selectedStory.id, userId, role);
     setParticipants((p) => p.map((x) => (x.userId === userId ? updated : x)));
+    const participant = participants.find((p) => p.userId === userId);
+    const name = participant?.user.displayName || participant?.user.email.split("@")[0] || "Participant";
+    const roleLabel = role === "EDITOR" ? "éditeur" : "lecteur";
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: `${name} est maintenant ${roleLabel}.` }].slice(-5);
+    });
   };
 
   const handleRemoveParticipant = async (userId: string) => {
