@@ -1536,7 +1536,7 @@ export default function App() {
               {/* ── Tab Personnages */}
               {activeTab === "characters" && (
                 <div>
-                  {myRole === "OWNER" ? (
+                  {(myRole === "OWNER" || myRole === "EDITOR") ? (
                     <form onSubmit={handleCreateChar} style={s.inlineForm}>
                       <div style={s.row}>
                         <input style={s.inputDark} placeholder="Nom" value={newChar.name ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, name: e.target.value }))} />
@@ -1547,9 +1547,7 @@ export default function App() {
                     </form>
                   ) : (
                     <p style={{ ...s.hint, marginBottom: 12 }}>
-                      {myRole === "VIEWER"
-                        ? "Vous pouvez simplement apprécier et lire l'histoire en direct. Si vous souhaitez collaborer, demandez au propriétaire 😉"
-                        : "Seul le propriétaire peut créer ou modifier les personnages."}
+                      Vous êtes en lecture seule sur cette histoire. Demandez à devenir éditeur pour contribuer aux personnages.
                     </p>
                   )}
 
@@ -1560,6 +1558,11 @@ export default function App() {
                       const hue = avatarHue(displayName(char));
                       const ink = characterInk(hue);
                       const isExpanded = expandedCharId === char.id;
+                      // Auteur = celui qui a créé le personnage.
+                      // Cas legacy (userId null) : le OWNER garde les droits admin.
+                      const isAuthor = char.userId
+                        ? char.userId === currentUser?.id
+                        : myRole === "OWNER";
                       return (
                         <div key={char.id} style={s.charCard}>
                           <div style={s.charCardTop}>
@@ -1585,7 +1588,7 @@ export default function App() {
                               }}>
                                 {isExpanded ? "Fermer" : "Fiche"}
                               </button>
-                              {myRole === "OWNER" && (
+                              {isAuthor && (
                                 <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
                               )}
                             </div>
@@ -1617,14 +1620,14 @@ export default function App() {
                                 <div key={field} style={s.fieldGroup}>
                                   <label style={s.fieldLabel}>{label}</label>
                                   <input
-                                    style={{ ...s.inputDark, ...(myRole !== "OWNER" ? { opacity: 0.7, cursor: "default" } : {}) }}
+                                    style={{ ...s.inputDark, ...(!isAuthor ? { opacity: 0.7, cursor: "default" } : {}) }}
                                     value={(charEdits[char.id]?.[field] as string) ?? ""}
                                     onChange={(e) => setCharEdits((p) => ({ ...p, [char.id]: { ...p[char.id], [field]: e.target.value } }))}
-                                    readOnly={myRole !== "OWNER"}
+                                    readOnly={!isAuthor}
                                   />
                                 </div>
                               ))}
-                              {myRole === "OWNER" && (
+                              {isAuthor && (
                                 <div style={{ gridColumn: "1 / -1" }}>
                                   <button style={s.btnAccent} onClick={() => handleSaveChar(char)} disabled={savingChar === char.id}>
                                     {savingChar === char.id ? "Sauvegarde…" : "Sauvegarder →"}

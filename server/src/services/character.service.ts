@@ -26,8 +26,8 @@ export const getCharactersByStory = (storyId: string) =>
     },
   });
 
-export const createCharacter = (storyId: string, data: CharacterData) =>
-  prisma.character.create({ data: { ...data, storyId } });
+export const createCharacter = (storyId: string, userId: string, data: CharacterData) =>
+  prisma.character.create({ data: { ...data, storyId, userId } });
 
 export const updateCharacter = (id: string, data: CharacterData) =>
   prisma.character.update({ where: { id }, data });
@@ -41,4 +41,12 @@ export const getStoryIdByCharacter = async (characterId: string): Promise<string
     select: { storyId: true },
   });
   return char?.storyId ?? null;
+};
+
+export const getCharacterMeta = async (characterId: string): Promise<{ storyId: string; userId: string | null } | null> => {
+  const char = await prisma.character.findUnique({
+    where: { id: characterId },
+    select: { storyId: true, userId: true },
+  });
+  return char ?? null;
 };

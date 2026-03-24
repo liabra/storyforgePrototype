@@ -77,6 +77,7 @@ export interface Scene {
 export interface Character {
   id: string;
   storyId: string;
+  userId?: string | null;
   name?: string;
   nickname?: string;
   role?: string;
