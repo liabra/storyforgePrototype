@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as characterService from "../services/character.service";
 import * as participantService from "../services/participant.service";
+import * as storyService from "../services/story.service";
 import { ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
 
@@ -63,6 +64,9 @@ async function assertCharacterAuthor(
 
 export const getByStory = async (req: Request, res: Response) => {
   const storyId = getSingleParam(req.params.storyId);
+  const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+  if (access === "not_found") return res.status(404).json({ error: "Histoire introuvable" });
+  if (access === "forbidden") return res.status(403).json({ error: "Cette histoire est privée" });
   const characters = await characterService.getCharactersByStory(storyId);
   return res.json(characters);
 };

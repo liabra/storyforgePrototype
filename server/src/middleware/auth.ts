@@ -8,6 +8,20 @@ export interface JwtPayload {
   email: string;
 }
 
+/** Decode the token if present but never block the request. */
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction): void => {
+  if (!JWT_SECRET) { next(); return; }
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    const token = header.slice(7);
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+      req.user = { id: payload.userId, email: payload.email };
+    } catch { /* token invalid — proceed as anonymous */ }
+  }
+  next();
+};
+
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
   if (!JWT_SECRET) {
     res.status(500).json({ error: "JWT_SECRET non configuré" });

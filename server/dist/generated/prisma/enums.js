@@ -9,7 +9,7 @@
 * 🟢 You can import this file directly.
 */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SceneMode = exports.ContentStatus = exports.SceneStatus = exports.JoinRequestStatus = exports.ParticipantRole = void 0;
+exports.SceneMode = exports.StoryVisibility = exports.ContentStatus = exports.SceneStatus = exports.JoinRequestStatus = exports.ParticipantRole = void 0;
 exports.ParticipantRole = {
     OWNER: 'OWNER',
     EDITOR: 'EDITOR',
@@ -28,6 +28,10 @@ exports.SceneStatus = {
 exports.ContentStatus = {
     ACTIVE: 'ACTIVE',
     DONE: 'DONE'
+};
+exports.StoryVisibility = {
+    PRIVATE: 'PRIVATE',
+    PUBLIC: 'PUBLIC'
 };
 exports.SceneMode = {
     FREE: 'FREE',

@@ -1061,6 +1061,7 @@ export const StoryScalarFieldEnum = {
   title: 'title',
   description: 'description',
   status: 'status',
+  visibility: 'visibility',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1230,6 +1231,20 @@ export type EnumContentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pr
  * Reference to a field of type 'ContentStatus[]'
  */
 export type ListEnumContentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ContentStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'StoryVisibility'
+ */
+export type EnumStoryVisibilityFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'StoryVisibility'>
+    
+
+
+/**
+ * Reference to a field of type 'StoryVisibility[]'
+ */
+export type ListEnumStoryVisibilityFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'StoryVisibility[]'>
     
 
 

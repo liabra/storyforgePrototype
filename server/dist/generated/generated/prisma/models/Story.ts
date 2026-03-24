@@ -29,6 +29,7 @@ export type StoryMinAggregateOutputType = {
   title: string | null
   description: string | null
   status: $Enums.ContentStatus | null
+  visibility: $Enums.StoryVisibility | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -38,6 +39,7 @@ export type StoryMaxAggregateOutputType = {
   title: string | null
   description: string | null
   status: $Enums.ContentStatus | null
+  visibility: $Enums.StoryVisibility | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -47,6 +49,7 @@ export type StoryCountAggregateOutputType = {
   title: number
   description: number
   status: number
+  visibility: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -58,6 +61,7 @@ export type StoryMinAggregateInputType = {
   title?: true
   description?: true
   status?: true
+  visibility?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -67,6 +71,7 @@ export type StoryMaxAggregateInputType = {
   title?: true
   description?: true
   status?: true
+  visibility?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -76,6 +81,7 @@ export type StoryCountAggregateInputType = {
   title?: true
   description?: true
   status?: true
+  visibility?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -158,6 +164,7 @@ export type StoryGroupByOutputType = {
   title: string
   description: string | null
   status: $Enums.ContentStatus
+  visibility: $Enums.StoryVisibility
   createdAt: Date
   updatedAt: Date
   _count: StoryCountAggregateOutputType | null
@@ -188,6 +195,7 @@ export type StoryWhereInput = {
   title?: Prisma.StringFilter<"Story"> | string
   description?: Prisma.StringNullableFilter<"Story"> | string | null
   status?: Prisma.EnumContentStatusFilter<"Story"> | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFilter<"Story"> | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFilter<"Story"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Story"> | Date | string
   chapters?: Prisma.ChapterListRelationFilter
@@ -201,6 +209,7 @@ export type StoryOrderByWithRelationInput = {
   title?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  visibility?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   chapters?: Prisma.ChapterOrderByRelationAggregateInput
@@ -217,6 +226,7 @@ export type StoryWhereUniqueInput = Prisma.AtLeast<{
   title?: Prisma.StringFilter<"Story"> | string
   description?: Prisma.StringNullableFilter<"Story"> | string | null
   status?: Prisma.EnumContentStatusFilter<"Story"> | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFilter<"Story"> | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFilter<"Story"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Story"> | Date | string
   chapters?: Prisma.ChapterListRelationFilter
@@ -230,6 +240,7 @@ export type StoryOrderByWithAggregationInput = {
   title?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  visibility?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.StoryCountOrderByAggregateInput
@@ -245,6 +256,7 @@ export type StoryScalarWhereWithAggregatesInput = {
   title?: Prisma.StringWithAggregatesFilter<"Story"> | string
   description?: Prisma.StringNullableWithAggregatesFilter<"Story"> | string | null
   status?: Prisma.EnumContentStatusWithAggregatesFilter<"Story"> | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityWithAggregatesFilter<"Story"> | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Story"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Story"> | Date | string
 }
@@ -254,6 +266,7 @@ export type StoryCreateInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterCreateNestedManyWithoutStoryInput
@@ -267,6 +280,7 @@ export type StoryUncheckedCreateInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterUncheckedCreateNestedManyWithoutStoryInput
@@ -280,6 +294,7 @@ export type StoryUpdateInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUpdateManyWithoutStoryNestedInput
@@ -293,6 +308,7 @@ export type StoryUncheckedUpdateInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUncheckedUpdateManyWithoutStoryNestedInput
@@ -306,6 +322,7 @@ export type StoryCreateManyInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -315,6 +332,7 @@ export type StoryUpdateManyMutationInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -324,6 +342,7 @@ export type StoryUncheckedUpdateManyInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -333,6 +352,7 @@ export type StoryCountOrderByAggregateInput = {
   title?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  visibility?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -342,6 +362,7 @@ export type StoryMaxOrderByAggregateInput = {
   title?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  visibility?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -351,6 +372,7 @@ export type StoryMinOrderByAggregateInput = {
   title?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  visibility?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -362,6 +384,10 @@ export type StoryScalarRelationFilter = {
 
 export type EnumContentStatusFieldUpdateOperationsInput = {
   set?: $Enums.ContentStatus
+}
+
+export type EnumStoryVisibilityFieldUpdateOperationsInput = {
+  set?: $Enums.StoryVisibility
 }
 
 export type StoryCreateNestedOneWithoutJoinRequestsInput = {
@@ -425,6 +451,7 @@ export type StoryCreateWithoutJoinRequestsInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterCreateNestedManyWithoutStoryInput
@@ -437,6 +464,7 @@ export type StoryUncheckedCreateWithoutJoinRequestsInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterUncheckedCreateNestedManyWithoutStoryInput
@@ -465,6 +493,7 @@ export type StoryUpdateWithoutJoinRequestsInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUpdateManyWithoutStoryNestedInput
@@ -477,6 +506,7 @@ export type StoryUncheckedUpdateWithoutJoinRequestsInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUncheckedUpdateManyWithoutStoryNestedInput
@@ -489,6 +519,7 @@ export type StoryCreateWithoutParticipantsInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterCreateNestedManyWithoutStoryInput
@@ -501,6 +532,7 @@ export type StoryUncheckedCreateWithoutParticipantsInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterUncheckedCreateNestedManyWithoutStoryInput
@@ -529,6 +561,7 @@ export type StoryUpdateWithoutParticipantsInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUpdateManyWithoutStoryNestedInput
@@ -541,6 +574,7 @@ export type StoryUncheckedUpdateWithoutParticipantsInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUncheckedUpdateManyWithoutStoryNestedInput
@@ -553,6 +587,7 @@ export type StoryCreateWithoutChaptersInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   characters?: Prisma.CharacterCreateNestedManyWithoutStoryInput
@@ -565,6 +600,7 @@ export type StoryUncheckedCreateWithoutChaptersInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   characters?: Prisma.CharacterUncheckedCreateNestedManyWithoutStoryInput
@@ -593,6 +629,7 @@ export type StoryUpdateWithoutChaptersInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   characters?: Prisma.CharacterUpdateManyWithoutStoryNestedInput
@@ -605,6 +642,7 @@ export type StoryUncheckedUpdateWithoutChaptersInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   characters?: Prisma.CharacterUncheckedUpdateManyWithoutStoryNestedInput
@@ -617,6 +655,7 @@ export type StoryCreateWithoutCharactersInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterCreateNestedManyWithoutStoryInput
@@ -629,6 +668,7 @@ export type StoryUncheckedCreateWithoutCharactersInput = {
   title: string
   description?: string | null
   status?: $Enums.ContentStatus
+  visibility?: $Enums.StoryVisibility
   createdAt?: Date | string
   updatedAt?: Date | string
   chapters?: Prisma.ChapterUncheckedCreateNestedManyWithoutStoryInput
@@ -657,6 +697,7 @@ export type StoryUpdateWithoutCharactersInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUpdateManyWithoutStoryNestedInput
@@ -669,6 +710,7 @@ export type StoryUncheckedUpdateWithoutCharactersInput = {
   title?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumContentStatusFieldUpdateOperationsInput | $Enums.ContentStatus
+  visibility?: Prisma.EnumStoryVisibilityFieldUpdateOperationsInput | $Enums.StoryVisibility
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chapters?: Prisma.ChapterUncheckedUpdateManyWithoutStoryNestedInput
@@ -739,6 +781,7 @@ export type StorySelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   title?: boolean
   description?: boolean
   status?: boolean
+  visibility?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   chapters?: boolean | Prisma.Story$chaptersArgs<ExtArgs>
@@ -753,6 +796,7 @@ export type StorySelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   title?: boolean
   description?: boolean
   status?: boolean
+  visibility?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["story"]>
@@ -762,6 +806,7 @@ export type StorySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   title?: boolean
   description?: boolean
   status?: boolean
+  visibility?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["story"]>
@@ -771,11 +816,12 @@ export type StorySelectScalar = {
   title?: boolean
   description?: boolean
   status?: boolean
+  visibility?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type StoryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "description" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["story"]>
+export type StoryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "description" | "status" | "visibility" | "createdAt" | "updatedAt", ExtArgs["result"]["story"]>
 export type StoryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   chapters?: boolean | Prisma.Story$chaptersArgs<ExtArgs>
   characters?: boolean | Prisma.Story$charactersArgs<ExtArgs>
@@ -799,6 +845,7 @@ export type $StoryPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs 
     title: string
     description: string | null
     status: $Enums.ContentStatus
+    visibility: $Enums.StoryVisibility
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["story"]>
@@ -1232,6 +1279,7 @@ export interface StoryFieldRefs {
   readonly title: Prisma.FieldRef<"Story", 'String'>
   readonly description: Prisma.FieldRef<"Story", 'String'>
   readonly status: Prisma.FieldRef<"Story", 'ContentStatus'>
+  readonly visibility: Prisma.FieldRef<"Story", 'StoryVisibility'>
   readonly createdAt: Prisma.FieldRef<"Story", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Story", 'DateTime'>
 }

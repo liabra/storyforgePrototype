@@ -117,6 +117,13 @@ export type EnumContentStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumContentStatusFilter<$PrismaModel> | $Enums.ContentStatus
 }
 
+export type EnumStoryVisibilityFilter<$PrismaModel = never> = {
+  equals?: $Enums.StoryVisibility | Prisma.EnumStoryVisibilityFieldRefInput<$PrismaModel>
+  in?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  notIn?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumStoryVisibilityFilter<$PrismaModel> | $Enums.StoryVisibility
+}
+
 export type EnumContentStatusWithAggregatesFilter<$PrismaModel = never> = {
   equals?: $Enums.ContentStatus | Prisma.EnumContentStatusFieldRefInput<$PrismaModel>
   in?: $Enums.ContentStatus[] | Prisma.ListEnumContentStatusFieldRefInput<$PrismaModel>
@@ -125,6 +132,16 @@ export type EnumContentStatusWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumContentStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumContentStatusFilter<$PrismaModel>
+}
+
+export type EnumStoryVisibilityWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.StoryVisibility | Prisma.EnumStoryVisibilityFieldRefInput<$PrismaModel>
+  in?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  notIn?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumStoryVisibilityWithAggregatesFilter<$PrismaModel> | $Enums.StoryVisibility
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumStoryVisibilityFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumStoryVisibilityFilter<$PrismaModel>
 }
 
 export type EnumJoinRequestStatusFilter<$PrismaModel = never> = {
@@ -338,6 +355,13 @@ export type NestedEnumContentStatusFilter<$PrismaModel = never> = {
   not?: Prisma.NestedEnumContentStatusFilter<$PrismaModel> | $Enums.ContentStatus
 }
 
+export type NestedEnumStoryVisibilityFilter<$PrismaModel = never> = {
+  equals?: $Enums.StoryVisibility | Prisma.EnumStoryVisibilityFieldRefInput<$PrismaModel>
+  in?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  notIn?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumStoryVisibilityFilter<$PrismaModel> | $Enums.StoryVisibility
+}
+
 export type NestedEnumContentStatusWithAggregatesFilter<$PrismaModel = never> = {
   equals?: $Enums.ContentStatus | Prisma.EnumContentStatusFieldRefInput<$PrismaModel>
   in?: $Enums.ContentStatus[] | Prisma.ListEnumContentStatusFieldRefInput<$PrismaModel>
@@ -346,6 +370,16 @@ export type NestedEnumContentStatusWithAggregatesFilter<$PrismaModel = never> = 
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumContentStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumContentStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumStoryVisibilityWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.StoryVisibility | Prisma.EnumStoryVisibilityFieldRefInput<$PrismaModel>
+  in?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  notIn?: $Enums.StoryVisibility[] | Prisma.ListEnumStoryVisibilityFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumStoryVisibilityWithAggregatesFilter<$PrismaModel> | $Enums.StoryVisibility
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumStoryVisibilityFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumStoryVisibilityFilter<$PrismaModel>
 }
 
 export type NestedEnumJoinRequestStatusFilter<$PrismaModel = never> = {

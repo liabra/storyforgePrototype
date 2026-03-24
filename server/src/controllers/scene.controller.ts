@@ -3,6 +3,7 @@ import * as sceneService from "../services/scene.service";
 import * as chapterService from "../services/chapter.service";
 import * as participantService from "../services/participant.service";
 import * as activityService from "../services/activity.service";
+import * as storyService from "../services/story.service";
 import { getIO } from "../socket";
 import { ContentStatus, ParticipantRole, SceneMode } from "../generated/prisma/client";
 import prisma from "../prisma/client";
@@ -34,12 +35,20 @@ async function assertOwner(storyId: string, req: Request, res: Response): Promis
 
 export const getByChapter = async (req: Request, res: Response) => {
   const chapterId = getSingleParam(req.params.chapterId);
+  const storyId = await chapterService.getStoryIdByChapter(chapterId);
+  if (!storyId) return res.status(404).json({ error: "Chapitre introuvable" });
+  const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+  if (access === "forbidden") return res.status(403).json({ error: "Cette histoire est privée" });
   const scenes = await sceneService.getScenesByChapter(chapterId);
   return res.json(scenes);
 };
 
 export const getOne = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
+  const storyId = await participantService.getStoryIdByScene(id);
+  if (!storyId) return res.status(404).json({ error: "Scène introuvable" });
+  const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+  if (access === "forbidden") return res.status(403).json({ error: "Cette histoire est privée" });
   const scene = await sceneService.getSceneWithContributions(id);
   return res.json(scene);
 };

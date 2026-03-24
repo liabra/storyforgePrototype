@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.remove = exports.update = exports.create = exports.getById = exports.getAll = void 0;
+exports.remove = exports.update = exports.create = exports.getById = exports.getAll = exports.getPublic = void 0;
 const storyService = __importStar(require("../services/story.service"));
 const participantService = __importStar(require("../services/participant.service"));
 const client_1 = require("../generated/prisma/client");
@@ -43,6 +43,11 @@ const getSingleParam = (value) => {
         throw new Error("Missing route parameter");
     return Array.isArray(value) ? value[0] : value;
 };
+const getPublic = async (_req, res) => {
+    const stories = await storyService.getPublicStories();
+    return res.json(stories);
+};
+exports.getPublic = getPublic;
 const getAll = async (req, res) => {
     if (req.user) {
         const stories = await storyService.getUserStories(req.user.id);
@@ -57,6 +62,13 @@ const getById = async (req, res) => {
     const story = await storyService.getStoryById(storyId);
     if (!story)
         return res.status(404).json({ error: "Story not found" });
+    if (story.visibility === client_1.StoryVisibility.PRIVATE) {
+        if (!req.user)
+            return res.status(403).json({ error: "Cette histoire est privée" });
+        const role = await participantService.getUserRole(storyId, req.user.id);
+        if (!role)
+            return res.status(403).json({ error: "Cette histoire est privée" });
+    }
     return res.json(story);
 };
 exports.getById = getById;
@@ -79,11 +91,21 @@ const update = async (req, res) => {
     if (req.body.status && !Object.values(client_1.ContentStatus).includes(req.body.status)) {
         return res.status(400).json({ error: "Statut invalide. Utilisez ACTIVE ou DONE." });
     }
+    if (req.body.visibility && !Object.values(client_1.StoryVisibility).includes(req.body.visibility)) {
+        return res.status(400).json({ error: "Visibilité invalide. Utilisez PRIVATE ou PUBLIC." });
+    }
     const story = await storyService.updateStory(storyId, req.body);
+    const io = (0, socket_1.getIO)();
     if (req.body.status !== undefined) {
-        (0, socket_1.getIO)()?.to(`story:${storyId}`).emit("story:statusUpdate", {
+        io?.to(`story:${storyId}`).emit("story:statusUpdate", {
             storyId,
             status: story.status,
+        });
+    }
+    if (req.body.visibility !== undefined) {
+        io?.to(`story:${storyId}`).emit("story:visibilityUpdate", {
+            storyId,
+            visibility: story.visibility,
         });
     }
     return res.json(story);

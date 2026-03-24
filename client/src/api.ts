@@ -12,11 +12,24 @@ export type SceneStatus = "DRAFT" | "ACTIVE" | "DONE";
 
 export type ContentStatus = "ACTIVE" | "DONE";
 
+export type StoryVisibility = "PRIVATE" | "PUBLIC";
+
 export interface Story {
   id: string;
   title: string;
   description?: string;
   status: ContentStatus;
+  visibility: StoryVisibility;
+}
+
+export interface PublicStory {
+  id: string;
+  title: string;
+  description?: string;
+  visibility: StoryVisibility;
+  createdAt: string;
+  updatedAt: string;
+  _count: { chapters: number };
 }
 
 export interface CharacterRef {
@@ -192,10 +205,13 @@ export const api = {
   },
   stories: {
     list: () => request<Story[]>("/stories"),
+    listPublic: () => request<PublicStory[]>("/stories/public"),
     create: (data: { title: string; description?: string }) =>
       request<Story>("/stories", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: string, status: ContentStatus) =>
       request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ status }) }),
+    updateVisibility: (id: string, visibility: StoryVisibility) =>
+      request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ visibility }) }),
   },
   chapters: {
     list: (storyId: string) => request<Chapter[]>(`/stories/${storyId}/chapters`),

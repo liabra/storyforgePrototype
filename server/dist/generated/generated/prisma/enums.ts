@@ -44,6 +44,14 @@ export const ContentStatus = {
 export type ContentStatus = (typeof ContentStatus)[keyof typeof ContentStatus]
 
 
+export const StoryVisibility = {
+  PRIVATE: 'PRIVATE',
+  PUBLIC: 'PUBLIC'
+} as const
+
+export type StoryVisibility = (typeof StoryVisibility)[keyof typeof StoryVisibility]
+
+
 export const SceneMode = {
   FREE: 'FREE',
   TURN: 'TURN'

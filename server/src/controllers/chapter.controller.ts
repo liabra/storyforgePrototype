@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as chapterService from "../services/chapter.service";
 import * as participantService from "../services/participant.service";
 import * as storyService from "../services/story.service";
+
 import { ContentStatus, ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
 
@@ -12,6 +13,9 @@ const getSingleParam = (value: string | string[] | undefined): string => {
 
 export const getByStory = async (req: Request, res: Response) => {
   const storyId = getSingleParam(req.params.storyId);
+  const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+  if (access === "not_found") return res.status(404).json({ error: "Histoire introuvable" });
+  if (access === "forbidden") return res.status(403).json({ error: "Cette histoire est privée" });
   const chapters = await chapterService.getChaptersByStory(storyId);
   return res.json(chapters);
 };

@@ -6,8 +6,8 @@ const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 // Literal avant toute route avec :id
 router.post("/scenes/suggest-idea", auth_1.requireAuth, scene_controller_1.suggestIdea);
-router.get("/chapters/:chapterId/scenes", scene_controller_1.getByChapter);
-router.get("/scenes/:id", scene_controller_1.getOne);
+router.get("/chapters/:chapterId/scenes", auth_1.optionalAuth, scene_controller_1.getByChapter);
+router.get("/scenes/:id", auth_1.optionalAuth, scene_controller_1.getOne);
 router.post("/chapters/:chapterId/scenes", auth_1.requireAuth, scene_controller_1.create);
 router.put("/scenes/:id", auth_1.requireAuth, scene_controller_1.update);
 router.put("/scenes/:id/characters", auth_1.requireAuth, scene_controller_1.updateCharacters);

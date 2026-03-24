@@ -9,15 +9,15 @@ import {
   generateImage,
   suggestIdea,
 } from "../controllers/scene.controller";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, optionalAuth } from "../middleware/auth";
 
 const router = Router();
 
 // Literal avant toute route avec :id
 router.post("/scenes/suggest-idea", requireAuth, suggestIdea);
 
-router.get("/chapters/:chapterId/scenes", getByChapter);
-router.get("/scenes/:id", getOne);
+router.get("/chapters/:chapterId/scenes", optionalAuth, getByChapter);
+router.get("/scenes/:id", optionalAuth, getOne);
 router.post("/chapters/:chapterId/scenes", requireAuth, create);
 router.put("/scenes/:id", requireAuth, update);
 router.put("/scenes/:id/characters", requireAuth, updateCharacters);

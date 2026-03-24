@@ -46,6 +46,11 @@ const getSingleParam = (value) => {
 };
 const getByStory = async (req, res) => {
     const storyId = getSingleParam(req.params.storyId);
+    const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+    if (access === "not_found")
+        return res.status(404).json({ error: "Histoire introuvable" });
+    if (access === "forbidden")
+        return res.status(403).json({ error: "Cette histoire est privée" });
     const chapters = await chapterService.getChaptersByStory(storyId);
     return res.json(chapters);
 };

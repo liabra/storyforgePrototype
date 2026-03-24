@@ -3,6 +3,7 @@ import { api, tokenStore } from "./api";
 import { socket } from "./socket";
 import type {
   Story,
+  PublicStory,
   Chapter,
   ChapterSceneItem,
   Scene,
@@ -14,6 +15,7 @@ import type {
   ContentStatus,
   SceneStatus,
   SceneMode,
+  StoryVisibility,
   AuthUser,
   UserProfileInput,
   Participant,
@@ -240,6 +242,9 @@ export default function App() {
   // Homepage vivante
   const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
   const [storyLastActivity, setStoryLastActivity] = useState<Record<string, number>>({});
+
+  // Histoires publiques (discovery)
+  const [publicStories, setPublicStories] = useState<PublicStory[]>([]);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -637,6 +642,12 @@ export default function App() {
       setStories((p) => p.map((s) => s.id === storyId ? { ...s, status } : s));
     };
 
+    const onStoryVisibilityUpdate = ({ storyId, visibility }: { storyId: string; visibility: StoryVisibility }) => {
+      setSelectedStory((s) => s?.id === storyId ? { ...s, visibility } : s);
+      setStories((p) => p.map((s) => s.id === storyId ? { ...s, visibility } : s));
+      if (visibility === "PRIVATE") setPublicStories((p) => p.filter((s) => s.id !== storyId));
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
@@ -651,6 +662,7 @@ export default function App() {
     socket.on("scene:statusUpdate", onSceneStatusUpdate);
     socket.on("chapter:statusUpdate", onChapterStatusUpdate);
     socket.on("story:statusUpdate", onStoryStatusUpdate);
+    socket.on("story:visibilityUpdate", onStoryVisibilityUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -668,6 +680,7 @@ export default function App() {
       socket.off("scene:statusUpdate", onSceneStatusUpdate);
       socket.off("chapter:statusUpdate", onChapterStatusUpdate);
       socket.off("story:statusUpdate", onStoryStatusUpdate);
+      socket.off("story:visibilityUpdate", onStoryVisibilityUpdate);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -689,6 +702,11 @@ export default function App() {
       .then((data) => { setStories(data); setStoriesLoaded(true); })
       .catch(() => setError("Impossible de charger les histoires."));
   }, [currentUser]);
+
+  // ── Load public stories (toujours, connecté ou non)
+  useEffect(() => {
+    api.stories.listPublic().then(setPublicStories).catch(() => {});
+  }, []);
 
   // ── Load activity feed (seed initial)
   useEffect(() => {
@@ -793,15 +811,15 @@ export default function App() {
     setMyRole(null);
     setJoinRequests([]);
     setMyJoinRequest(null);
-    const [chapterData, charData, participantData] = await Promise.all([
+    const [chapterData, charData] = await Promise.all([
       api.chapters.list(story.id),
       api.characters.list(story.id),
-      api.participants.list(story.id),
     ]);
     setChapters(chapterData);
     setCharacters(charData);
-    setParticipants(participantData);
     if (currentUser) {
+      const participantData = await api.participants.list(story.id);
+      setParticipants(participantData);
       const mine = participantData.find((p) => p.userId === currentUser.id);
       const role = mine?.role ?? null;
       setMyRole(role);
@@ -1114,6 +1132,22 @@ export default function App() {
     const label = updated.status === "DONE"
       ? `Histoire "${selectedStory.title}" terminée`
       : `Histoire "${selectedStory.title}" réouverte`;
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
+    });
+  };
+
+  // ── Toggle story visibility (OWNER)
+  const handleToggleVisibility = async () => {
+    if (!selectedStory) return;
+    const newVis: StoryVisibility = selectedStory.visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC";
+    const updated = await api.stories.updateVisibility(selectedStory.id, newVis);
+    setSelectedStory((s) => s ? { ...s, visibility: updated.visibility } : s);
+    setStories((p) => p.map((s) => s.id === updated.id ? { ...s, visibility: updated.visibility } : s));
+    // Rafraîchir la liste publique depuis le serveur
+    api.stories.listPublic().then(setPublicStories).catch(() => {});
+    const label = updated.visibility === "PUBLIC" ? `Histoire rendue publique` : `Histoire rendue privée`;
     setToasts((prev) => {
       const id = ++toastIdRef.current;
       return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
@@ -1581,8 +1615,13 @@ export default function App() {
               return (
                 <li key={story.id} style={{ ...s.storyItem, ...(active ? s.storyItemActive : {}) }} className={`story-item${active ? " is-active" : ""}`} onClick={() => handleSelectStory(story)}>
                   <div style={s.storyItemDot}>{active ? "▶" : "○"}</div>
-                  <div>
-                    <div style={s.storyItemTitle}>{story.title}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <div style={s.storyItemTitle}>{story.title}</div>
+                      {story.visibility === "PUBLIC" && (
+                        <span style={{ fontSize: "0.65rem", color: "#2a6a2a", background: "rgba(20,80,20,0.10)", border: "1px solid rgba(20,80,20,0.2)", borderRadius: 3, padding: "0 0.3rem", flexShrink: 0 }}>Public</span>
+                      )}
+                    </div>
                     {story.description && <div style={s.storyItemDesc}>{story.description}</div>}
                   </div>
                 </li>
@@ -1597,15 +1636,37 @@ export default function App() {
         {/* ══ Main */}
         <main style={s.main} className="app-main">
 
-          {/* ── Aucune histoire sélectionnée */}
+          {/* ── Aucune histoire sélectionnée — visiteur non connecté */}
           {!selectedStory && !currentUser && (
-            <div style={s.emptyState}>
-              <div style={s.emptyOrn} className="empty-orn">✦</div>
-              <p style={s.emptyTitle}>StoryForge</p>
-              <p style={s.emptyText}>
-                Chaque grande histoire commence<br />par une ligne.<br /><br />
-                Ouvre le menu pour choisir une histoire,<br />ou crée-en une nouvelle.
-              </p>
+            <div style={s.homepage}>
+              <div style={s.homepageHead}>
+                <div style={s.emptyOrn} className="empty-orn">✦</div>
+                <p style={s.emptyTitle}>StoryForge</p>
+                <p style={{ ...s.emptyText, marginTop: "0.5rem" }}>
+                  Écriture collaborative en temps réel.<br />
+                  <button style={{ background: "none", border: "none", color: C.accent, textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={() => setAuthView("login")}>Se connecter</button>
+                  {" "}pour créer ou rejoindre une histoire.
+                </p>
+              </div>
+              {publicStories.length > 0 && (
+                <div style={s.homepageSection}>
+                  <p style={s.homepageSectionLabel}>Histoires publiques</p>
+                  <div>
+                    {publicStories.map((story) => (
+                      <div key={story.id} style={s.homepageStoryRow} className="story-item" onClick={() => handleSelectStory(story as unknown as Story)}>
+                        <div style={{ flex: 1 }}>
+                          <div style={s.homepageStoryTitle}>{story.title}</div>
+                          {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
+                          <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2 }}>
+                            {story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}
+                          </div>
+                        </div>
+                        <span style={{ ...s.chapterArrow, marginTop: 0 }}>→</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1670,6 +1731,32 @@ export default function App() {
                 </div>
               )}
 
+              {/* Histoires publiques auxquelles l'utilisateur n'appartient pas */}
+              {(() => {
+                const myIds = new Set(stories.map((s) => s.id));
+                const discoverable = publicStories.filter((s) => !myIds.has(s.id));
+                if (discoverable.length === 0) return null;
+                return (
+                  <div style={s.homepageSection}>
+                    <p style={s.homepageSectionLabel}>Histoires publiques</p>
+                    <div>
+                      {discoverable.map((story) => (
+                        <div key={story.id} style={s.homepageStoryRow} className="story-item" onClick={() => handleSelectStory(story as unknown as Story)}>
+                          <div style={{ flex: 1 }}>
+                            <div style={s.homepageStoryTitle}>{story.title}</div>
+                            {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
+                            <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2 }}>
+                              {story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                          <span style={{ ...s.chapterArrow, marginTop: 0 }}>→</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Fallback si aucune activité */}
               {activityFeed.length === 0 && stories.length === 0 && (
                 <p style={s.emptyText}>
@@ -1686,18 +1773,31 @@ export default function App() {
               <div style={s.pageHeader}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
                   <h1 style={{ ...s.pageTitle, margin: 0 }} className="app-page-title">{selectedStory.title}</h1>
+                  {selectedStory.visibility === "PUBLIC" && (
+                    <span style={{ ...s.statusBadge, background: "rgba(20,80,20,0.10)", color: "#2a6a2a", border: "1px solid rgba(20,80,20,0.25)", fontSize: "0.7rem" }}>
+                      Public
+                    </span>
+                  )}
                   {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" && (
                     <span style={{ ...s.statusBadge, background: "rgba(75,35,5,0.12)", color: C.textMuted, border: `1px solid ${C.border}`, fontSize: "0.7rem" }}>
-                      Histoire terminée
+                      Terminée
                     </span>
                   )}
                   {myRole === "OWNER" && (
-                    <button
-                      style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem", marginLeft: "auto" }}
-                      onClick={handleToggleStoryStatus}
-                    >
-                      {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? "Réouvrir l'histoire" : "Terminer l'histoire"}
-                    </button>
+                    <div style={{ display: "flex", gap: "0.4rem", marginLeft: "auto" }}>
+                      <button
+                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                        onClick={handleToggleVisibility}
+                      >
+                        {selectedStory.visibility === "PUBLIC" ? "Rendre privée" : "Rendre publique"}
+                      </button>
+                      <button
+                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                        onClick={handleToggleStoryStatus}
+                      >
+                        {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? "Réouvrir l'histoire" : "Terminer l'histoire"}
+                      </button>
+                    </div>
                   )}
                 </div>
                 {selectedStory.description && <p style={s.pageDesc}>{selectedStory.description}</p>}

@@ -39,6 +39,7 @@ model Story {
   title        String
   description  String?
   status       ContentStatus        @default(ACTIVE)
+  visibility   StoryVisibility      @default(PRIVATE)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   chapters     Chapter[]
@@ -94,6 +95,11 @@ enum SceneStatus {
 enum ContentStatus {
   ACTIVE
   DONE
+}
+
+enum StoryVisibility {
+  PRIVATE
+  PUBLIC
 }
 
 enum SceneMode {

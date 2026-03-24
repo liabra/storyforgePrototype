@@ -108,6 +108,7 @@ exports.StoryScalarFieldEnum = {
     title: 'title',
     description: 'description',
     status: 'status',
+    visibility: 'visibility',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
 };

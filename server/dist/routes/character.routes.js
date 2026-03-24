@@ -4,7 +4,7 @@ const express_1 = require("express");
 const character_controller_1 = require("../controllers/character.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-router.get("/stories/:storyId/characters", character_controller_1.getByStory);
+router.get("/stories/:storyId/characters", auth_1.optionalAuth, character_controller_1.getByStory);
 router.post("/stories/:storyId/characters", auth_1.requireAuth, character_controller_1.create);
 router.put("/characters/:id", auth_1.requireAuth, character_controller_1.update);
 router.delete("/characters/:id", auth_1.requireAuth, character_controller_1.remove);

@@ -1,5 +1,5 @@
 import prisma from "../prisma/client";
-import { ContentStatus, ParticipantRole } from "../generated/prisma/client";
+import { ContentStatus, ParticipantRole, StoryVisibility } from "../generated/prisma/client";
 
 export const getUserStories = (userId: string) =>
   prisma.story.findMany({
@@ -26,8 +26,23 @@ export const createStory = async (data: { title: string; description?: string },
 
 export const updateStory = (
   id: string,
-  data: { title?: string; description?: string; status?: ContentStatus }
+  data: { title?: string; description?: string; status?: ContentStatus; visibility?: StoryVisibility }
 ) => prisma.story.update({ where: { id }, data });
+
+export const getPublicStories = () =>
+  prisma.story.findMany({
+    where: { visibility: StoryVisibility.PUBLIC },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      visibility: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { chapters: true } },
+    },
+  });
 
 export const deleteStory = (id: string) =>
   prisma.story.delete({ where: { id } });
@@ -35,4 +50,29 @@ export const deleteStory = (id: string) =>
 export const getStoryStatus = async (storyId: string): Promise<ContentStatus | null> => {
   const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true } });
   return story?.status ?? null;
+};
+
+/**
+ * Vérifie qu'un utilisateur peut lire une histoire.
+ * - PUBLIC → toujours autorisé
+ * - PRIVATE → requiert un userId valide et une participation active
+ */
+export const checkStoryReadAccess = async (
+  storyId: string,
+  userId: string | undefined
+): Promise<"ok" | "not_found" | "forbidden"> => {
+  const story = await prisma.story.findUnique({
+    where: { id: storyId },
+    select: { visibility: true },
+  });
+  if (!story) return "not_found";
+  if (story.visibility === StoryVisibility.PRIVATE) {
+    if (!userId) return "forbidden";
+    const participant = await prisma.storyParticipant.findUnique({
+      where: { storyId_userId: { storyId, userId } },
+      select: { id: true },
+    });
+    if (!participant) return "forbidden";
+  }
+  return "ok";
 };

@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.remove = exports.update = exports.create = exports.getByStory = void 0;
 const characterService = __importStar(require("../services/character.service"));
 const participantService = __importStar(require("../services/participant.service"));
+const storyService = __importStar(require("../services/story.service"));
 const client_1 = require("../generated/prisma/client");
 const socket_1 = require("../socket");
 const getSingleParam = (value) => {
@@ -88,6 +89,11 @@ async function assertCharacterAuthor(characterId, req, res) {
 }
 const getByStory = async (req, res) => {
     const storyId = getSingleParam(req.params.storyId);
+    const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+    if (access === "not_found")
+        return res.status(404).json({ error: "Histoire introuvable" });
+    if (access === "forbidden")
+        return res.status(403).json({ error: "Cette histoire est privée" });
     const characters = await characterService.getCharactersByStory(storyId);
     return res.json(characters);
 };
