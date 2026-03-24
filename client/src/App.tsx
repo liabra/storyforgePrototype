@@ -275,6 +275,19 @@ export default function App() {
   useEffect(() => { contribContentRef.current = contribContent; }, [contribContent]);
   useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
 
+  // ── Restauration de brouillon après changement de scène ou de rôle
+  // S'exécute après que selectedScene ET myRole sont tous deux committés dans le DOM,
+  // ce qui garantit que le rôle est à jour même après refresh (où setMyRole est asynchrone).
+  useEffect(() => {
+    if (!selectedScene || !currentUser || myRole !== "VIEWER") return;
+    const draftKey = `sf_draft_${currentUser.id}_${selectedScene.id}`;
+    const savedDraft = localStorage.getItem(draftKey);
+    if (!savedDraft) return;
+    setContribContent(savedDraft);
+    setRoleDowngradeDraft(savedDraft);
+    setRoleDowngradeAlert(true);
+  }, [selectedScene?.id, myRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Socket : connexion liée à l'authentification
   useEffect(() => {
     if (!currentUser) return;
@@ -695,6 +708,8 @@ export default function App() {
           setShowSettings(false);
           setShowCharSelect(false);
           setSuggestion(null);
+          setRoleDowngradeAlert(false);
+          setRoleDowngradeDraft(null);
           setContribContent("");
           setContribCharId(charData[0]?.id ?? "");
         }).catch(() => { /* scène supprimée ou inaccessible */ });
@@ -764,17 +779,7 @@ export default function App() {
     setSuggestion(null);
     setRoleDowngradeAlert(false);
     setRoleDowngradeDraft(null);
-
-    // Restaurer un brouillon sauvegardé si l'utilisateur est VIEWER (ex : après refresh)
-    const draftKey = `sf_draft_${currentUser?.id}_${sceneId}`;
-    const savedDraft = localStorage.getItem(draftKey);
-    if (savedDraft && myRoleRef.current === "VIEWER") {
-      setContribContent(savedDraft);
-      setRoleDowngradeDraft(savedDraft);
-      setRoleDowngradeAlert(true);
-    } else {
-      setContribContent("");
-    }
+    setContribContent("");
     setContribCharId(characters[0]?.id ?? "");
   };
 
