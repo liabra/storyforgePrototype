@@ -118,6 +118,16 @@ export const updateCharacters = async (req: Request, res: Response) => {
   if (!await assertEditorOrOwner(storyId, req, res)) return;
 
   const scene = await sceneService.updateSceneCharacters(id, characterIds);
+
+  // Diffuse à tous les participants de l'histoire (vue scène + vue chapitre)
+  const io = getIO();
+  if (io) {
+    io.to(`story:${storyId}`).emit("scene:characters:update", {
+      sceneId: id,
+      characters: scene.characters,
+    });
+  }
+
   return res.json(scene);
 };
 

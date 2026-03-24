@@ -536,6 +536,16 @@ export default function App() {
       setExpandedCharId((prev) => prev === id ? null : prev);
     };
 
+    const onSceneCharactersUpdate = ({ sceneId, characters }: { sceneId: string; characters: CharacterRef[] }) => {
+      // Met à jour la scène ouverte si c'est la bonne
+      setSelectedScene((s) => s?.id === sceneId ? { ...s, characters } : s);
+      // Met à jour la liste de scènes dans la vue chapitre
+      setChapters((prev) => prev.map((ch) => ({
+        ...ch,
+        scenes: ch.scenes.map((sc) => sc.id === sceneId ? { ...sc, characters } : sc),
+      })));
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
@@ -543,6 +553,7 @@ export default function App() {
     socket.on("character:new", onCharacterNew);
     socket.on("character:update", onCharacterUpdate);
     socket.on("character:delete", onCharacterDelete);
+    socket.on("scene:characters:update", onSceneCharactersUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -553,6 +564,7 @@ export default function App() {
       socket.off("character:new", onCharacterNew);
       socket.off("character:update", onCharacterUpdate);
       socket.off("character:delete", onCharacterDelete);
+      socket.off("scene:characters:update", onSceneCharactersUpdate);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -1945,19 +1957,21 @@ export default function App() {
                         </div>
                       );
                     })}
-                    <button style={s.btnMicro} onClick={() => setShowCharSelect((v) => !v)}>
-                      {showCharSelect ? "Fermer" : "✏️ Modifier"}
-                    </button>
+                    {(myRole === "OWNER" || myRole === "EDITOR") && (
+                      <button style={s.btnMicro} onClick={() => setShowCharSelect((v) => !v)}>
+                        {showCharSelect ? "Fermer" : "✏️ Modifier"}
+                      </button>
+                    )}
                   </div>
                 )}
-                {selectedScene.characters.length === 0 && (
+                {selectedScene.characters.length === 0 && (myRole === "OWNER" || myRole === "EDITOR") && (
                   <button style={s.addPersonnageBtn} onClick={() => setShowCharSelect((v) => !v)}>
                     + Ajouter des personnages à cette scène
                   </button>
                 )}
 
-                {/* Sélection personnages */}
-                {showCharSelect && (
+                {/* Sélection personnages — OWNER/EDITOR uniquement */}
+                {showCharSelect && (myRole === "OWNER" || myRole === "EDITOR") && (
                   <div style={s.charSelectBox}>
                     <p style={s.charSelectTitle}>Personnages présents dans cette scène</p>
                     <div style={s.charCheckList}>
