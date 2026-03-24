@@ -1150,6 +1150,16 @@ export default function App() {
   const crumbChapter = selectedChapter?.title ?? null;
   const crumbScene = selectedScene?.title ?? null;
 
+  // Navigation précédente / suivante dans le chapitre courant
+  const sortedScenes = selectedChapter
+    ? [...selectedChapter.scenes].sort((a, b) => a.order - b.order)
+    : [];
+  const sceneNavIndex = selectedScene
+    ? sortedScenes.findIndex((sc) => sc.id === selectedScene.id)
+    : -1;
+  const prevScene = sceneNavIndex > 0 ? sortedScenes[sceneNavIndex - 1] : null;
+  const nextScene = sceneNavIndex < sortedScenes.length - 1 ? sortedScenes[sceneNavIndex + 1] : null;
+
   return (
     <div style={s.root}>
       <div style={s.sealTL} className="app-seal-tl" aria-hidden="true">✦</div>
@@ -1933,7 +1943,29 @@ export default function App() {
 
               {/* Header scène */}
               <div style={s.sceneViewHeader}>
-                <button style={s.backBtn} onClick={() => setSelectedScene(null)}>← Scènes</button>
+                {/* Barre de navigation : retour + précédente/suivante */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: "0.9rem" }}>
+                  <button style={{ ...s.backBtn, padding: 0 }} onClick={() => setSelectedScene(null)}>← Scènes</button>
+                  {sortedScenes.length > 1 && (
+                    <div style={{ display: "flex", gap: "0.75rem" }}>
+                      <button
+                        style={{ ...s.backBtn, padding: 0, ...(prevScene ? {} : { opacity: 0.3, pointerEvents: "none" as const }) }}
+                        onClick={() => prevScene && handleSelectScene(prevScene.id)}
+                        disabled={!prevScene}
+                      >
+                        ‹ Précédente
+                      </button>
+                      <span style={{ color: "rgba(75,35,5,0.2)", fontSize: "0.7rem", alignSelf: "center" }}>|</span>
+                      <button
+                        style={{ ...s.backBtn, padding: 0, ...(nextScene ? {} : { opacity: 0.3, pointerEvents: "none" as const }) }}
+                        onClick={() => nextScene && handleSelectScene(nextScene.id)}
+                        disabled={!nextScene}
+                      >
+                        Suivante ›
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div style={s.sceneChapterLabel}>
                   Chapitre {selectedChapter.order} — {selectedChapter.title}
                 </div>
@@ -2215,6 +2247,29 @@ export default function App() {
                   </div>
 
                   <p style={s.writeHint}>⌘↵ ou Ctrl+↵ pour envoyer</p>
+                </div>
+              )}
+
+              {/* ── Navigation bas de page */}
+              {sortedScenes.length > 1 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "1.25rem", borderTop: "1px solid rgba(75,35,5,0.12)" }}>
+                  <button
+                    style={{ ...s.btnGhost, ...(prevScene ? {} : { opacity: 0.3, pointerEvents: "none" as const }) }}
+                    onClick={() => prevScene && handleSelectScene(prevScene.id)}
+                    disabled={!prevScene}
+                  >
+                    ← {prevScene?.title ?? ""}
+                  </button>
+                  <span style={{ fontSize: "0.68rem", color: C.textMuted, fontFamily: C.ui, letterSpacing: "0.08em" }}>
+                    {sceneNavIndex + 1} / {sortedScenes.length}
+                  </span>
+                  <button
+                    style={{ ...s.btnGhost, ...(nextScene ? {} : { opacity: 0.3, pointerEvents: "none" as const }) }}
+                    onClick={() => nextScene && handleSelectScene(nextScene.id)}
+                    disabled={!nextScene}
+                  >
+                    {nextScene?.title ?? ""} →
+                  </button>
                 </div>
               )}
 
