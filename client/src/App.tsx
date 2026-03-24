@@ -8,6 +8,7 @@ import type {
   Scene,
   Contribution,
   Character,
+  CharacterRef,
   CharacterFull,
   CharacterInput,
   SceneStatus,
