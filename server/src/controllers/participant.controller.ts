@@ -80,6 +80,13 @@ export const updateRole = async (req: Request, res: Response): Promise<void> => 
   try {
     const participant = await participantService.updateRole(storyId, userId, role as ParticipantRole);
     res.json(participant);
+
+    const io = getIO();
+    if (io) {
+      const payload = { userId, storyId, role: role as string };
+      io.to(`story:${storyId}`).emit("participant:update", payload);
+      io.to(`user:${userId}`).emit("participant:update", payload);
+    }
   } catch (err: unknown) {
     res.status(500).json({ error: (err as Error).message });
   }

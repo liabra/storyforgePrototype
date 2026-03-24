@@ -369,6 +369,16 @@ export default function App() {
       if (userId === currentUser.id) {
         setMyRole(role);
         setMyJoinRequest((prev) => prev ? { ...prev, status: "ACCEPTED" } : prev);
+        if (role === "VIEWER") {
+          setToasts((prev) => {
+            const id = ++toastIdRef.current;
+            return [...prev, {
+              id,
+              type: "contribution" as const,
+              message: "Votre rôle a changé. Vous êtes maintenant en lecture seule. Pensez à sauvegarder votre texte.",
+            }].slice(-5);
+          });
+        }
       }
     };
 
