@@ -181,6 +181,10 @@ export default function App() {
   // Contributions
   const [contribContent, setContribContent] = useState("");
   const [contribCharId, setContribCharId] = useState<string>("");
+  const [roleDowngradeAlert, setRoleDowngradeAlert] = useState(false);
+  const [roleDowngradeDraft, setRoleDowngradeDraft] = useState<string | null>(null);
+  const contribContentRef = useRef("");
+  const myRoleRef = useRef<ParticipantRole | null>(null);
   const [submittingContrib, setSubmittingContrib] = useState(false);
   const [editingContribId, setEditingContribId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -267,6 +271,9 @@ export default function App() {
   useEffect(() => {
     selectedSceneIdRef.current = selectedScene?.id ?? null;
   }, [selectedScene?.id]);
+
+  useEffect(() => { contribContentRef.current = contribContent; }, [contribContent]);
+  useEffect(() => { myRoleRef.current = myRole; }, [myRole]);
 
   // ── Socket : connexion liée à l'authentification
   useEffect(() => {
@@ -367,17 +374,32 @@ export default function App() {
 
       // Mise à jour du rôle personnel si c'est notre propre userId
       if (userId === currentUser.id) {
+        const prevRole = myRoleRef.current;
         setMyRole(role);
         setMyJoinRequest((prev) => prev ? { ...prev, status: "ACCEPTED" } : prev);
-        if (role === "VIEWER") {
-          setToasts((prev) => {
-            const id = ++toastIdRef.current;
-            return [...prev, {
-              id,
-              type: "contribution" as const,
-              message: "Votre rôle a changé. Vous êtes maintenant en lecture seule. Pensez à sauvegarder votre texte.",
-            }].slice(-5);
-          });
+
+        if (role === "VIEWER" && prevRole !== "VIEWER") {
+          // Downgrade EDITOR → VIEWER : sauvegarder le brouillon en cours
+          const sceneId = selectedSceneIdRef.current;
+          const draft = contribContentRef.current.trim();
+          if (sceneId && draft) {
+            localStorage.setItem(`sf_draft_${currentUser.id}_${sceneId}`, draft);
+            setRoleDowngradeDraft(draft);
+          } else {
+            setRoleDowngradeDraft(null);
+          }
+          setRoleDowngradeAlert(true);
+        } else if (role !== "VIEWER" && prevRole === "VIEWER") {
+          // Upgrade VIEWER → EDITOR : restaurer le brouillon si la zone est vide
+          setRoleDowngradeAlert(false);
+          const sceneId = selectedSceneIdRef.current;
+          if (sceneId) {
+            const saved = localStorage.getItem(`sf_draft_${currentUser.id}_${sceneId}`);
+            if (saved && !contribContentRef.current.trim()) {
+              setContribContent(saved);
+              setRoleDowngradeDraft(saved);
+            }
+          }
         }
       }
     };
@@ -740,7 +762,19 @@ export default function App() {
     setShowSettings(false);
     setShowCharSelect(false);
     setSuggestion(null);
-    setContribContent("");
+    setRoleDowngradeAlert(false);
+    setRoleDowngradeDraft(null);
+
+    // Restaurer un brouillon sauvegardé si l'utilisateur est VIEWER (ex : après refresh)
+    const draftKey = `sf_draft_${currentUser?.id}_${sceneId}`;
+    const savedDraft = localStorage.getItem(draftKey);
+    if (savedDraft && myRoleRef.current === "VIEWER") {
+      setContribContent(savedDraft);
+      setRoleDowngradeDraft(savedDraft);
+      setRoleDowngradeAlert(true);
+    } else {
+      setContribContent("");
+    }
     setContribCharId(characters[0]?.id ?? "");
   };
 
@@ -2194,8 +2228,62 @@ export default function App() {
                 {typingLabel(typingUsers)}
               </p>
 
-              {/* ── Bandeau lecture seule */}
-              {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && (
+              {/* ── Alerte changement de rôle (downgrade en direct ou après refresh) */}
+              {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && roleDowngradeAlert && (
+                <div style={{ padding: "1rem 1.1rem", background: "rgba(180,60,20,0.07)", border: "1.5px solid rgba(180,60,20,0.3)", borderRadius: 8, color: "#8b3a0f", fontSize: "0.9rem" }}>
+                  <p style={{ margin: "0 0 0.4rem", fontWeight: 600 }}>Votre rôle a changé — vous êtes maintenant en lecture seule.</p>
+                  {roleDowngradeDraft ? (
+                    <>
+                      <p style={{ margin: "0 0 0.6rem", fontSize: "0.85rem", opacity: 0.85 }}>Votre texte a été conservé temporairement pour éviter toute perte.</p>
+                      <textarea
+                        readOnly
+                        value={roleDowngradeDraft}
+                        rows={4}
+                        style={{ width: "100%", boxSizing: "border-box", resize: "vertical", padding: "0.5rem 0.6rem", borderRadius: 5, border: "1px solid rgba(180,60,20,0.25)", background: "rgba(180,60,20,0.04)", color: "inherit", fontSize: "0.88rem", fontFamily: "inherit", marginBottom: "0.75rem" }}
+                      />
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <button
+                          style={{ padding: "0.35rem 0.9rem", borderRadius: 5, border: "1px solid rgba(180,60,20,0.35)", background: "transparent", color: "#8b3a0f", cursor: "pointer", fontSize: "0.85rem" }}
+                          onClick={() => { navigator.clipboard.writeText(roleDowngradeDraft ?? ""); }}
+                        >
+                          Copier le texte
+                        </button>
+                        <button
+                          style={{ padding: "0.35rem 0.9rem", borderRadius: 5, border: "none", background: "rgba(180,60,20,0.12)", color: "#8b3a0f", cursor: "pointer", fontSize: "0.85rem" }}
+                          onClick={() => {
+                            const blob = new Blob([roleDowngradeDraft ?? ""], { type: "text/plain" });
+                            const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+                            a.download = `brouillon-scene-${selectedScene.id}.txt`; a.click();
+                          }}
+                        >
+                          Télécharger
+                        </button>
+                        <button
+                          style={{ padding: "0.35rem 0.9rem", borderRadius: 5, border: "none", background: "transparent", color: "#8b3a0f", cursor: "pointer", fontSize: "0.85rem", marginLeft: "auto", opacity: 0.7 }}
+                          onClick={() => {
+                            setRoleDowngradeAlert(false);
+                            localStorage.removeItem(`sf_draft_${currentUser?.id}_${selectedScene.id}`);
+                            setRoleDowngradeDraft(null);
+                            setContribContent("");
+                          }}
+                        >
+                          J'ai compris ✕
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      style={{ padding: "0.35rem 0.9rem", borderRadius: 5, border: "none", background: "transparent", color: "#8b3a0f", cursor: "pointer", fontSize: "0.85rem", opacity: 0.7, paddingLeft: 0 }}
+                      onClick={() => setRoleDowngradeAlert(false)}
+                    >
+                      J'ai compris ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* ── Bandeau lecture seule (sans alerte active) */}
+              {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && !roleDowngradeAlert && (
                 <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", textAlign: "center" }}>
                   {myJoinRequest?.status === "PENDING" ? (
                     "Ta demande est en attente de validation par le propriétaire."
