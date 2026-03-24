@@ -523,10 +523,26 @@ export default function App() {
       setAllScenePresence(snapshot);
     };
 
+    const onCharacterNew = (char: Character) => {
+      setCharacters((prev) => prev.some((c) => c.id === char.id) ? prev : [...prev, char]);
+    };
+
+    const onCharacterUpdate = (char: Character) => {
+      setCharacters((prev) => prev.map((c) => c.id === char.id ? char : c));
+    };
+
+    const onCharacterDelete = ({ id }: { id: string }) => {
+      setCharacters((prev) => prev.filter((c) => c.id !== id));
+      setExpandedCharId((prev) => prev === id ? null : prev);
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
     socket.on("story:presence:snapshot", onStoryPresenceSnapshot);
+    socket.on("character:new", onCharacterNew);
+    socket.on("character:update", onCharacterUpdate);
+    socket.on("character:delete", onCharacterDelete);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -534,6 +550,9 @@ export default function App() {
       socket.off("scene:new", onSceneNew);
       socket.off("scene:presence:update", onScenePresenceUpdate);
       socket.off("story:presence:snapshot", onStoryPresenceSnapshot);
+      socket.off("character:new", onCharacterNew);
+      socket.off("character:update", onCharacterUpdate);
+      socket.off("character:delete", onCharacterDelete);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -1579,6 +1598,11 @@ export default function App() {
                                 )}
                               </div>
                               {char.shortDescription && <p style={s.charDesc}>{char.shortDescription}</p>}
+                              {char.user && (
+                                <p style={{ fontSize: "0.7rem", color: C.textMuted, margin: "0.25rem 0 0", fontStyle: "italic" }}>
+                                  Créé par {char.user.displayName || char.user.email.split("@")[0]}
+                                </p>
+                              )}
                             </div>
                             <div style={s.charActions}>
                               <button style={s.btnMicro} onClick={() => {

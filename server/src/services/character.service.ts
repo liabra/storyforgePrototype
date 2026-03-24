@@ -14,23 +14,36 @@ export type CharacterData = {
   visualNotes?: string;
 };
 
+/** Include commun : scènes + auteur. */
+const characterInclude = {
+  scenes: {
+    select: { id: true, title: true, order: true, status: true } as const,
+    orderBy: { order: "asc" } as const,
+  },
+  user: {
+    select: { id: true, displayName: true, email: true } as const,
+  },
+};
+
 export const getCharactersByStory = (storyId: string) =>
   prisma.character.findMany({
     where: { storyId },
     orderBy: { createdAt: "asc" },
-    include: {
-      scenes: {
-        select: { id: true, title: true, order: true, status: true },
-        orderBy: { order: "asc" },
-      },
-    },
+    include: characterInclude,
   });
 
 export const createCharacter = (storyId: string, userId: string, data: CharacterData) =>
-  prisma.character.create({ data: { ...data, storyId, userId } });
+  prisma.character.create({
+    data: { ...data, storyId, userId },
+    include: characterInclude,
+  });
 
 export const updateCharacter = (id: string, data: CharacterData) =>
-  prisma.character.update({ where: { id }, data });
+  prisma.character.update({
+    where: { id },
+    data,
+    include: characterInclude,
+  });
 
 export const deleteCharacter = (id: string) =>
   prisma.character.delete({ where: { id } });
