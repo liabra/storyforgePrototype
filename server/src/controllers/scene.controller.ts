@@ -96,14 +96,23 @@ export const update = async (req: Request, res: Response) => {
   }
 
   const scene = await sceneService.updateScene(id, updateData);
+  const io = getIO();
 
   // Émettre turn:update si le mode ou le tour a changé
   if (updateData.mode !== undefined) {
-    const io = getIO();
     io?.to(`story:${storyId}`).emit("turn:update", {
       sceneId: id,
       mode: scene.mode,
       currentTurnUserId: scene.currentTurnUserId,
+    });
+  }
+
+  // Émettre scene:statusUpdate si le statut a changé
+  if (updateData.status !== undefined) {
+    io?.to(`story:${storyId}`).emit("scene:statusUpdate", {
+      sceneId: id,
+      chapterId: scene.chapterId,
+      status: scene.status,
     });
   }
 
@@ -113,11 +122,17 @@ export const update = async (req: Request, res: Response) => {
 export const remove = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
 
-  const storyId = await participantService.getStoryIdByScene(id);
-  if (!storyId) return res.status(404).json({ error: "Scène introuvable" });
+  const scene = await prisma.scene.findUnique({
+    where: { id },
+    select: { chapterId: true, chapter: { select: { storyId: true } } },
+  });
+  if (!scene) return res.status(404).json({ error: "Scène introuvable" });
+  const storyId = scene.chapter.storyId;
   if (!await assertOwner(storyId, req, res)) return;
 
   await sceneService.deleteScene(id);
+  const io = getIO();
+  io?.to(`story:${storyId}`).emit("scene:delete", { sceneId: id, chapterId: scene.chapterId });
   return res.status(204).send();
 };
 

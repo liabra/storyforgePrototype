@@ -1,5 +1,5 @@
 import prisma from "../prisma/client";
-import { ParticipantRole } from "../generated/prisma/client";
+import { ContentStatus, ParticipantRole } from "../generated/prisma/client";
 
 export const getUserStories = (userId: string) =>
   prisma.story.findMany({
@@ -26,7 +26,7 @@ export const createStory = async (data: { title: string; description?: string },
 
 export const updateStory = (
   id: string,
-  data: { title?: string; description?: string }
+  data: { title?: string; description?: string; status?: ContentStatus }
 ) => prisma.story.update({ where: { id }, data });
 
 export const deleteStory = (id: string) =>

@@ -102,15 +102,30 @@ export const create = async (req: Request, res: Response) => {
 
 export const remove = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
+
   const contrib = await prisma.contribution.findUnique({
     where: { id },
-    select: { sceneId: true },
+    select: {
+      sceneId: true,
+      userId: true,
+      scene: { select: { chapter: { select: { storyId: true } } } },
+    },
   });
-  await contributionService.deleteContribution(id);
-  if (contrib) {
-    const io = getIO();
-    io?.to(`scene:${contrib.sceneId}`).emit("contribution:delete", { id });
+  if (!contrib) return res.status(404).json({ error: "Contribution introuvable" });
+
+  // Seul l'auteur ou le OWNER peut supprimer
+  const storyId = contrib.scene.chapter.storyId;
+  const isAuthor = req.user?.id === contrib.userId;
+  if (!isAuthor) {
+    const role = await participantService.getUserRole(storyId, req.user!.id);
+    if (role !== ParticipantRole.OWNER) {
+      return res.status(403).json({ error: "Seul l'auteur ou le propriétaire peut supprimer cette contribution" });
+    }
   }
+
+  await contributionService.deleteContribution(id);
+  const io = getIO();
+  io?.to(`scene:${contrib.sceneId}`).emit("contribution:delete", { id });
   return res.status(204).send();
 };
 

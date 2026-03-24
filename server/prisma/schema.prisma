@@ -38,6 +38,7 @@ model Story {
   id           String               @id @default(cuid())
   title        String
   description  String?
+  status       ContentStatus        @default(ACTIVE)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   chapters     Chapter[]
@@ -72,19 +73,25 @@ model StoryParticipant {
 }
 
 model Chapter {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   title       String
   description String?
-  order       Int      @default(0)
+  order       Int           @default(0)
+  status      ContentStatus @default(ACTIVE)
   storyId     String
-  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  story       Story         @relation(fields: [storyId], references: [id], onDelete: Cascade)
   scenes      Scene[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 enum SceneStatus {
   DRAFT
+  ACTIVE
+  DONE
+}
+
+enum ContentStatus {
   ACTIVE
   DONE
 }

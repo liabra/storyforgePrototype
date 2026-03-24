@@ -10,10 +10,13 @@ export const tokenStore = {
 
 export type SceneStatus = "DRAFT" | "ACTIVE" | "DONE";
 
+export type ContentStatus = "ACTIVE" | "DONE";
+
 export interface Story {
   id: string;
   title: string;
   description?: string;
+  status: ContentStatus;
 }
 
 export interface CharacterRef {
@@ -43,6 +46,7 @@ export interface Chapter {
   title: string;
   description?: string;
   order: number;
+  status: ContentStatus;
   storyId: string;
   scenes: ChapterSceneItem[];
 }
@@ -190,6 +194,8 @@ export const api = {
     list: () => request<Story[]>("/stories"),
     create: (data: { title: string; description?: string }) =>
       request<Story>("/stories", { method: "POST", body: JSON.stringify(data) }),
+    updateStatus: (id: string, status: ContentStatus) =>
+      request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ status }) }),
   },
   chapters: {
     list: (storyId: string) => request<Chapter[]>(`/stories/${storyId}/chapters`),
@@ -200,6 +206,8 @@ export const api = {
       }),
     update: (id: string, data: { title?: string; description?: string; order?: number }) =>
       request<Chapter>(`/chapters/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    updateStatus: (id: string, status: ContentStatus) =>
+      request<Chapter>(`/chapters/${id}`, { method: "PUT", body: JSON.stringify({ status }) }),
     delete: (id: string) => request<void>(`/chapters/${id}`, { method: "DELETE" }),
   },
   scenes: {

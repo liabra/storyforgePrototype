@@ -11,6 +11,7 @@ import type {
   CharacterRef,
   CharacterFull,
   CharacterInput,
+  ContentStatus,
   SceneStatus,
   SceneMode,
   AuthUser,
@@ -598,6 +599,43 @@ export default function App() {
       setSettingsEdit((p) => ({ ...p, mode }));
     };
 
+    const onSceneDelete = ({ sceneId, chapterId }: { sceneId: string; chapterId: string }) => {
+      setChapters((p) => p.map((ch) =>
+        ch.id === chapterId ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== sceneId) } : ch
+      ));
+      setSelectedScene((s) => s?.id === sceneId ? null : s);
+    };
+
+    const onChapterDelete = ({ chapterId }: { chapterId: string }) => {
+      setChapters((p) => p.filter((ch) => ch.id !== chapterId));
+      setSelectedChapter((c) => c?.id === chapterId ? null : c);
+      setSelectedScene((s) => {
+        // La scène ouverte appartient peut-être au chapitre supprimé ; on ne peut pas savoir directement,
+        // mais selectedChapter sera null, donc la vue reviendra au niveau histoire.
+        return s;
+      });
+    };
+
+    const onSceneStatusUpdate = ({ sceneId, chapterId, status }: { sceneId: string; chapterId: string; status: SceneStatus }) => {
+      setSelectedScene((s) => s?.id === sceneId ? { ...s, status } : s);
+      setChapters((p) => p.map((ch) =>
+        ch.id === chapterId
+          ? { ...ch, scenes: ch.scenes.map((sc) => sc.id === sceneId ? { ...sc, status } : sc) }
+          : ch
+      ));
+      setSettingsEdit((p) => ({ ...p, status }));
+    };
+
+    const onChapterStatusUpdate = ({ chapterId, status }: { chapterId: string; status: ContentStatus }) => {
+      setChapters((p) => p.map((ch) => ch.id === chapterId ? { ...ch, status } : ch));
+      setSelectedChapter((c) => c?.id === chapterId ? { ...c, status } : c);
+    };
+
+    const onStoryStatusUpdate = ({ storyId, status }: { storyId: string; status: ContentStatus }) => {
+      setSelectedStory((s) => s?.id === storyId ? { ...s, status } : s);
+      setStories((p) => p.map((s) => s.id === storyId ? { ...s, status } : s));
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
@@ -607,6 +645,11 @@ export default function App() {
     socket.on("character:delete", onCharacterDelete);
     socket.on("scene:characters:update", onSceneCharactersUpdate);
     socket.on("turn:update", onTurnUpdate);
+    socket.on("scene:delete", onSceneDelete);
+    socket.on("chapter:delete", onChapterDelete);
+    socket.on("scene:statusUpdate", onSceneStatusUpdate);
+    socket.on("chapter:statusUpdate", onChapterStatusUpdate);
+    socket.on("story:statusUpdate", onStoryStatusUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -619,6 +662,11 @@ export default function App() {
       socket.off("character:delete", onCharacterDelete);
       socket.off("scene:characters:update", onSceneCharactersUpdate);
       socket.off("turn:update", onTurnUpdate);
+      socket.off("scene:delete", onSceneDelete);
+      socket.off("chapter:delete", onChapterDelete);
+      socket.off("scene:statusUpdate", onSceneStatusUpdate);
+      socket.off("chapter:statusUpdate", onChapterStatusUpdate);
+      socket.off("story:statusUpdate", onStoryStatusUpdate);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -915,8 +963,8 @@ export default function App() {
   // ── Delete contribution
   const handleDeleteContrib = async (id: string) => {
     if (!selectedScene) return;
+    if (!window.confirm("Supprimer cette contribution ?")) return;
     await api.contributions.delete(id);
-    // Optimistic local update — socket event will sync other clients
     setSelectedScene((s) =>
       s ? { ...s, contributions: (s.contributions ?? []).filter((c) => c.id !== id) } : s
     );
@@ -1004,6 +1052,47 @@ export default function App() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  // ── Delete scene (OWNER)
+  const handleDeleteScene = async () => {
+    if (!selectedScene || !selectedChapter) return;
+    if (!window.confirm(`Supprimer la scène "${selectedScene.title}" ? Cette action est irréversible.`)) return;
+    await api.scenes.delete(selectedScene.id);
+    // Mise à jour locale (le socket confirmera chez les autres)
+    setChapters((p) => p.map((ch) =>
+      ch.id === selectedChapter.id
+        ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== selectedScene.id) }
+        : ch
+    ));
+    setSelectedScene(null);
+  };
+
+  // ── Delete chapter (OWNER)
+  const handleDeleteChapter = async (chapterId: string, chapterTitle: string) => {
+    if (!window.confirm(`Supprimer le chapitre "${chapterTitle}" et toutes ses scènes ? Cette action est irréversible.`)) return;
+    await api.chapters.delete(chapterId);
+    setChapters((p) => p.filter((ch) => ch.id !== chapterId));
+    if (selectedChapter?.id === chapterId) setSelectedChapter(null);
+    setSelectedScene(null);
+  };
+
+  // ── Toggle chapter status (OWNER)
+  const handleToggleChapterStatus = async () => {
+    if (!selectedChapter) return;
+    const newStatus: ContentStatus = selectedChapter.status === "DONE" ? "ACTIVE" : "DONE";
+    const updated = await api.chapters.updateStatus(selectedChapter.id, newStatus);
+    setSelectedChapter((c) => c ? { ...c, status: updated.status } : c);
+    setChapters((p) => p.map((ch) => ch.id === updated.id ? { ...ch, status: updated.status } : ch));
+  };
+
+  // ── Toggle story status (OWNER)
+  const handleToggleStoryStatus = async () => {
+    if (!selectedStory) return;
+    const newStatus: ContentStatus = (selectedStory as Story & { status: ContentStatus }).status === "DONE" ? "ACTIVE" : "DONE";
+    const updated = await api.stories.updateStatus(selectedStory.id, newStatus);
+    setSelectedStory((s) => s ? { ...s, status: updated.status } : s);
+    setStories((p) => p.map((s) => s.id === updated.id ? { ...s, status: updated.status } : s));
   };
 
   // ── Save scene characters
@@ -1570,7 +1659,22 @@ export default function App() {
           {selectedStory && !selectedChapter && !selectedScene && (
             <div>
               <div style={s.pageHeader}>
-                <h1 style={s.pageTitle} className="app-page-title">{selectedStory.title}</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                  <h1 style={{ ...s.pageTitle, margin: 0 }} className="app-page-title">{selectedStory.title}</h1>
+                  {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" && (
+                    <span style={{ ...s.statusBadge, background: "rgba(75,35,5,0.12)", color: C.textMuted, border: `1px solid ${C.border}`, fontSize: "0.7rem" }}>
+                      Histoire terminée
+                    </span>
+                  )}
+                  {myRole === "OWNER" && (
+                    <button
+                      style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem", marginLeft: "auto" }}
+                      onClick={handleToggleStoryStatus}
+                    >
+                      {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? "Réouvrir l'histoire" : "Terminer l'histoire"}
+                    </button>
+                  )}
+                </div>
                 {selectedStory.description && <p style={s.pageDesc}>{selectedStory.description}</p>}
               </div>
 
@@ -1937,8 +2041,33 @@ export default function App() {
           {selectedStory && selectedChapter && !selectedScene && (
             <div>
               <div style={s.pageHeader}>
-                <button style={s.backBtn} onClick={() => setSelectedChapter(null)}>← Chapitres</button>
-                <h2 style={s.pageTitle}>{selectedChapter.title}</h2>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                  <button style={s.backBtn} onClick={() => setSelectedChapter(null)}>← Chapitres</button>
+                  {myRole === "OWNER" && (
+                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                      <button
+                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                        onClick={handleToggleChapterStatus}
+                      >
+                        {selectedChapter.status === "DONE" ? "Réouvrir" : "Terminer"}
+                      </button>
+                      <button
+                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem", color: C.danger, borderColor: "rgba(139,26,10,0.3)" }}
+                        onClick={() => handleDeleteChapter(selectedChapter.id, selectedChapter.title)}
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
+                  <h2 style={{ ...s.pageTitle, margin: 0 }}>{selectedChapter.title}</h2>
+                  {selectedChapter.status === "DONE" && (
+                    <span style={{ ...s.statusBadge, background: "rgba(75,35,5,0.12)", color: C.textMuted, border: `1px solid ${C.border}`, fontSize: "0.7rem" }}>
+                      Terminé
+                    </span>
+                  )}
+                </div>
                 {selectedChapter.description && <p style={s.pageDesc}>{selectedChapter.description}</p>}
                 {(() => {
                   const n = new Set(
@@ -2197,7 +2326,7 @@ export default function App() {
                             {!spectatorView && isOwn && !isEditing && (
                               <button style={s.contribAction} onClick={() => handleStartEdit(contrib)} title="Modifier">✎</button>
                             )}
-                            {!spectatorView && (
+                            {!spectatorView && (isOwn || myRole === "OWNER") && (
                               <button style={s.contribDelete} onClick={() => handleDeleteContrib(contrib.id)} title="Supprimer">✕</button>
                             )}
                           </div>
@@ -2496,6 +2625,14 @@ export default function App() {
                       <button style={s.btnAccent} onClick={handleSaveSettings} disabled={savingSettings}>
                         {savingSettings ? "Sauvegarde…" : "Appliquer"}
                       </button>
+                      <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: `1px solid ${C.border}` }}>
+                        <button
+                          style={{ ...s.btnGhost, color: C.danger, borderColor: "rgba(139,26,10,0.3)", fontSize: "0.82rem" }}
+                          onClick={handleDeleteScene}
+                        >
+                          🗑 Supprimer cette scène
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -1,9 +1,11 @@
 import prisma from "../prisma/client";
+import { ContentStatus } from "../generated/prisma/client";
 
 export type ChapterData = {
   title: string;
   description?: string;
   order?: number;
+  status?: ContentStatus;
 };
 
 export const getChaptersByStory = (storyId: string) =>
