@@ -220,6 +220,7 @@ export const api = {
       }),
     update: (sceneId: string, data: Partial<Scene>) =>
       request<Scene>(`/scenes/${sceneId}`, { method: "PUT", body: JSON.stringify(data) }),
+    delete: (sceneId: string) => request<void>(`/scenes/${sceneId}`, { method: "DELETE" }),
     updateCharacters: (sceneId: string, characterIds: string[]) =>
       request<Scene>(`/scenes/${sceneId}/characters`, {
         method: "PUT",
