@@ -943,7 +943,9 @@ export default function App() {
       name: newChar.name?.trim() || undefined,
       nickname: newChar.nickname?.trim() || undefined,
     });
-    setCharacters((p) => [...p, created]);
+    // Déduplication : le socket character:new peut arriver avant la réponse HTTP
+    // (le serveur émet avant res.json). On n'ajoute que si absent.
+    setCharacters((p) => p.some((c) => c.id === created.id) ? p : [...p, created]);
     setNewChar({ name: "", nickname: "" });
   };
 
@@ -951,7 +953,7 @@ export default function App() {
     setSavingChar(char.id);
     try {
       const updated = await api.characters.update(char.id, charEdits[char.id] ?? {});
-      setCharacters((p) => p.map((c) => (c.id === updated.id ? { ...updated, scenes: c.scenes } : c)));
+      setCharacters((p) => p.map((c) => (c.id === updated.id ? updated : c)));
       setExpandedCharId(null);
     } finally {
       setSavingChar(null);
@@ -1487,7 +1489,17 @@ export default function App() {
               {/* ── Tab Chapitres */}
               {activeTab === "chapters" && (
                 <div>
-                  {myRole !== "VIEWER" && (!showChapterForm ? (
+                  {myRole === "VIEWER" ? (
+                    <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", marginBottom: "1.25rem" }}>
+                      Vous lisez cette histoire en tant que spectateur.{" "}
+                      <button
+                        style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }}
+                        onClick={() => setActiveTab("participants")}
+                      >
+                        Demander à participer →
+                      </button>
+                    </div>
+                  ) : (!showChapterForm ? (
                     <button style={s.addBtn} onClick={() => setShowChapterForm(true)}>+ Ajouter un chapitre</button>
                   ) : (
                     <form onSubmit={handleCreateChapter} style={s.inlineForm}>
@@ -1501,7 +1513,11 @@ export default function App() {
                     </form>
                   ))}
 
-                  {chapters.length === 0 && <p style={s.mutedCenter}>Aucun chapitre. Commence par en créer un.</p>}
+                  {chapters.length === 0 && (
+                    <p style={s.mutedCenter}>
+                      {myRole === "VIEWER" ? "Aucun chapitre pour l'instant." : "Aucun chapitre. Commence par en créer un."}
+                    </p>
+                  )}
 
                   <div style={s.chapterList}>
                     {chapters.map((ch) => {
@@ -1608,7 +1624,19 @@ export default function App() {
                               <button style={s.btnMicro} onClick={() => {
                                 if (isExpanded) { setExpandedCharId(null); return; }
                                 setExpandedCharId(char.id);
-                                setCharEdits((p) => ({ ...p, [char.id]: { ...char } }));
+                                setCharEdits((p) => ({ ...p, [char.id]: {
+                                  name: char.name,
+                                  nickname: char.nickname,
+                                  role: char.role,
+                                  shortDescription: char.shortDescription,
+                                  appearance: char.appearance,
+                                  outfit: char.outfit,
+                                  accessories: char.accessories,
+                                  personality: char.personality,
+                                  traits: char.traits,
+                                  faction: char.faction,
+                                  visualNotes: char.visualNotes,
+                                }}));
                               }}>
                                 {isExpanded ? "Fermer" : "Fiche"}
                               </button>

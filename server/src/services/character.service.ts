@@ -38,12 +38,20 @@ export const createCharacter = (storyId: string, userId: string, data: Character
     include: characterInclude,
   });
 
-export const updateCharacter = (id: string, data: CharacterData) =>
-  prisma.character.update({
+export const updateCharacter = (id: string, data: CharacterData) => {
+  // Destructurer explicitement pour éviter que des champs parasites (user, scenes, id…)
+  // issus du body HTTP ne soient transmis à Prisma et provoquent une erreur.
+  const {
+    name, nickname, role, shortDescription,
+    appearance, outfit, accessories, personality,
+    traits, faction, visualNotes,
+  } = data;
+  return prisma.character.update({
     where: { id },
-    data,
+    data: { name, nickname, role, shortDescription, appearance, outfit, accessories, personality, traits, faction, visualNotes },
     include: characterInclude,
   });
+};
 
 export const deleteCharacter = (id: string) =>
   prisma.character.delete({ where: { id } });
