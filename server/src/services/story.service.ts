@@ -31,3 +31,8 @@ export const updateStory = (
 
 export const deleteStory = (id: string) =>
   prisma.story.delete({ where: { id } });
+
+export const getStoryStatus = async (storyId: string): Promise<ContentStatus | null> => {
+  const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true } });
+  return story?.status ?? null;
+};

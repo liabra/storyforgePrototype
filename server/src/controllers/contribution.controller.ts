@@ -4,7 +4,7 @@ import * as participantService from "../services/participant.service";
 import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 import prisma from "../prisma/client";
-import { SceneMode, SceneStatus, ParticipantRole } from "../generated/prisma/client";
+import { ContentStatus, SceneMode, SceneStatus, ParticipantRole } from "../generated/prisma/client";
 
 
 const getSingleParam = (value: string | string[] | undefined): string => {
@@ -31,7 +31,7 @@ export const create = async (req: Request, res: Response) => {
       status: true,
       mode: true,
       currentTurnUserId: true,
-      chapter: { select: { storyId: true, story: { select: { title: true } } } },
+      chapter: { select: { storyId: true, story: { select: { title: true, status: true } } } },
     },
   });
   if (!scene) return res.status(404).json({ error: "Scene not found" });
@@ -43,6 +43,9 @@ export const create = async (req: Request, res: Response) => {
   }
 
   const storyId = scene.chapter.storyId;
+  if (scene.chapter.story.status === ContentStatus.DONE) {
+    return res.status(403).json({ error: "Cette histoire est terminée et n'accepte plus de contributions" });
+  }
   if (req.user) {
     const role = await participantService.getUserRole(storyId, req.user.id);
     if (role !== ParticipantRole.OWNER && role !== ParticipantRole.EDITOR) {

@@ -4,7 +4,7 @@ import * as chapterService from "../services/chapter.service";
 import * as participantService from "../services/participant.service";
 import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
-import { ParticipantRole, SceneMode } from "../generated/prisma/client";
+import { ContentStatus, ParticipantRole, SceneMode } from "../generated/prisma/client";
 import prisma from "../prisma/client";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
@@ -49,8 +49,20 @@ export const create = async (req: Request, res: Response) => {
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
 
-  const storyId = await chapterService.getStoryIdByChapter(chapterId);
-  if (!storyId) return res.status(404).json({ error: "Chapitre introuvable" });
+  const chapterInfo = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+    select: { storyId: true, status: true, story: { select: { status: true } } },
+  });
+  if (!chapterInfo) return res.status(404).json({ error: "Chapitre introuvable" });
+  const storyId = chapterInfo.storyId;
+
+  if (chapterInfo.story.status === ContentStatus.DONE) {
+    return res.status(409).json({ error: "Impossible de créer une scène dans une histoire terminée" });
+  }
+  if (chapterInfo.status === ContentStatus.DONE) {
+    return res.status(409).json({ error: "Impossible de créer une scène dans un chapitre terminé" });
+  }
+
   if (!await assertEditorOrOwner(storyId, req, res)) return;
 
   const scene = await sceneService.createScene(chapterId, { title, description, order });

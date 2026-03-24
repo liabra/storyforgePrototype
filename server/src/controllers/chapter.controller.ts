@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as chapterService from "../services/chapter.service";
 import * as participantService from "../services/participant.service";
+import * as storyService from "../services/story.service";
 import { ContentStatus, ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
 
@@ -19,6 +20,12 @@ export const create = async (req: Request, res: Response) => {
   const storyId = getSingleParam(req.params.storyId);
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
+
+  const storyStatus = await storyService.getStoryStatus(storyId);
+  if (storyStatus === null) return res.status(404).json({ error: "Histoire introuvable" });
+  if (storyStatus === ContentStatus.DONE) {
+    return res.status(409).json({ error: "Impossible de créer un chapitre dans une histoire terminée" });
+  }
 
   if (req.user) {
     const role = await participantService.getUserRole(storyId, req.user.id);

@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const contribution_controller_1 = require("../controllers/contribution.controller");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.get("/scenes/:sceneId/contributions", contribution_controller_1.getByScene);
+router.post("/scenes/:sceneId/contributions", auth_1.requireAuth, contribution_controller_1.create);
+router.delete("/contributions/:id", auth_1.requireAuth, contribution_controller_1.remove);
+router.patch("/contributions/:id", auth_1.requireAuth, contribution_controller_1.update);
+router.post("/contributions/:id/moderate", auth_1.requireAuth, contribution_controller_1.moderate);
+exports.default = router;

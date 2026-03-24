@@ -603,6 +603,7 @@ export default function App() {
       setChapters((p) => p.map((ch) =>
         ch.id === chapterId ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== sceneId) } : ch
       ));
+      setSelectedChapter((c) => c?.id === chapterId ? { ...c, scenes: c.scenes.filter((sc) => sc.id !== sceneId) } : c);
       setSelectedScene((s) => s?.id === sceneId ? null : s);
     };
 
@@ -1058,14 +1059,20 @@ export default function App() {
   const handleDeleteScene = async () => {
     if (!selectedScene || !selectedChapter) return;
     if (!window.confirm(`Supprimer la scène "${selectedScene.title}" ? Cette action est irréversible.`)) return;
-    await api.scenes.delete(selectedScene.id);
+    const deletedTitle = selectedScene.title;
+    const deletedId = selectedScene.id;
+    const chapterId = selectedChapter.id;
+    await api.scenes.delete(deletedId);
     // Mise à jour locale (le socket confirmera chez les autres)
     setChapters((p) => p.map((ch) =>
-      ch.id === selectedChapter.id
-        ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== selectedScene.id) }
-        : ch
+      ch.id === chapterId ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== deletedId) } : ch
     ));
+    setSelectedChapter((c) => c ? { ...c, scenes: c.scenes.filter((sc) => sc.id !== deletedId) } : c);
     setSelectedScene(null);
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: `Scène "${deletedTitle}" supprimée` }].slice(-5);
+    });
   };
 
   // ── Delete chapter (OWNER)
@@ -1075,6 +1082,10 @@ export default function App() {
     setChapters((p) => p.filter((ch) => ch.id !== chapterId));
     if (selectedChapter?.id === chapterId) setSelectedChapter(null);
     setSelectedScene(null);
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: `Chapitre "${chapterTitle}" supprimé` }].slice(-5);
+    });
   };
 
   // ── Toggle chapter status (OWNER)
@@ -1084,6 +1095,13 @@ export default function App() {
     const updated = await api.chapters.updateStatus(selectedChapter.id, newStatus);
     setSelectedChapter((c) => c ? { ...c, status: updated.status } : c);
     setChapters((p) => p.map((ch) => ch.id === updated.id ? { ...ch, status: updated.status } : ch));
+    const label = updated.status === "DONE"
+      ? `Chapitre "${selectedChapter.title}" terminé`
+      : `Chapitre "${selectedChapter.title}" réouvert`;
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
+    });
   };
 
   // ── Toggle story status (OWNER)
@@ -1093,6 +1111,13 @@ export default function App() {
     const updated = await api.stories.updateStatus(selectedStory.id, newStatus);
     setSelectedStory((s) => s ? { ...s, status: updated.status } : s);
     setStories((p) => p.map((s) => s.id === updated.id ? { ...s, status: updated.status } : s));
+    const label = updated.status === "DONE"
+      ? `Histoire "${selectedStory.title}" terminée`
+      : `Histoire "${selectedStory.title}" réouverte`;
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
+    });
   };
 
   // ── Save scene characters
@@ -1704,7 +1729,7 @@ export default function App() {
                         Demander à participer →
                       </button>
                     </div>
-                  ) : (!showChapterForm ? (
+                  ) : (selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? null : (!showChapterForm ? (
                     <button style={s.addBtn} onClick={() => setShowChapterForm(true)}>+ Ajouter un chapitre</button>
                   ) : (
                     <form onSubmit={handleCreateChapter} style={s.inlineForm}>
@@ -2082,7 +2107,7 @@ export default function App() {
                 })()}
               </div>
 
-              {myRole !== "VIEWER" && (!showSceneForm ? (
+              {myRole !== "VIEWER" && selectedChapter.status !== "DONE" && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showSceneForm ? (
                 <button style={s.addBtn} onClick={() => setShowSceneForm(true)}>+ Ajouter une scène</button>
               ) : (
                 <form onSubmit={handleCreateScene} style={s.inlineForm}>
@@ -2460,8 +2485,15 @@ export default function App() {
                 </div>
               )}
 
+              {/* ── Histoire terminée — contributions bloquées */}
+              {!spectatorView && selectedScene.status === "ACTIVE" && (myRole === "OWNER" || myRole === "EDITOR") && (selectedStory as Story & { status?: ContentStatus }).status === "DONE" && (
+                <div style={s.closedBanner}>
+                  🔒 Cette histoire est terminée — les contributions ne sont plus acceptées.
+                </div>
+              )}
+
               {/* ── Zone d'écriture (OWNER / EDITOR, scène ACTIVE seulement) */}
-              {!spectatorView && selectedScene.status === "ACTIVE" && (myRole === "OWNER" || myRole === "EDITOR") && (() => {
+              {!spectatorView && selectedScene.status === "ACTIVE" && (myRole === "OWNER" || myRole === "EDITOR") && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (() => {
                 const isTurnMode = selectedScene.mode === "TURN";
                 const isMyTurn = !isTurnMode || selectedScene.currentTurnUserId === currentUser?.id;
                 const turnParticipant = isTurnMode && !isMyTurn
