@@ -59,6 +59,8 @@ export interface Contribution {
   createdAt: string;
 }
 
+export type SceneMode = "FREE" | "TURN";
+
 export interface Scene {
   id: string;
   title: string;
@@ -66,6 +68,8 @@ export interface Scene {
   imageUrl?: string;
   order: number;
   status: SceneStatus;
+  mode: SceneMode;
+  currentTurnUserId?: string | null;
   visibilityMode: string;
   visibleCount: number;
   chapterId: string;

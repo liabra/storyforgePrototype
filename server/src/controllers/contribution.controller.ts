@@ -4,7 +4,7 @@ import * as participantService from "../services/participant.service";
 import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 import prisma from "../prisma/client";
-import { SceneStatus, ParticipantRole } from "../generated/prisma/client";
+import { SceneMode, SceneStatus, ParticipantRole } from "../generated/prisma/client";
 
 
 const getSingleParam = (value: string | string[] | undefined): string => {
@@ -29,6 +29,8 @@ export const create = async (req: Request, res: Response) => {
     select: {
       title: true,
       status: true,
+      mode: true,
+      currentTurnUserId: true,
       chapter: { select: { storyId: true, story: { select: { title: true } } } },
     },
   });
@@ -40,10 +42,15 @@ export const create = async (req: Request, res: Response) => {
     });
   }
 
+  const storyId = scene.chapter.storyId;
   if (req.user) {
-    const role = await participantService.getUserRole(scene.chapter.storyId, req.user.id);
+    const role = await participantService.getUserRole(storyId, req.user.id);
     if (role !== ParticipantRole.OWNER && role !== ParticipantRole.EDITOR) {
       return res.status(403).json({ error: "Vous devez être OWNER ou EDITOR pour contribuer à cette histoire" });
+    }
+    // En mode TURN, vérifier que c'est bien le tour de cet utilisateur
+    if (scene.mode === SceneMode.TURN && scene.currentTurnUserId !== req.user.id) {
+      return res.status(403).json({ error: "Ce n'est pas votre tour d'écrire" });
     }
   }
 
@@ -54,13 +61,11 @@ export const create = async (req: Request, res: Response) => {
   });
 
   const io = getIO();
-  // Diffuse aux autres clients de la même scène
   io?.to(`scene:${sceneId}`).emit("contribution:new", contribution);
-  // Diffuse le feed d'activité aux participants de l'histoire uniquement
   const username = req.user?.email?.split("@")[0] || "Anonyme";
-  void activityService.broadcastActivityToStory(scene.chapter.storyId, {
+  void activityService.broadcastActivityToStory(storyId, {
     type: "contribution",
-    storyId: scene.chapter.storyId,
+    storyId,
     storyTitle: scene.chapter.story.title,
     sceneId,
     sceneTitle: scene.title,
@@ -68,6 +73,29 @@ export const create = async (req: Request, res: Response) => {
     userId: req.user?.id,
     at: contribution.createdAt.toISOString(),
   });
+
+  // En mode TURN : passer au participant suivant
+  if (scene.mode === SceneMode.TURN && req.user) {
+    const eligible = await prisma.storyParticipant.findMany({
+      where: { storyId, role: { in: [ParticipantRole.OWNER, ParticipantRole.EDITOR] } },
+      orderBy: { createdAt: "asc" },
+      select: { userId: true },
+    });
+    if (eligible.length > 0) {
+      const currentIdx = eligible.findIndex((p) => p.userId === scene.currentTurnUserId);
+      const nextIdx = (currentIdx + 1) % eligible.length;
+      const nextUserId = eligible[nextIdx].userId;
+      await prisma.scene.update({
+        where: { id: sceneId },
+        data: { currentTurnUserId: nextUserId },
+      });
+      io?.to(`story:${storyId}`).emit("turn:update", {
+        sceneId,
+        mode: SceneMode.TURN,
+        currentTurnUserId: nextUserId,
+      });
+    }
+  }
 
   return res.status(201).json(contribution);
 };

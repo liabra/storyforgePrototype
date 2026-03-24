@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import prisma from "../prisma/client";
-import { SceneStatus } from "../generated/prisma/client";
+import { SceneMode, SceneStatus } from "../generated/prisma/client";
 import { generateImage } from "./image.service";
 
 const characterSelect = {
@@ -61,6 +61,8 @@ export const updateScene = (
     status?: SceneStatus;
     visibilityMode?: string;
     visibleCount?: number;
+    mode?: SceneMode;
+    currentTurnUserId?: string | null;
   }
 ) =>
   prisma.scene.update({

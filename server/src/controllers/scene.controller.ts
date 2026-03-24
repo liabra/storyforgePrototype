@@ -4,7 +4,8 @@ import * as chapterService from "../services/chapter.service";
 import * as participantService from "../services/participant.service";
 import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
-import { ParticipantRole } from "../generated/prisma/client";
+import { ParticipantRole, SceneMode } from "../generated/prisma/client";
+import prisma from "../prisma/client";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -80,7 +81,32 @@ export const update = async (req: Request, res: Response) => {
   if (!storyId) return res.status(404).json({ error: "Scène introuvable" });
   if (!await assertOwner(storyId, req, res)) return;
 
-  const scene = await sceneService.updateScene(id, req.body);
+  // Gestion du changement de mode (FREE ↔ TURN)
+  const updateData = { ...req.body };
+  if (updateData.mode === SceneMode.TURN) {
+    // Initialiser le tour sur le premier OWNER+EDITOR (par date d'entrée)
+    const eligible = await prisma.storyParticipant.findMany({
+      where: { storyId, role: { in: [ParticipantRole.OWNER, ParticipantRole.EDITOR] } },
+      orderBy: { createdAt: "asc" },
+      select: { userId: true },
+    });
+    updateData.currentTurnUserId = eligible[0]?.userId ?? null;
+  } else if (updateData.mode === SceneMode.FREE) {
+    updateData.currentTurnUserId = null;
+  }
+
+  const scene = await sceneService.updateScene(id, updateData);
+
+  // Émettre turn:update si le mode ou le tour a changé
+  if (updateData.mode !== undefined) {
+    const io = getIO();
+    io?.to(`story:${storyId}`).emit("turn:update", {
+      sceneId: id,
+      mode: scene.mode,
+      currentTurnUserId: scene.currentTurnUserId,
+    });
+  }
+
   return res.json(scene);
 };
 

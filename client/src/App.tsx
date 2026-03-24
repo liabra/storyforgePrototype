@@ -12,6 +12,7 @@ import type {
   CharacterFull,
   CharacterInput,
   SceneStatus,
+  SceneMode,
   AuthUser,
   UserProfileInput,
   Participant,
@@ -170,7 +171,7 @@ export default function App() {
 
   // Scene settings
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsEdit, setSettingsEdit] = useState<{ visibilityMode: string; visibleCount: number; status: SceneStatus }>({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE" });
+  const [settingsEdit, setSettingsEdit] = useState<{ visibilityMode: string; visibleCount: number; status: SceneStatus; mode: "FREE" | "TURN" }>({ visibilityMode: "last", visibleCount: 3, status: "ACTIVE", mode: "FREE" });
   const [savingSettings, setSavingSettings] = useState(false);
 
   // Scene characters
@@ -592,6 +593,11 @@ export default function App() {
       })));
     };
 
+    const onTurnUpdate = ({ sceneId, mode, currentTurnUserId }: { sceneId: string; mode: SceneMode; currentTurnUserId: string | null }) => {
+      setSelectedScene((s) => s?.id === sceneId ? { ...s, mode, currentTurnUserId } : s);
+      setSettingsEdit((p) => ({ ...p, mode }));
+    };
+
     socket.on("chapter:new", onChapterNew);
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
@@ -600,6 +606,7 @@ export default function App() {
     socket.on("character:update", onCharacterUpdate);
     socket.on("character:delete", onCharacterDelete);
     socket.on("scene:characters:update", onSceneCharactersUpdate);
+    socket.on("turn:update", onTurnUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -611,6 +618,7 @@ export default function App() {
       socket.off("character:update", onCharacterUpdate);
       socket.off("character:delete", onCharacterDelete);
       socket.off("scene:characters:update", onSceneCharactersUpdate);
+      socket.off("turn:update", onTurnUpdate);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -702,6 +710,7 @@ export default function App() {
             visibilityMode: scene.visibilityMode,
             visibleCount: scene.visibleCount,
             status: scene.status,
+            mode: scene.mode ?? "FREE",
           });
           setSceneCharEdits(scene.characters.map((c) => c.id));
           setSpectatorView(false);
@@ -771,6 +780,7 @@ export default function App() {
       visibilityMode: scene.visibilityMode,
       visibleCount: scene.visibleCount,
       status: scene.status,
+      mode: scene.mode ?? "FREE",
     });
     setSceneCharEdits(scene.characters.map((c) => c.id));
     setSpectatorView(false);
@@ -962,6 +972,18 @@ export default function App() {
   };
 
   // ── Save scene settings
+  const handleToggleMode = async (newMode: SceneMode) => {
+    if (!selectedScene) return;
+    const updated = await api.scenes.update(selectedScene.id, { mode: newMode });
+    setSelectedScene((s) => s ? { ...s, mode: updated.mode, currentTurnUserId: updated.currentTurnUserId } : s);
+    setSettingsEdit((p) => ({ ...p, mode: updated.mode }));
+    const label = newMode === "TURN" ? "Tour par tour activé" : "Mode libre activé";
+    setToasts((prev) => {
+      const id = ++toastIdRef.current;
+      return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
+    });
+  };
+
   const handleSaveSettings = async () => {
     if (!selectedScene) return;
     setSavingSettings(true);
@@ -2310,55 +2332,81 @@ export default function App() {
               )}
 
               {/* ── Zone d'écriture (OWNER / EDITOR, scène ACTIVE seulement) */}
-              {!spectatorView && selectedScene.status === "ACTIVE" && (myRole === "OWNER" || myRole === "EDITOR") && (
-                <div style={s.writeArea} className="write-area app-write-area">
-                  {suggestion && (
-                    <div style={s.suggestion}>
-                      <span style={s.suggestionIcon}>💡</span>
-                      <em style={s.suggestionText}>{suggestion}</em>
-                      <button style={s.suggestionClose} onClick={() => setSuggestion(null)}>✕</button>
+              {!spectatorView && selectedScene.status === "ACTIVE" && (myRole === "OWNER" || myRole === "EDITOR") && (() => {
+                const isTurnMode = selectedScene.mode === "TURN";
+                const isMyTurn = !isTurnMode || selectedScene.currentTurnUserId === currentUser?.id;
+                const turnParticipant = isTurnMode && !isMyTurn
+                  ? participants.find((p) => p.userId === selectedScene.currentTurnUserId)
+                  : null;
+                const turnName = turnParticipant?.user.displayName || turnParticipant?.user.email.split("@")[0] || "…";
+                return (
+                  <div style={s.writeArea} className="write-area app-write-area">
+                    {/* Indicateur de tour */}
+                    {isTurnMode && (
+                      <div style={{
+                        padding: "0.5rem 0.75rem",
+                        borderRadius: 6,
+                        marginBottom: "0.6rem",
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        background: isMyTurn ? "rgba(25,72,32,0.10)" : "rgba(122,76,8,0.08)",
+                        color: isMyTurn ? "#194820" : "#7a4c08",
+                        border: `1px solid ${isMyTurn ? "rgba(45,115,55,0.34)" : "rgba(160,100,20,0.34)"}`,
+                      }}>
+                        {isMyTurn ? "👉 C'est votre tour d'écrire" : `⏳ Ce n'est pas votre tour — Tour de : ${turnName}`}
+                      </div>
+                    )}
+
+                    {suggestion && (
+                      <div style={s.suggestion}>
+                        <span style={s.suggestionIcon}>💡</span>
+                        <em style={s.suggestionText}>{suggestion}</em>
+                        <button style={s.suggestionClose} onClick={() => setSuggestion(null)}>✕</button>
+                      </div>
+                    )}
+
+                    {characters.length > 0 && (
+                      <select
+                        style={s.charSelect}
+                        value={contribCharId}
+                        onChange={(e) => setContribCharId(e.target.value)}
+                        disabled={!isMyTurn}
+                      >
+                        <option value="">— Aucun personnage —</option>
+                        {characters.map((c) => (
+                          <option key={c.id} value={c.id}>{displayName(c)}{c.role ? ` (${c.role})` : ""}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <textarea
+                      style={{ ...s.writeTextarea, ...(!isMyTurn ? { opacity: 0.45, cursor: "not-allowed" } : {}) }}
+                      placeholder={isMyTurn ? "Écris ta contribution narrative ici…" : "En attente de votre tour…"}
+                      value={contribContent}
+                      onChange={(e) => { if (isMyTurn) { setContribContent(e.target.value); handleTyping(); } }}
+                      onKeyDown={(e) => {
+                        if (isMyTurn && e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmitContrib();
+                      }}
+                      readOnly={!isMyTurn}
+                      rows={4}
+                    />
+
+                    <div style={s.writeActions}>
+                      <button style={s.btnAccent} onClick={handleSubmitContrib} disabled={submittingContrib || !contribContent.trim() || !isMyTurn}>
+                        {submittingContrib ? "Envoi…" : "Contribuer"}
+                      </button>
+                      <button style={s.btnGhost} onClick={handleSuggestIdea} disabled={suggestingIdea}>
+                        {suggestingIdea ? "…" : "💡 Idée"}
+                      </button>
+                      <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
+                        {generatingImage ? "…" : "🎨 Illustrer"}
+                      </button>
                     </div>
-                  )}
 
-                  {characters.length > 0 && (
-                    <select
-                      style={s.charSelect}
-                      value={contribCharId}
-                      onChange={(e) => setContribCharId(e.target.value)}
-                    >
-                      <option value="">— Aucun personnage —</option>
-                      {characters.map((c) => (
-                        <option key={c.id} value={c.id}>{displayName(c)}{c.role ? ` (${c.role})` : ""}</option>
-                      ))}
-                    </select>
-                  )}
-
-                  <textarea
-                    style={s.writeTextarea}
-                    placeholder="Écris ta contribution narrative ici…"
-                    value={contribContent}
-                    onChange={(e) => { setContribContent(e.target.value); handleTyping(); }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmitContrib();
-                    }}
-                    rows={4}
-                  />
-
-                  <div style={s.writeActions}>
-                    <button style={s.btnAccent} onClick={handleSubmitContrib} disabled={submittingContrib || !contribContent.trim()}>
-                      {submittingContrib ? "Envoi…" : "Contribuer"}
-                    </button>
-                    <button style={s.btnGhost} onClick={handleSuggestIdea} disabled={suggestingIdea}>
-                      {suggestingIdea ? "…" : "💡 Idée"}
-                    </button>
-                    <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
-                      {generatingImage ? "…" : "🎨 Illustrer"}
-                    </button>
+                    <p style={s.writeHint}>⌘↵ ou Ctrl+↵ pour envoyer</p>
                   </div>
-
-                  <p style={s.writeHint}>⌘↵ ou Ctrl+↵ pour envoyer</p>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ── Navigation bas de page */}
               {sortedScenes.length > 1 && (
@@ -2416,6 +2464,35 @@ export default function App() {
                           <input type="number" min={1} max={20} style={{ ...s.inputDark, maxWidth: 70 }} value={settingsEdit.visibleCount} onChange={(e) => setSettingsEdit((p) => ({ ...p, visibleCount: Number(e.target.value) || 1 }))} />
                         </div>
                       )}
+                      <div style={s.settingsRow}>
+                        <label style={s.settingsLabel} className="app-settings-label">Mode d'écriture</label>
+                        <div style={{ display: "flex", gap: "0.4rem" }}>
+                          <button
+                            style={{
+                              padding: "0.25rem 0.7rem", borderRadius: 5, fontSize: "0.82rem", cursor: "pointer",
+                              border: `1px solid ${settingsEdit.mode === "FREE" ? C.accentLight : C.border}`,
+                              background: settingsEdit.mode === "FREE" ? C.accentGlow : "transparent",
+                              color: settingsEdit.mode === "FREE" ? C.accent : C.textMuted,
+                              fontWeight: settingsEdit.mode === "FREE" ? 600 : 400,
+                            }}
+                            onClick={() => { if (settingsEdit.mode !== "FREE") handleToggleMode("FREE"); }}
+                          >
+                            Mode libre
+                          </button>
+                          <button
+                            style={{
+                              padding: "0.25rem 0.7rem", borderRadius: 5, fontSize: "0.82rem", cursor: "pointer",
+                              border: `1px solid ${settingsEdit.mode === "TURN" ? C.accentLight : C.border}`,
+                              background: settingsEdit.mode === "TURN" ? C.accentGlow : "transparent",
+                              color: settingsEdit.mode === "TURN" ? C.accent : C.textMuted,
+                              fontWeight: settingsEdit.mode === "TURN" ? 600 : 400,
+                            }}
+                            onClick={() => { if (settingsEdit.mode !== "TURN") handleToggleMode("TURN"); }}
+                          >
+                            Tour par tour
+                          </button>
+                        </div>
+                      </div>
                       <button style={s.btnAccent} onClick={handleSaveSettings} disabled={savingSettings}>
                         {savingSettings ? "Sauvegarde…" : "Appliquer"}
                       </button>
