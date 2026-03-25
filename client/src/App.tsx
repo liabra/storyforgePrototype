@@ -624,7 +624,7 @@ export default function App() {
       });
     };
 
-    const onSceneStatusUpdate = ({ sceneId, chapterId, status }: { sceneId: string; chapterId: string; status: SceneStatus }) => {
+    const onSceneStatusUpdate = ({ sceneId, chapterId, status, triggeredBy }: { sceneId: string; chapterId: string; status: SceneStatus; triggeredBy?: string }) => {
       setSelectedScene((s) => s?.id === sceneId ? { ...s, status } : s);
       setChapters((p) => p.map((ch) =>
         ch.id === chapterId
@@ -632,16 +632,34 @@ export default function App() {
           : ch
       ));
       setSettingsEdit((p) => ({ ...p, status }));
+      if (status === "DONE" && triggeredBy !== currentUser?.id) {
+        setToasts((prev) => {
+          const id = ++toastIdRef.current;
+          return [...prev, { id, type: "scene" as const, message: "🏁 La scène vient d'être terminée" }].slice(-5);
+        });
+      }
     };
 
-    const onChapterStatusUpdate = ({ chapterId, status }: { chapterId: string; status: ContentStatus }) => {
+    const onChapterStatusUpdate = ({ chapterId, status, triggeredBy }: { chapterId: string; status: ContentStatus; triggeredBy?: string }) => {
       setChapters((p) => p.map((ch) => ch.id === chapterId ? { ...ch, status } : ch));
       setSelectedChapter((c) => c?.id === chapterId ? { ...c, status } : c);
+      if (status === "DONE" && triggeredBy !== currentUser?.id) {
+        setToasts((prev) => {
+          const id = ++toastIdRef.current;
+          return [...prev, { id, type: "scene" as const, message: "📕 Le chapitre est terminé" }].slice(-5);
+        });
+      }
     };
 
-    const onStoryStatusUpdate = ({ storyId, status }: { storyId: string; status: ContentStatus }) => {
+    const onStoryStatusUpdate = ({ storyId, status, triggeredBy }: { storyId: string; status: ContentStatus; triggeredBy?: string }) => {
       setSelectedStory((s) => s?.id === storyId ? { ...s, status } : s);
       setStories((p) => p.map((s) => s.id === storyId ? { ...s, status } : s));
+      if (status === "DONE" && triggeredBy !== currentUser?.id) {
+        setToasts((prev) => {
+          const id = ++toastIdRef.current;
+          return [...prev, { id, type: "scene" as const, message: "📖 L'histoire est terminée" }].slice(-5);
+        });
+      }
     };
 
     const onStoryVisibilityUpdate = ({ storyId, visibility }: { storyId: string; visibility: StoryVisibility }) => {

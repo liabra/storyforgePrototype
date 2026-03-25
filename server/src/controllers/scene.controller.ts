@@ -134,6 +134,7 @@ export const update = async (req: Request, res: Response) => {
       sceneId: id,
       chapterId: scene.chapterId,
       status: scene.status,
+      triggeredBy: req.user?.id,
     });
   }
 

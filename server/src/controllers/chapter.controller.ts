@@ -67,6 +67,7 @@ export const update = async (req: Request, res: Response) => {
     getIO()?.to(`story:${storyId}`).emit("chapter:statusUpdate", {
       chapterId: id,
       status: chapter.status,
+      triggeredBy: req.user?.id,
     });
   }
 
