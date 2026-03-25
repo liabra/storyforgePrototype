@@ -64,9 +64,12 @@ export const update = async (req: Request, res: Response) => {
   const chapter = await chapterService.updateChapter(id, req.body);
 
   if (req.body.status !== undefined) {
+    const storyTitle = await storyService.getStoryTitle(storyId);
     getIO()?.to(`story:${storyId}`).emit("chapter:statusUpdate", {
       chapterId: id,
       status: chapter.status,
+      chapterTitle: chapter.title,
+      storyTitle: storyTitle ?? undefined,
       triggeredBy: req.user?.id,
     });
   }

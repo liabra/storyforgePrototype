@@ -52,6 +52,11 @@ export const getStoryStatus = async (storyId: string): Promise<ContentStatus | n
   return story?.status ?? null;
 };
 
+export const getStoryTitle = async (storyId: string): Promise<string | null> => {
+  const story = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
+  return story?.title ?? null;
+};
+
 /**
  * Vérifie qu'un utilisateur peut lire une histoire.
  * - PUBLIC → toujours autorisé
