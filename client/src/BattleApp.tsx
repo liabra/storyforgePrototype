@@ -119,7 +119,16 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   // ── Écoute socket globale (liste) ──────────────────────────────────────────
 
   useEffect(() => {
-    const onBattleCreated = (battle: BattleListItem) => {
+    const onBattleCreated = (raw: BattleListItem & { moves?: unknown[]; votes?: unknown[] }) => {
+      // Le serveur peut envoyer un objet battleDetailInclude (avec moves/votes arrays)
+      // ou battleListInclude (avec _count). On normalise pour garantir _count.
+      const battle: BattleListItem = {
+        ...raw,
+        _count: raw._count ?? {
+          moves: raw.moves?.length ?? 0,
+          votes: raw.votes?.length ?? 0,
+        },
+      };
       setBattles((prev) => prev.some((b) => b.id === battle.id) ? prev : [battle, ...prev]);
     };
     const onBattleUpdated = ({ id, status, defenderId, winner }: Partial<BattleListItem> & { id: string }) => {
@@ -430,7 +439,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                         : <span style={{ fontStyle: "italic" }}>🛡️ En attente d'un défenseur…</span>
                       }
                       <span>Tour {b.turnCount}/{b.maxTurns}</span>
-                      <span>{b._count.moves} move{b._count.moves !== 1 ? "s" : ""}</span>
+                      <span>{b._count?.moves ?? 0} move{(b._count?.moves ?? 0) !== 1 ? "s" : ""}</span>
                     </div>
                   </div>
                   <span style={{ color: C.textMuted }}>→</span>
