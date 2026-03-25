@@ -253,6 +253,8 @@ export default function App() {
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
+  // true une fois que le rôle a été résolu (évite le flash de bannières "visiteur" pendant le chargement)
+  const [membershipResolved, setMembershipResolved] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"EDITOR" | "VIEWER">("EDITOR");
   const [inviting, setInviting] = useState(false);
@@ -760,6 +762,7 @@ export default function App() {
         const mine = participantData.find((p) => p.userId === currentUser.id);
         const restoredRole = mine?.role ?? null;
         setMyRole(restoredRole);
+        setMembershipResolved(true);
         if (restoredRole === "OWNER") {
           api.joinRequests.list(story.id).then(setJoinRequests).catch(() => {});
         } else if (restoredRole === "VIEWER") {
@@ -809,6 +812,7 @@ export default function App() {
     setSidebarOpen(false);
     setParticipants([]);
     setMyRole(null);
+    setMembershipResolved(false);
     setJoinRequests([]);
     setMyJoinRequest(null);
     const [chapterData, charData] = await Promise.all([
@@ -823,6 +827,7 @@ export default function App() {
       const mine = participantData.find((p) => p.userId === currentUser.id);
       const role = mine?.role ?? null;
       setMyRole(role);
+      setMembershipResolved(true);
       // Charger les demandes selon le rôle
       if (role === "OWNER") {
         api.joinRequests.list(story.id).then(setJoinRequests).catch(() => {});
@@ -830,6 +835,9 @@ export default function App() {
         // VIEWER et non-membre connecté peuvent tous deux avoir une demande en cours
         api.joinRequests.getMine(story.id).then(setMyJoinRequest).catch(() => {});
       }
+    } else {
+      // Invité : pas de membership à charger
+      setMembershipResolved(true);
     }
   };
 
@@ -1391,6 +1399,8 @@ export default function App() {
   const isGuest = !currentUser;                           // non connecté
   const isMember = myRole !== null;                       // a un rôle dans l'histoire
   const canWrite = myRole === "OWNER" || myRole === "EDITOR"; // peut écrire
+  // true pendant le chargement du membership — masque les bannières "visiteur" pour éviter le flash
+  const membershipPending = !!selectedStory && !membershipResolved;
   // Données de l'histoire publique (pour les non-membres : count participants, etc.)
   const publicStoryData = selectedStory && !isMember
     ? publicStories.find((s) => s.id === selectedStory.id) ?? null
@@ -1708,6 +1718,14 @@ export default function App() {
                           <div style={{ flex: 1 }}>
                             <div style={s.homepageStoryTitle}>{story.title}</div>
                             {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
+                            {(() => {
+                              const pd = publicStories.find((ps) => ps.id === story.id);
+                              return pd ? (
+                                <span style={{ fontSize: "0.75rem", color: C.textMuted }}>
+                                  👥 {pd._count.participants} participant{pd._count.participants !== 1 ? "s" : ""}
+                                </span>
+                              ) : null;
+                            })()}
                           </div>
                           {storyLastActivity[story.id] && (
                             <span style={s.homepageStoryTime}>{timeAgo(new Date(storyLastActivity[story.id]).toISOString())}</span>
@@ -1831,8 +1849,8 @@ export default function App() {
               {/* ── Tab Chapitres */}
               {activeTab === "chapters" && (
                 <div>
-                  {/* Bannière contextuelle selon le profil du lecteur */}
-                  {isGuest ? (
+                  {/* Bannière visiteur — toujours stable, isGuest ne flicker pas */}
+                  {isGuest && (
                     <div style={{ padding: "0.75rem 1rem", background: "rgba(60,60,80,0.07)", border: "1px solid rgba(60,60,80,0.18)", borderRadius: 6, color: C.textMuted, fontSize: "0.88rem", marginBottom: "1.25rem" }}>
                       Vous consultez cette histoire en lecture publique.{" "}
                       <button
@@ -1842,7 +1860,9 @@ export default function App() {
                         Créer un compte pour participer →
                       </button>
                     </div>
-                  ) : !isMember ? (
+                  )}
+                  {/* Bannières connecté — masquées pendant le chargement du membership */}
+                  {!isGuest && !membershipPending && !isMember && (
                     <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", marginBottom: "1.25rem" }}>
                       Vous lisez cette histoire en tant que visiteur.{" "}
                       <button
@@ -1853,7 +1873,8 @@ export default function App() {
                         {myJoinRequest?.status === "PENDING" ? "Demande en attente…" : "Demander à participer →"}
                       </button>
                     </div>
-                  ) : myRole === "VIEWER" ? (
+                  )}
+                  {!membershipPending && myRole === "VIEWER" && (
                     <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", marginBottom: "1.25rem" }}>
                       Vous lisez cette histoire en tant que spectateur.{" "}
                       <button
@@ -1863,7 +1884,9 @@ export default function App() {
                         Devenir éditeur →
                       </button>
                     </div>
-                  ) : (selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? null : (!showChapterForm ? (
+                  )}
+                  {/* Bouton ajout chapitre — visible seulement pour les membres qui peuvent écrire */}
+                  {!membershipPending && canWrite && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showChapterForm ? (
                     <button style={s.addBtn} onClick={() => setShowChapterForm(true)}>+ Ajouter un chapitre</button>
                   ) : (
                     <form onSubmit={handleCreateChapter} style={s.inlineForm}>
@@ -1945,21 +1968,23 @@ export default function App() {
                       <p style={s.hint}>Un nom ou un pseudo suffit pour commencer.</p>
                     </form>
                   ) : (
-                    <p style={{ ...s.hint, marginBottom: 12 }}>
-                      {isGuest ? (
-                        <>Créez un compte pour contribuer aux personnages.{" "}
-                          <button style={{ background: "none", border: "none", color: C.accent, textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={() => setAuthView("register")}>Créer un compte →</button>
-                        </>
-                      ) : !isMember ? (
-                        <>Vous lisez cette histoire en visiteur.{" "}
-                          <button style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={handleRequestJoin} disabled={requestingJoin || myJoinRequest?.status === "PENDING"}>
-                            {myJoinRequest?.status === "PENDING" ? "Demande en attente…" : "Demander à participer →"}
-                          </button>
-                        </>
-                      ) : (
-                        "Vous êtes en lecture seule. Demandez à devenir éditeur pour contribuer aux personnages."
-                      )}
-                    </p>
+                    !membershipPending && (
+                      <p style={{ ...s.hint, marginBottom: 12 }}>
+                        {isGuest ? (
+                          <>Créez un compte pour contribuer aux personnages.{" "}
+                            <button style={{ background: "none", border: "none", color: C.accent, textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={() => setAuthView("register")}>Créer un compte →</button>
+                          </>
+                        ) : !isMember ? (
+                          <>Vous lisez cette histoire en visiteur.{" "}
+                            <button style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={handleRequestJoin} disabled={requestingJoin || myJoinRequest?.status === "PENDING"}>
+                              {myJoinRequest?.status === "PENDING" ? "Demande en attente…" : "Demander à participer →"}
+                            </button>
+                          </>
+                        ) : (
+                          "Vous êtes en lecture seule. Demandez à devenir éditeur pour contribuer aux personnages."
+                        )}
+                      </p>
+                    )
                   )}
 
                   {characters.length === 0 && <p style={s.mutedCenter}>Aucun personnage dans cette histoire.</p>}
@@ -1968,7 +1993,7 @@ export default function App() {
                     {characters.map((char) => {
                       const hue = avatarHue(displayName(char));
                       const ink = characterInk(hue);
-                      const isExpanded = expandedCharId === char.id;
+                      const isExpanded = isMember && expandedCharId === char.id;
                       // Auteur = celui qui a créé le personnage.
                       // Cas legacy (userId null) : le OWNER garde les droits admin.
                       const isAuthor = char.userId
@@ -1997,25 +2022,27 @@ export default function App() {
                               )}
                             </div>
                             <div style={s.charActions}>
-                              <button style={s.btnMicro} onClick={() => {
-                                if (isExpanded) { setExpandedCharId(null); return; }
-                                setExpandedCharId(char.id);
-                                setCharEdits((p) => ({ ...p, [char.id]: {
-                                  name: char.name,
-                                  nickname: char.nickname,
-                                  role: char.role,
-                                  shortDescription: char.shortDescription,
-                                  appearance: char.appearance,
-                                  outfit: char.outfit,
-                                  accessories: char.accessories,
-                                  personality: char.personality,
-                                  traits: char.traits,
-                                  faction: char.faction,
-                                  visualNotes: char.visualNotes,
-                                }}));
-                              }}>
-                                {isExpanded ? "Fermer" : "Fiche"}
-                              </button>
+                              {isMember && (
+                                <button style={s.btnMicro} onClick={() => {
+                                  if (isExpanded) { setExpandedCharId(null); return; }
+                                  setExpandedCharId(char.id);
+                                  setCharEdits((p) => ({ ...p, [char.id]: {
+                                    name: char.name,
+                                    nickname: char.nickname,
+                                    role: char.role,
+                                    shortDescription: char.shortDescription,
+                                    appearance: char.appearance,
+                                    outfit: char.outfit,
+                                    accessories: char.accessories,
+                                    personality: char.personality,
+                                    traits: char.traits,
+                                    faction: char.faction,
+                                    visualNotes: char.visualNotes,
+                                  }}));
+                                }}>
+                                  {isExpanded ? "Fermer" : "Fiche"}
+                                </button>
+                              )}
                               {isAuthor && (
                                 <button style={s.btnDanger} onClick={() => handleDeleteChar(char.id)}>✕</button>
                               )}
@@ -2075,7 +2102,7 @@ export default function App() {
               {activeTab === "participants" && (
                 <div>
                   {/* Non-membre ou visiteur : count uniquement, pas de liste nominative */}
-                  {!isMember && (
+                  {!membershipPending && !isMember && (
                     <div style={{ padding: "1rem", background: "rgba(60,60,80,0.05)", border: "1px solid rgba(60,60,80,0.15)", borderRadius: 6, marginBottom: "1rem", textAlign: "center" as const }}>
                       <p style={{ margin: "0 0 0.5rem", fontSize: "1rem", color: C.textMuted }}>
                         👥 {publicStoryData ? (
@@ -2503,13 +2530,16 @@ export default function App() {
                     : contribs;
 
                   if (visible.length === 0) {
-                    return (
-                      <div style={s.contribEmpty}>
-                        {spectatorView
-                          ? "Aucun texte visible pour les spectateurs selon les paramètres actuels."
-                          : "Aucune contribution encore. Sois le premier à écrire !"}
-                      </div>
-                    );
+                    const emptyMsg = spectatorView
+                      ? "Aucun texte visible pour les spectateurs selon les paramètres actuels."
+                      : isGuest
+                        ? "Aucune contribution pour l'instant. Créez un compte pour participer."
+                        : !isMember
+                          ? "Aucune contribution pour l'instant. Demandez à participer pour contribuer."
+                          : myRole === "VIEWER"
+                            ? "Aucune contribution pour l'instant. Demandez à devenir éditeur pour contribuer."
+                            : "Aucune contribution encore. Soyez le premier à écrire !";
+                    return <div style={s.contribEmpty}>{emptyMsg}</div>;
                   }
 
                   return visible.map((contrib) => {
@@ -2641,7 +2671,7 @@ export default function App() {
               )}
 
               {/* ── Bandeau lecture seule (sans alerte active) */}
-              {!spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && !roleDowngradeAlert && (
+              {!membershipPending && !spectatorView && selectedScene.status === "ACTIVE" && myRole === "VIEWER" && !roleDowngradeAlert && (
                 <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", textAlign: "center" }}>
                   {myJoinRequest?.status === "PENDING" ? (
                     "Ta demande est en attente de validation par le propriétaire."
