@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { api, AuthUser, Battle, BattleListItem, BattleMove, BattleVote } from "./api";
+import { api } from "./api";
+import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote } from "./api";
 import { socket } from "./socket";
 
 // ── Couleurs / styles ────────────────────────────────────────────────────────
