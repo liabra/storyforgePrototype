@@ -1,5 +1,5 @@
 import prisma from "../prisma/client";
-import { BattleStatus, BattleWinner } from "../generated/prisma/client";
+import { BattleStatus, BattleWinner, StoryVisibility } from "../generated/prisma/client";
 
 const userSelect = {
   id: true,
@@ -29,8 +29,15 @@ const battleDetailInclude = {
   },
 } as const;
 
-export const listBattles = () =>
+export const listBattles = (userId: string) =>
   prisma.battle.findMany({
+    where: {
+      OR: [
+        { visibility: StoryVisibility.PUBLIC },
+        { attackerId: userId },
+        { defenderId: userId },
+      ],
+    },
     include: battleListInclude,
     orderBy: { createdAt: "desc" },
   });
@@ -44,6 +51,7 @@ export const createBattle = (data: {
   attackerId: string;
   minTurns?: number;
   maxTurns?: number;
+  visibility?: StoryVisibility;
 }) =>
   prisma.battle.create({
     data: {
@@ -53,6 +61,7 @@ export const createBattle = (data: {
       minTurns: data.minTurns ?? 4,
       maxTurns: data.maxTurns ?? 8,
       status: BattleStatus.WAITING,
+      visibility: data.visibility ?? StoryVisibility.PRIVATE,
     },
     include: battleDetailInclude,
   });

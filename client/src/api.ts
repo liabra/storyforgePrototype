@@ -202,11 +202,14 @@ export interface BattleVote {
   createdAt: string;
 }
 
+export type BattleVisibility = "PUBLIC" | "PRIVATE";
+
 export interface Battle {
   id: string;
   title: string;
   goal: string;
   status: BattleStatus;
+  visibility: BattleVisibility;
   attackerId: string;
   attacker: BattleUser;
   defenderId: string | null;
@@ -227,6 +230,7 @@ export interface BattleListItem {
   title: string;
   goal: string;
   status: BattleStatus;
+  visibility: BattleVisibility;
   attackerId: string;
   attacker: BattleUser;
   defenderId: string | null;
@@ -388,7 +392,7 @@ export const api = {
   battles: {
     list: () => request<BattleListItem[]>("/battles"),
     get: (id: string) => request<Battle>(`/battles/${id}`),
-    create: (data: { title: string; goal: string; minTurns?: number; maxTurns?: number }) =>
+    create: (data: { title: string; goal: string; minTurns?: number; maxTurns?: number; visibility?: BattleVisibility }) =>
       request<Battle>("/battles", { method: "POST", body: JSON.stringify(data) }),
     join: (id: string) =>
       request<Battle>(`/battles/${id}/join`, { method: "POST" }),

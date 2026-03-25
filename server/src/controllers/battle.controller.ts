@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import * as battleService from "../services/battle.service";
-import { BattleStatus } from "../generated/prisma/client";
+import { BattleStatus, StoryVisibility } from "../generated/prisma/client";
 import { getIO } from "../socket";
 
 const p = (v: string | string[] | undefined): string => {
@@ -9,9 +9,9 @@ const p = (v: string | string[] | undefined): string => {
 };
 
 // GET /api/battles
-export const list = async (_req: Request, res: Response): Promise<void> => {
+export const list = async (req: Request, res: Response): Promise<void> => {
   try {
-    const battles = await battleService.listBattles();
+    const battles = await battleService.listBattles(req.user!.id);
     res.json(battles);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -21,9 +21,14 @@ export const list = async (_req: Request, res: Response): Promise<void> => {
 // GET /api/battles/:id
 export const getOne = async (req: Request, res: Response): Promise<void> => {
   const id = p(req.params.id);
+  const userId = req.user!.id;
   try {
     const battle = await battleService.getBattleById(id);
     if (!battle) { res.status(404).json({ error: "Battle introuvable" }); return; }
+    // Accès : PUBLIC ou joueur
+    if (battle.visibility === StoryVisibility.PRIVATE && battle.attackerId !== userId && battle.defenderId !== userId) {
+      res.status(403).json({ error: "Accès refusé à cette battle privée" }); return;
+    }
     res.json(battle);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -32,7 +37,7 @@ export const getOne = async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/battles
 export const create = async (req: Request, res: Response): Promise<void> => {
-  const { title, goal, minTurns, maxTurns } = req.body;
+  const { title, goal, minTurns, maxTurns, visibility } = req.body;
   if (!title?.trim()) { res.status(400).json({ error: "title requis" }); return; }
   if (!goal?.trim()) { res.status(400).json({ error: "goal requis" }); return; }
   if (minTurns !== undefined && (!Number.isInteger(minTurns) || minTurns < 2)) {
@@ -41,6 +46,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
   if (maxTurns !== undefined && (!Number.isInteger(maxTurns) || maxTurns < (minTurns ?? 4))) {
     res.status(400).json({ error: "maxTurns doit être ≥ minTurns" }); return;
   }
+  const parsedVisibility = visibility === "PUBLIC" ? StoryVisibility.PUBLIC : StoryVisibility.PRIVATE;
 
   try {
     const battle = await battleService.createBattle({
@@ -49,6 +55,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
       attackerId: req.user!.id,
       minTurns,
       maxTurns,
+      visibility: parsedVisibility,
     });
     // Notifier tous les clients connectés pour la liste
     getIO()?.emit("battle:created", battle);
@@ -190,6 +197,8 @@ export const castVote = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+const MIN_VOTES_TO_CLOSE = 3;
+
 // POST /api/battles/:id/vote/close
 export const closeVoting = async (req: Request, res: Response): Promise<void> => {
   const id = p(req.params.id);
@@ -202,6 +211,9 @@ export const closeVoting = async (req: Request, res: Response): Promise<void> =>
   }
   if (battle.attackerId !== userId && battle.defenderId !== userId) {
     res.status(403).json({ error: "Seuls les joueurs peuvent clore le vote" }); return;
+  }
+  if (battle.votes.length < MIN_VOTES_TO_CLOSE) {
+    res.status(409).json({ error: `Il faut au moins ${MIN_VOTES_TO_CLOSE} votes pour clore le scrutin (actuellement ${battle.votes.length})` }); return;
   }
 
   try {

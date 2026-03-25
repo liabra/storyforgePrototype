@@ -183,10 +183,11 @@ enum BattleWinner {
 }
 
 model Battle {
-  id                String        @id @default(cuid())
+  id                String          @id @default(cuid())
   title             String
   goal              String
-  status            BattleStatus  @default(WAITING)
+  status            BattleStatus    @default(WAITING)
+  visibility        StoryVisibility @default(PRIVATE)
   attackerId        String
   attacker          User          @relation("BattleAttacker", fields: [attackerId], references: [id])
   defenderId        String?
