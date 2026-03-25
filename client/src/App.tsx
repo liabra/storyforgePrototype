@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, tokenStore } from "./api";
 import { socket } from "./socket";
+import BattleApp from "./BattleApp";
 import type {
   Story,
   PublicStory,
@@ -152,6 +153,9 @@ export default function App() {
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [activeTab, setActiveTab] = useState<"chapters" | "characters" | "participants">("chapters");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Navigation principale
+  const [appView, setAppView] = useState<"stories" | "battle">("stories");
 
   // Stories
   const [stories, setStories] = useState<Story[]>([]);
@@ -1429,6 +1433,11 @@ export default function App() {
     ? publicStories.find((s) => s.id === selectedStory.id) ?? null
     : null;
 
+  // ── Mode Battle — rendu isolé ──────────────────────────────────────────────
+  if (appView === "battle") {
+    return <BattleApp currentUser={currentUser} onBack={() => setAppView("stories")} />;
+  }
+
   return (
     <div style={s.root}>
       <div style={s.sealTL} className="app-seal-tl" aria-hidden="true">✦</div>
@@ -1480,6 +1489,13 @@ export default function App() {
             </div>
           </div>
           <div style={s.headerRight} className="app-header-right">
+            <button
+              style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem" }}
+              onClick={() => setAppView("battle")}
+              title="Mode Battle"
+            >
+              ⚔ Battle
+            </button>
             {!authLoading && (
               currentUser ? (
                 <div style={s.userChip}>

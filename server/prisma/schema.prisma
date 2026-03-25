@@ -32,6 +32,10 @@ model User {
   contributions Contribution[]
   participations StoryParticipant[]
   joinRequests  JoinRequest[]
+  battlesAsAttacker Battle[]         @relation("BattleAttacker")
+  battlesAsDefender Battle[]         @relation("BattleDefender")
+  battleMoves   BattleMove[]         @relation("BattleMoves")
+  battleVotes   BattleVote[]         @relation("BattleVotes")
 }
 
 model Story {
@@ -162,4 +166,61 @@ model Character {
   contributions    Contribution[]
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+}
+
+// ── Battle mode ─────────────────────────────────────────────────────────────
+
+enum BattleStatus {
+  WAITING
+  ACTIVE
+  VOTING
+  DONE
+}
+
+enum BattleWinner {
+  ATTACKER
+  DEFENDER
+}
+
+model Battle {
+  id                String        @id @default(cuid())
+  title             String
+  goal              String
+  status            BattleStatus  @default(WAITING)
+  attackerId        String
+  attacker          User          @relation("BattleAttacker", fields: [attackerId], references: [id])
+  defenderId        String?
+  defender          User?         @relation("BattleDefender", fields: [defenderId], references: [id])
+  currentTurnUserId String?
+  turnCount         Int           @default(0)
+  minTurns          Int           @default(4)
+  maxTurns          Int           @default(8)
+  winner            BattleWinner?
+  moves             BattleMove[]
+  votes             BattleVote[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model BattleMove {
+  id         String   @id @default(cuid())
+  battleId   String
+  battle     Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("BattleMoves", fields: [userId], references: [id])
+  content    String
+  turnNumber Int
+  createdAt  DateTime @default(now())
+}
+
+model BattleVote {
+  id        String   @id @default(cuid())
+  battleId  String
+  battle    Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("BattleVotes", fields: [userId], references: [id])
+  vote      Boolean
+  createdAt DateTime @default(now())
+
+  @@unique([battleId, userId])
 }

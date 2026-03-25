@@ -70,6 +70,15 @@ io.on("connection", (socket) => {
     console.log(`[socket] ${socket.id} left scene:${sceneId}`);
   });
 
+  // ── Rooms battle
+  socket.on("battle:join", ({ battleId }: { battleId: string }) => {
+    socket.join(`battle:${battleId}`);
+  });
+
+  socket.on("battle:leave", ({ battleId }: { battleId: string }) => {
+    socket.leave(`battle:${battleId}`);
+  });
+
   // ── Typing
   socket.on("typing:start", ({ sceneId, userId, username }: { sceneId: string; userId: string; username: string }) => {
     socket.to(`scene:${sceneId}`).emit("typing:start", { sceneId, userId, username });

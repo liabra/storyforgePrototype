@@ -10,6 +10,7 @@ import participantRoutes from "./participant.routes";
 import joinRequestRoutes from "./joinRequest.routes";
 import activityRoutes from "./activity.routes";
 import devRoutes from "./dev.routes";
+import battleRoutes from "./battle.routes";
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use(participantRoutes);
 router.use(joinRequestRoutes);
 router.use(activityRoutes);
 router.use(devRoutes);
+router.use(battleRoutes);
 
 export default router;

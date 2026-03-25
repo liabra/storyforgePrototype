@@ -171,6 +171,86 @@ export interface JoinRequest {
   story: { id: string; title: string };
 }
 
+// ── Battle types ──────────────────────────────────────────────────────────────
+
+export type BattleStatus = "WAITING" | "ACTIVE" | "VOTING" | "DONE";
+export type BattleWinner = "ATTACKER" | "DEFENDER";
+
+export interface BattleUser {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  color?: string | null;
+}
+
+export interface BattleMove {
+  id: string;
+  battleId: string;
+  userId: string;
+  user: BattleUser;
+  content: string;
+  turnNumber: number;
+  createdAt: string;
+}
+
+export interface BattleVote {
+  id: string;
+  battleId: string;
+  userId: string;
+  user: BattleUser;
+  vote: boolean;
+  createdAt: string;
+}
+
+export interface Battle {
+  id: string;
+  title: string;
+  goal: string;
+  status: BattleStatus;
+  attackerId: string;
+  attacker: BattleUser;
+  defenderId: string | null;
+  defender: BattleUser | null;
+  currentTurnUserId: string | null;
+  turnCount: number;
+  minTurns: number;
+  maxTurns: number;
+  winner: BattleWinner | null;
+  moves: BattleMove[];
+  votes: BattleVote[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BattleListItem {
+  id: string;
+  title: string;
+  goal: string;
+  status: BattleStatus;
+  attackerId: string;
+  attacker: BattleUser;
+  defenderId: string | null;
+  defender: BattleUser | null;
+  currentTurnUserId: string | null;
+  turnCount: number;
+  minTurns: number;
+  maxTurns: number;
+  winner: BattleWinner | null;
+  _count: { moves: number; votes: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BattleMoveResult {
+  move: BattleMove;
+  updatedBattle: {
+    id: string;
+    turnCount: number;
+    currentTurnUserId: string | null;
+    status: BattleStatus;
+  };
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = tokenStore.get();
   const res = await fetch(`${BASE}${path}`, {
@@ -304,5 +384,21 @@ export const api = {
     update: (id: string, data: CharacterInput) =>
       request<Character>(`/characters/${id}`, { method: "PUT", body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/characters/${id}`, { method: "DELETE" }),
+  },
+  battles: {
+    list: () => request<BattleListItem[]>("/battles"),
+    get: (id: string) => request<Battle>(`/battles/${id}`),
+    create: (data: { title: string; goal: string; minTurns?: number; maxTurns?: number }) =>
+      request<Battle>("/battles", { method: "POST", body: JSON.stringify(data) }),
+    join: (id: string) =>
+      request<Battle>(`/battles/${id}/join`, { method: "POST" }),
+    createMove: (id: string, content: string) =>
+      request<BattleMoveResult>(`/battles/${id}/moves`, { method: "POST", body: JSON.stringify({ content }) }),
+    startVoting: (id: string) =>
+      request<Battle>(`/battles/${id}/vote/start`, { method: "POST" }),
+    castVote: (id: string, vote: boolean) =>
+      request<BattleVote>(`/battles/${id}/vote`, { method: "POST", body: JSON.stringify({ vote }) }),
+    closeVoting: (id: string) =>
+      request<Battle>(`/battles/${id}/vote/close`, { method: "POST" }),
   },
 };
