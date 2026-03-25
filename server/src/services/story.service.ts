@@ -40,7 +40,7 @@ export const getPublicStories = () =>
       visibility: true,
       createdAt: true,
       updatedAt: true,
-      _count: { select: { chapters: true } },
+      _count: { select: { chapters: true, participants: true } },
     },
   });
 

@@ -29,7 +29,7 @@ export interface PublicStory {
   visibility: StoryVisibility;
   createdAt: string;
   updatedAt: string;
-  _count: { chapters: number };
+  _count: { chapters: number; participants: number };
 }
 
 export interface CharacterRef {

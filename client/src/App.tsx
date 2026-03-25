@@ -826,7 +826,8 @@ export default function App() {
       // Charger les demandes selon le rôle
       if (role === "OWNER") {
         api.joinRequests.list(story.id).then(setJoinRequests).catch(() => {});
-      } else if (role === "VIEWER") {
+      } else if (role === "VIEWER" || role === null) {
+        // VIEWER et non-membre connecté peuvent tous deux avoir une demande en cours
         api.joinRequests.getMine(story.id).then(setMyJoinRequest).catch(() => {});
       }
     }
@@ -1386,6 +1387,15 @@ export default function App() {
   const prevScene = sceneNavIndex > 0 ? sortedScenes[sceneNavIndex - 1] : null;
   const nextScene = sceneNavIndex < sortedScenes.length - 1 ? sortedScenes[sceneNavIndex + 1] : null;
 
+  // ── Rôles et accès dérivés ──────────────────────────────────────────────────
+  const isGuest = !currentUser;                           // non connecté
+  const isMember = myRole !== null;                       // a un rôle dans l'histoire
+  const canWrite = myRole === "OWNER" || myRole === "EDITOR"; // peut écrire
+  // Données de l'histoire publique (pour les non-membres : count participants, etc.)
+  const publicStoryData = selectedStory && !isMember
+    ? publicStories.find((s) => s.id === selectedStory.id) ?? null
+    : null;
+
   return (
     <div style={s.root}>
       <div style={s.sealTL} className="app-seal-tl" aria-hidden="true">✦</div>
@@ -1657,8 +1667,9 @@ export default function App() {
                         <div style={{ flex: 1 }}>
                           <div style={s.homepageStoryTitle}>{story.title}</div>
                           {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
-                          <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2 }}>
-                            {story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}
+                          <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2, display: "flex", gap: "0.75rem" }}>
+                            <span>{story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}</span>
+                            <span>👥 {story._count.participants > 0 ? `${story._count.participants} participant${story._count.participants !== 1 ? "s" : ""}` : "Soyez le premier à participer"}</span>
                           </div>
                         </div>
                         <span style={{ ...s.chapterArrow, marginTop: 0 }}>→</span>
@@ -1745,8 +1756,9 @@ export default function App() {
                           <div style={{ flex: 1 }}>
                             <div style={s.homepageStoryTitle}>{story.title}</div>
                             {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
-                            <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2 }}>
-                              {story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}
+                            <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2, display: "flex", gap: "0.75rem" }}>
+                              <span>{story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}</span>
+                              <span>👥 {story._count.participants > 0 ? `${story._count.participants} participant${story._count.participants !== 1 ? "s" : ""}` : "Soyez le premier à participer"}</span>
                             </div>
                           </div>
                           <span style={{ ...s.chapterArrow, marginTop: 0 }}>→</span>
@@ -1812,14 +1824,36 @@ export default function App() {
                   Personnages ({characters.length})
                 </button>
                 <button className="app-tab" style={{ ...s.tab, ...(activeTab === "participants" ? s.tabActive : {}) }} onClick={() => setActiveTab("participants")}>
-                  Participants ({participants.length})
+                  Participants {isMember ? `(${participants.length})` : publicStoryData ? `(${publicStoryData._count.participants})` : ""}
                 </button>
               </div>
 
               {/* ── Tab Chapitres */}
               {activeTab === "chapters" && (
                 <div>
-                  {myRole === "VIEWER" ? (
+                  {/* Bannière contextuelle selon le profil du lecteur */}
+                  {isGuest ? (
+                    <div style={{ padding: "0.75rem 1rem", background: "rgba(60,60,80,0.07)", border: "1px solid rgba(60,60,80,0.18)", borderRadius: 6, color: C.textMuted, fontSize: "0.88rem", marginBottom: "1.25rem" }}>
+                      Vous consultez cette histoire en lecture publique.{" "}
+                      <button
+                        style={{ background: "none", border: "none", color: C.accent, textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }}
+                        onClick={() => setAuthView("register")}
+                      >
+                        Créer un compte pour participer →
+                      </button>
+                    </div>
+                  ) : !isMember ? (
+                    <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", marginBottom: "1.25rem" }}>
+                      Vous lisez cette histoire en tant que visiteur.{" "}
+                      <button
+                        style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }}
+                        onClick={handleRequestJoin}
+                        disabled={requestingJoin || myJoinRequest?.status === "PENDING"}
+                      >
+                        {myJoinRequest?.status === "PENDING" ? "Demande en attente…" : "Demander à participer →"}
+                      </button>
+                    </div>
+                  ) : myRole === "VIEWER" ? (
                     <div style={{ padding: "0.75rem 1rem", background: "rgba(122,76,8,0.08)", border: "1px solid rgba(122,76,8,0.25)", borderRadius: 6, color: "#7a4c08", fontSize: "0.88rem", marginBottom: "1.25rem" }}>
                       Vous lisez cette histoire en tant que spectateur.{" "}
                       <button
@@ -1845,7 +1879,7 @@ export default function App() {
 
                   {chapters.length === 0 && (
                     <p style={s.mutedCenter}>
-                      {myRole === "VIEWER" ? "Aucun chapitre pour l'instant." : "Aucun chapitre. Commence par en créer un."}
+                      {canWrite ? "Aucun chapitre. Commence par en créer un." : "Aucun chapitre pour l'instant."}
                     </p>
                   )}
 
@@ -1901,7 +1935,7 @@ export default function App() {
               {/* ── Tab Personnages */}
               {activeTab === "characters" && (
                 <div>
-                  {(myRole === "OWNER" || myRole === "EDITOR") ? (
+                  {canWrite ? (
                     <form onSubmit={handleCreateChar} style={s.inlineForm}>
                       <div style={s.row}>
                         <input style={s.inputDark} placeholder="Nom" value={newChar.name ?? ""} onChange={(e) => setNewChar((p) => ({ ...p, name: e.target.value }))} />
@@ -1912,7 +1946,9 @@ export default function App() {
                     </form>
                   ) : (
                     <p style={{ ...s.hint, marginBottom: 12 }}>
-                      Vous êtes en lecture seule sur cette histoire. Demandez à devenir éditeur pour contribuer aux personnages.
+                      {isGuest
+                        ? "Créez un compte pour contribuer aux personnages de cette histoire."
+                        : "Vous êtes en lecture seule. Demandez à participer pour contribuer aux personnages."}
                     </p>
                   )}
 
@@ -2028,6 +2064,37 @@ export default function App() {
               {/* ── Tab Participants */}
               {activeTab === "participants" && (
                 <div>
+                  {/* Non-membre ou visiteur : count uniquement, pas de liste nominative */}
+                  {!isMember && (
+                    <div style={{ padding: "1rem", background: "rgba(60,60,80,0.05)", border: "1px solid rgba(60,60,80,0.15)", borderRadius: 6, marginBottom: "1rem", textAlign: "center" as const }}>
+                      <p style={{ margin: "0 0 0.5rem", fontSize: "1rem", color: C.textMuted }}>
+                        👥 {publicStoryData ? (
+                          publicStoryData._count.participants > 0
+                            ? `${publicStoryData._count.participants} participant${publicStoryData._count.participants !== 1 ? "s" : ""}`
+                            : "Soyez le premier à participer"
+                        ) : "Participants"}
+                      </p>
+                      {isGuest ? (
+                        <button
+                          style={{ ...s.btnAccent, fontSize: "0.85rem" }}
+                          onClick={() => setAuthView("register")}
+                        >
+                          Créer un compte pour participer →
+                        </button>
+                      ) : (
+                        <button
+                          style={{ ...s.btnAccent, fontSize: "0.85rem" }}
+                          onClick={handleRequestJoin}
+                          disabled={requestingJoin || myJoinRequest?.status === "PENDING"}
+                        >
+                          {myJoinRequest?.status === "PENDING"
+                            ? "Demande en attente de validation…"
+                            : requestingJoin ? "Envoi…" : "Demander à participer →"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {myRole === "OWNER" && (
                     <form onSubmit={handleInvite} style={s.inlineForm}>
                       <p style={s.formTitle}>Inviter un participant</p>
@@ -2113,9 +2180,9 @@ export default function App() {
                     </div>
                   )}
 
-                  {participants.length === 0 && <p style={s.mutedCenter}>Aucun participant chargé.</p>}
+                  {isMember && participants.length === 0 && <p style={s.mutedCenter}>Aucun participant chargé.</p>}
 
-                  {participants.length > 0 && (
+                  {isMember && participants.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
                     {participants.map((pt) => {
                       const ink = pt.user.color
@@ -2207,7 +2274,7 @@ export default function App() {
                 })()}
               </div>
 
-              {myRole !== "VIEWER" && selectedChapter.status !== "DONE" && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showSceneForm ? (
+              {canWrite && selectedChapter.status !== "DONE" && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showSceneForm ? (
                 <button style={s.addBtn} onClick={() => setShowSceneForm(true)}>+ Ajouter une scène</button>
               ) : (
                 <form onSubmit={handleCreateScene} style={s.inlineForm}>

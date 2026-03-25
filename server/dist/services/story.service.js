@@ -38,7 +38,7 @@ const getPublicStories = () => client_1.default.story.findMany({
         visibility: true,
         createdAt: true,
         updatedAt: true,
-        _count: { select: { chapters: true } },
+        _count: { select: { chapters: true, participants: true } },
     },
 });
 exports.getPublicStories = getPublicStories;
