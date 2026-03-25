@@ -718,7 +718,7 @@ export default function App() {
   useEffect(() => {
     const token = tokenStore.get();
     if (!token) { setAuthLoading(false); return; }
-    api.auth.me()
+    api.users.getProfile()
       .then(setCurrentUser)
       .catch(() => { tokenStore.clear(); setCurrentUser(null); })
       .finally(() => setAuthLoading(false));

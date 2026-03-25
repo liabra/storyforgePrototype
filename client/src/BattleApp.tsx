@@ -151,10 +151,12 @@ export default function BattleApp({ currentUser, onBack }: Props) {
     }) => {
       setSelectedBattle((prev) => {
         if (!prev) return prev;
-        const already = prev.moves.some((m) => m.id === move.id);
+        const prevMoves = prev.moves ?? [];
+        const already = prevMoves.some((m) => m.id === move.id);
         return {
           ...prev,
-          moves: already ? prev.moves : [...prev.moves, move],
+          moves: already ? prevMoves : [...prevMoves, move],
+          votes: prev.votes ?? [],
           turnCount,
           currentTurnUserId,
           status,
@@ -169,10 +171,11 @@ export default function BattleApp({ currentUser, onBack }: Props) {
     const onVoted = ({ vote, voteCount }: { battleId: string; vote: BattleVote; voteCount: { yes: number; no: number; total: number } }) => {
       setSelectedBattle((prev) => {
         if (!prev) return prev;
-        const already = prev.votes.some((v) => v.id === vote.id);
+        const prevVotes = prev.votes ?? [];
+        const already = prevVotes.some((v) => v.id === vote.id);
         if (already) return prev;
-        void voteCount; // total accessible via prev.votes.length + 1
-        return { ...prev, votes: [...prev.votes, vote] };
+        void voteCount;
+        return { ...prev, votes: [...prevVotes, vote], moves: prev.moves ?? [] };
       });
     };
 
@@ -219,11 +222,14 @@ export default function BattleApp({ currentUser, onBack }: Props) {
     setCreating(true);
     setError(null);
     try {
-      const battle = await api.battles.create({ title: newTitle.trim(), goal: newGoal.trim() });
+      const created = await api.battles.create({ title: newTitle.trim(), goal: newGoal.trim() });
+      // Refetch explicite pour garantir le détail complet (moves:[], votes:[])
+      const full = await api.battles.get(created.id);
       setNewTitle("");
       setNewGoal("");
       setShowCreateForm(false);
-      setSelectedBattle(battle);
+      setMoveContent("");
+      setSelectedBattle(full);
       setView("detail");
     } catch (e) {
       setError((e as Error).message);
@@ -256,10 +262,12 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       setMoveContent("");
       setSelectedBattle((prev) => {
         if (!prev) return prev;
-        const already = prev.moves.some((m) => m.id === move.id);
+        const prevMoves = prev.moves ?? [];
+        const already = prevMoves.some((m) => m.id === move.id);
         return {
           ...prev,
-          moves: already ? prev.moves : [...prev.moves, move],
+          moves: already ? prevMoves : [...prevMoves, move],
+          votes: prev.votes ?? [],
           turnCount: updatedBattle.turnCount,
           currentTurnUserId: updatedBattle.currentTurnUserId,
           status: updatedBattle.status,
@@ -294,8 +302,9 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       const newVote = await api.battles.castVote(selectedBattle.id, vote);
       setSelectedBattle((prev) => {
         if (!prev) return prev;
-        const already = prev.votes.some((v) => v.id === newVote.id);
-        return already ? prev : { ...prev, votes: [...prev.votes, newVote] };
+        const prevVotes = prev.votes ?? [];
+        const already = prevVotes.some((v) => v.id === newVote.id);
+        return already ? prev : { ...prev, votes: [...prevVotes, newVote], moves: prev.moves ?? [] };
       });
     } catch (e) {
       setError((e as Error).message);
@@ -439,13 +448,15 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   // ══════════════════════════════════════════════════════════════════════════
 
   const b = selectedBattle!;
+  const bMoves = b.moves ?? [];
+  const bVotes = b.votes ?? [];
   const isAttacker = currentUser.id === b.attackerId;
   const isDefender = currentUser.id === b.defenderId;
   const isPlayer = isAttacker || isDefender;
   const isMyTurn = b.currentTurnUserId === currentUser.id;
-  const myVote = b.votes.find((v) => v.userId === currentUser.id);
-  const yesCount = b.votes.filter((v) => v.vote).length;
-  const noCount = b.votes.filter((v) => !v.vote).length;
+  const myVote = bVotes.find((v) => v.userId === currentUser.id);
+  const yesCount = bVotes.filter((v) => v.vote).length;
+  const noCount = bVotes.filter((v) => !v.vote).length;
   const canStartVoting = isPlayer && b.status === "ACTIVE" && b.turnCount >= b.minTurns;
   const [statusColor2, statusBg2] = statusColor[b.status] ?? [C.textMuted, "transparent"];
 
@@ -510,12 +521,12 @@ export default function BattleApp({ currentUser, onBack }: Props) {
         <hr style={s.divider} />
 
         {/* Timeline des moves */}
-        <p style={s.sectionLabel}>Moves ({b.moves.length})</p>
-        {b.moves.length === 0 && (
+        <p style={s.sectionLabel}>Moves ({bMoves.length})</p>
+        {bMoves.length === 0 && (
           <p style={s.muted}>Aucun move pour l'instant.{b.status === "ACTIVE" && " C'est à l'attaquant de commencer."}</p>
         )}
         <div style={{ marginBottom: "1.25rem" }}>
-          {b.moves.map((move) => {
+          {bMoves.map((move) => {
             const isAtk = move.userId === b.attackerId;
             return (
               <div key={move.id} style={{ ...s.moveItem, ...(isAtk ? s.moveAttacker : s.moveDefender) }}>
@@ -606,7 +617,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             )}
 
             <p style={{ ...s.hint, marginTop: "0.75rem" }}>
-              {b.votes.length} vote{b.votes.length !== 1 ? "s" : ""} enregistré{b.votes.length !== 1 ? "s" : ""}
+              {bVotes.length} vote{bVotes.length !== 1 ? "s" : ""} enregistré{bVotes.length !== 1 ? "s" : ""}
             </p>
 
             {isPlayer && (
@@ -637,7 +648,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </p>
             <hr style={s.divider} />
             <p style={{ ...s.muted, marginBottom: 0 }}>
-              Résultat : {yesCount} Oui · {noCount} Non · {b.votes.length} vote{b.votes.length !== 1 ? "s" : ""}
+              Résultat : {yesCount} Oui · {noCount} Non · {bVotes.length} vote{bVotes.length !== 1 ? "s" : ""}
             </p>
           </div>
         )}
