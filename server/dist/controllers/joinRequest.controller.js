@@ -46,16 +46,13 @@ const p = (v) => (Array.isArray(v) ? v[0] : v);
 const create = async (req, res) => {
     const storyId = p(req.params.storyId);
     const userId = req.user.id;
-    // Vérifier que l'utilisateur est bien VIEWER (pas OWNER ou EDITOR)
+    // Refuser si déjà OWNER ou EDITOR (inutile de demander)
     const role = await participantService.getUserRole(storyId, userId);
-    if (!role) {
-        res.status(403).json({ error: "Vous n'êtes pas participant à cette histoire" });
+    if (role === client_1.ParticipantRole.OWNER || role === client_1.ParticipantRole.EDITOR) {
+        res.status(400).json({ error: "Vous êtes déjà membre actif de cette histoire" });
         return;
     }
-    if (role !== client_1.ParticipantRole.VIEWER) {
-        res.status(409).json({ error: "Vous êtes déjà éditeur ou propriétaire de cette histoire" });
-        return;
-    }
+    // role === null (non-membre) ou VIEWER → autorisé à soumettre une demande
     // Vérifier qu'il n'y a pas déjà une demande en cours
     const existing = await joinRequestService.getMyRequest(storyId, userId);
     if (existing && existing.status === "PENDING") {

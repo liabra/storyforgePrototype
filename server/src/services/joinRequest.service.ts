@@ -46,10 +46,11 @@ export const acceptRequest = async (requestId: string) => {
   });
   if (!request) throw new Error("Demande introuvable");
 
-  // Met à jour le rôle du participant en EDITOR
-  await prisma.storyParticipant.update({
+  // Met à jour le rôle en EDITOR (upsert pour gérer les non-membres sans enregistrement existant)
+  await prisma.storyParticipant.upsert({
     where: { storyId_userId: { storyId: request.storyId, userId: request.userId } },
-    data: { role: ParticipantRole.EDITOR },
+    create: { storyId: request.storyId, userId: request.userId, role: ParticipantRole.EDITOR },
+    update: { role: ParticipantRole.EDITOR },
   });
 
   // Marque la demande comme acceptée

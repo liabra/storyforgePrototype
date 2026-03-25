@@ -1860,7 +1860,7 @@ export default function App() {
                         style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }}
                         onClick={() => setActiveTab("participants")}
                       >
-                        Demander à participer →
+                        Devenir éditeur →
                       </button>
                     </div>
                   ) : (selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? null : (!showChapterForm ? (
@@ -1946,9 +1946,19 @@ export default function App() {
                     </form>
                   ) : (
                     <p style={{ ...s.hint, marginBottom: 12 }}>
-                      {isGuest
-                        ? "Créez un compte pour contribuer aux personnages de cette histoire."
-                        : "Vous êtes en lecture seule. Demandez à participer pour contribuer aux personnages."}
+                      {isGuest ? (
+                        <>Créez un compte pour contribuer aux personnages.{" "}
+                          <button style={{ background: "none", border: "none", color: C.accent, textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={() => setAuthView("register")}>Créer un compte →</button>
+                        </>
+                      ) : !isMember ? (
+                        <>Vous lisez cette histoire en visiteur.{" "}
+                          <button style={{ background: "none", border: "none", color: "#7a4c08", textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={handleRequestJoin} disabled={requestingJoin || myJoinRequest?.status === "PENDING"}>
+                            {myJoinRequest?.status === "PENDING" ? "Demande en attente…" : "Demander à participer →"}
+                          </button>
+                        </>
+                      ) : (
+                        "Vous êtes en lecture seule. Demandez à devenir éditeur pour contribuer aux personnages."
+                      )}
                     </p>
                   )}
 
@@ -2165,7 +2175,7 @@ export default function App() {
                               : "Tu es lecteur de cette histoire. Tu peux demander à devenir éditeur."}
                           </p>
                           <button style={s.btnAccent} onClick={handleRequestJoin} disabled={requestingJoin}>
-                            {requestingJoin ? "Envoi…" : "Demander à participer →"}
+                            {requestingJoin ? "Envoi…" : "Devenir éditeur →"}
                           </button>
                         </>
                       ) : myJoinRequest.status === "PENDING" ? (
@@ -2645,7 +2655,7 @@ export default function App() {
                         onClick={() => { setActiveTab("participants"); setSelectedScene(null); }}
                         disabled={requestingJoin}
                       >
-                        Demander à participer →
+                        Devenir éditeur →
                       </button>
                     </>
                   )}
