@@ -1318,19 +1318,6 @@ export default function App() {
     localStorage.removeItem("sf_nav");
   };
 
-  const handleAuthError = (err: unknown) => {
-    if ((err as Error).message.includes("401")) {
-      tokenStore.clear();
-      setCurrentUser(null);
-      setSelectedStory(null);
-      setSelectedChapter(null);
-      setSelectedScene(null);
-      navRestoredRef.current = false;
-      localStorage.removeItem("sf_nav");
-    }
-    throw err;
-  };
-
   const handleOpenProfile = () => {
     setProfileEdits({
       displayName: currentUser?.displayName ?? "",
