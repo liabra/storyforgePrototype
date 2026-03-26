@@ -152,8 +152,11 @@ export default function BattleApp({ currentUser, onBack }: Props) {
 
   useEffect(() => {
     const onBattleCreated = (raw: BattleListItem & { moves?: unknown[]; votes?: unknown[] }) => {
-      // Le serveur peut envoyer un objet battleDetailInclude (avec moves/votes arrays)
-      // ou battleListInclude (avec _count). On normalise pour garantir _count.
+      // Ignorer les battles PRIVATE dont l'utilisateur n'est pas joueur
+      // (garde défensive — le backend ne devrait plus les broadcaster globalement)
+      if (raw.visibility === "PRIVATE" && raw.attackerId !== currentUser?.id && raw.defenderId !== currentUser?.id) return;
+      // Normaliser _count : le serveur peut envoyer battleDetailInclude (moves/votes arrays)
+      // ou battleListInclude (_count). On garantit _count dans les deux cas.
       const battle: BattleListItem = {
         ...raw,
         _count: raw._count ?? {

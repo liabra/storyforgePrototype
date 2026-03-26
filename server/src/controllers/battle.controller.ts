@@ -63,7 +63,13 @@ export const create = async (req: Request, res: Response): Promise<void> => {
       maxTurns,
       visibility: parsedVisibility,
     });
-    getIO()?.emit("battle:created", battle);
+    // PRIVATE : notifier uniquement le créateur — les autres n'y ont pas accès
+    // PUBLIC  : broadcast global pour que tout le monde puisse rejoindre
+    if (parsedVisibility === StoryVisibility.PUBLIC) {
+      getIO()?.emit("battle:created", battle);
+    } else {
+      getIO()?.to(`user:${req.user!.id}`).emit("battle:created", battle);
+    }
     res.status(201).json(battle);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
