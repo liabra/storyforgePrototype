@@ -13,6 +13,7 @@ import devRoutes from "./dev.routes";
 import battleRoutes from "./battle.routes";
 import reportRoutes from "./report.routes";
 import adminRoutes from "./admin.routes";
+import notificationRoutes from "./notification.routes";
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use(devRoutes);
 router.use(battleRoutes);
 router.use(reportRoutes);
 router.use(adminRoutes);
+router.use(notificationRoutes);
 
 export default router;

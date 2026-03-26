@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import prisma from "../prisma/client";
 import { ReportStatus } from "../generated/prisma/client";
+import { createNotification } from "../services/notification.service";
+import { getIO } from "../socket";
 
 const p = (v: string | string[] | undefined): string => {
   if (!v) throw new Error("Missing param");
@@ -106,17 +108,25 @@ export const deleteContent = async (req: Request, res: Response): Promise<void> 
   }
 
   try {
+    let authorId: string | null = null;
+
     if (targetType === "CONTRIBUTION") {
-      const item = await prisma.contribution.findUnique({ where: { id: targetId }, select: { id: true } });
+      const item = await prisma.contribution.findUnique({ where: { id: targetId }, select: { id: true, userId: true } });
       if (!item) { res.status(404).json({ error: "Contribution introuvable" }); return; }
+      authorId = item.userId;
       await prisma.contribution.delete({ where: { id: targetId } });
     } else if (targetType === "BATTLE_MOVE") {
-      const item = await prisma.battleMove.findUnique({ where: { id: targetId }, select: { id: true } });
+      const item = await prisma.battleMove.findUnique({ where: { id: targetId }, select: { id: true, userId: true } });
       if (!item) { res.status(404).json({ error: "Move introuvable" }); return; }
+      authorId = item.userId;
       await prisma.battleMove.delete({ where: { id: targetId } });
     } else if (targetType === "STORY") {
-      const item = await prisma.story.findUnique({ where: { id: targetId }, select: { id: true } });
+      const item = await prisma.story.findUnique({
+        where: { id: targetId },
+        select: { id: true, participants: { where: { role: "OWNER" }, select: { userId: true }, take: 1 } },
+      });
       if (!item) { res.status(404).json({ error: "Histoire introuvable" }); return; }
+      authorId = item.participants[0]?.userId ?? null;
       await prisma.story.delete({ where: { id: targetId } });
     }
 
@@ -125,6 +135,16 @@ export const deleteContent = async (req: Request, res: Response): Promise<void> 
       where: { targetType, targetId, status: "OPEN" },
       data: { status: "RESOLVED" },
     });
+
+    // Notifier l'auteur du contenu supprimé
+    if (authorId) {
+      const notif = await createNotification(
+        authorId,
+        "CONTENT_REMOVED",
+        "Un de vos contenus a été retiré car il ne respecte pas les règles de Storyforge.",
+      );
+      getIO()?.to(`user:${authorId}`).emit("notification:new", notif);
+    }
 
     res.json({ ok: true });
   } catch (err) {
@@ -145,6 +165,14 @@ export const banUser = async (req: Request, res: Response): Promise<void> => {
       data: { isBanned: true },
       select: { id: true, email: true, displayName: true, isBanned: true },
     });
+
+    const notif = await createNotification(
+      id,
+      "USER_BANNED",
+      "Votre compte a été suspendu pour non-respect des règles de Storyforge.",
+    );
+    getIO()?.to(`user:${id}`).emit("notification:new", notif);
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -163,6 +191,14 @@ export const unbanUser = async (req: Request, res: Response): Promise<void> => {
       data: { isBanned: false },
       select: { id: true, email: true, displayName: true, isBanned: true },
     });
+
+    const notif = await createNotification(
+      id,
+      "USER_UNBANNED",
+      "Votre compte a de nouveau accès aux interactions sur Storyforge.",
+    );
+    getIO()?.to(`user:${id}`).emit("notification:new", notif);
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });

@@ -29,6 +29,7 @@ import { scenePresenceLabel } from "./presence";
 import { PresenceAvatar } from "./PresenceAvatar";
 import { ToastContainer } from "./Toast";
 import type { ToastItem } from "./Toast";
+import type { AppNotification } from "./api";
 import SceneReader from "./SceneReader";
 import { ReportModal } from "./ReportModal";
 import AdminPage from "./AdminPage";
@@ -259,6 +260,10 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastIdRef = useRef(0);
 
+  // Notifications internes
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+
   // Participants
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<ParticipantRole | null>(null);
@@ -444,6 +449,10 @@ export default function App() {
       });
     };
 
+    const onNotificationNew = (notif: AppNotification) => {
+      setNotifications((prev) => [notif, ...prev]);
+    };
+
     socket.on("connect", onConnect);
     socket.on("presence:update", onPresenceUpdate);
     socket.on("activity:new", onActivityNew);
@@ -452,6 +461,7 @@ export default function App() {
     socket.on("join-request:response", onJoinRequestResponse);
     socket.on("participant:update", onParticipantUpdateGlobal);
     socket.on("battle:invited", onBattleInvited);
+    socket.on("notification:new", onNotificationNew);
     socket.connect();
 
     return () => {
@@ -463,6 +473,7 @@ export default function App() {
       socket.off("join-request:response", onJoinRequestResponse);
       socket.off("participant:update", onParticipantUpdateGlobal);
       socket.off("battle:invited", onBattleInvited);
+      socket.off("notification:new", onNotificationNew);
       socket.disconnect();
     };
   }, [currentUser]);
@@ -739,6 +750,12 @@ export default function App() {
       .catch(() => { tokenStore.clear(); setCurrentUser(null); })
       .finally(() => setAuthLoading(false));
   }, []);
+
+  // ── Load notifications (uniquement si connecté)
+  useEffect(() => {
+    if (!currentUser) { setNotifications([]); return; }
+    api.notifications.mine().then(setNotifications).catch(() => {});
+  }, [currentUser]);
 
   // ── Load stories (uniquement si connecté)
   useEffect(() => {
@@ -1534,6 +1551,35 @@ export default function App() {
                 ⚑ Admin
               </button>
             )}
+            {currentUser && (
+              <div style={{ position: "relative" }}>
+                <button
+                  style={{ ...s.btnGhost, fontSize: "0.9rem", padding: "0.25rem 0.55rem", position: "relative" }}
+                  onClick={() => setShowNotifPanel((v) => !v)}
+                  title="Notifications"
+                  aria-label="Notifications"
+                >
+                  🔔
+                  {notifications.filter((n) => !n.isRead).length > 0 && (
+                    <span style={{
+                      position: "absolute", top: 1, right: 1,
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: "#b91c1c", border: "1.5px solid #f8f0d8",
+                    }} />
+                  )}
+                </button>
+                {showNotifPanel && (
+                  <NotifPanel
+                    notifications={notifications}
+                    onMarkRead={async (id) => {
+                      await api.notifications.markRead(id);
+                      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
+                    }}
+                    onClose={() => setShowNotifPanel(false)}
+                  />
+                )}
+              </div>
+            )}
             <button
               style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem" }}
               onClick={() => setAppView("battle")}
@@ -1692,6 +1738,16 @@ export default function App() {
       )}
 
       {error && <div style={s.errorBanner}>{error}<button style={s.errorClose} onClick={() => setError(null)}>✕</button></div>}
+
+      {currentUser?.isBanned && (
+        <div style={{
+          background: "rgba(146,64,14,0.12)", borderBottom: "1px solid rgba(146,64,14,0.28)",
+          color: "#92400e", padding: "0.55rem 1.5rem",
+          fontSize: "0.85rem", textAlign: "center" as const, fontWeight: 500,
+        }}>
+          Votre compte est actuellement suspendu. La lecture reste disponible, mais les interactions sont désactivées.
+        </div>
+      )}
 
       <div style={s.layout} className="app-layout">
 
@@ -3005,6 +3061,79 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+// ─── NotifPanel ───────────────────────────────────────────────────────────────
+function NotifPanel({
+  notifications,
+  onMarkRead,
+  onClose,
+}: {
+  notifications: AppNotification[];
+  onMarkRead: (id: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <>
+      {/* Overlay invisible pour fermer en cliquant dehors */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 10019 }} onClick={onClose} />
+      <div style={{
+        position: "absolute", top: "calc(100% + 6px)", right: 0,
+        width: 320, maxHeight: 420, overflowY: "auto" as const,
+        background: "rgba(252,244,215,0.99)",
+        border: "1px solid rgba(75,35,5,0.22)",
+        borderRadius: 8,
+        boxShadow: "0 8px 28px rgba(75,35,5,0.18)",
+        zIndex: 10020,
+        fontFamily: "'Jost', system-ui, sans-serif",
+      }}>
+        <div style={{ padding: "0.65rem 0.85rem", borderBottom: "1px solid rgba(75,35,5,0.12)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#180b01" }}>Notifications</span>
+          {notifications.filter((n) => !n.isRead).length > 0 && (
+            <span style={{ fontSize: "0.72rem", color: "rgba(75,35,5,0.55)" }}>
+              {notifications.filter((n) => !n.isRead).length} non lue{notifications.filter((n) => !n.isRead).length > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        {notifications.length === 0 ? (
+          <p style={{ margin: 0, padding: "1rem 0.85rem", fontSize: "0.82rem", color: "rgba(75,35,5,0.55)" }}>
+            Aucune notification.
+          </p>
+        ) : (
+          notifications.map((n) => (
+            <div
+              key={n.id}
+              style={{
+                padding: "0.6rem 0.85rem",
+                borderBottom: "1px solid rgba(75,35,5,0.07)",
+                background: n.isRead ? "transparent" : "rgba(60,30,106,0.04)",
+                display: "flex", flexDirection: "column" as const, gap: "0.2rem",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.83rem", lineHeight: 1.45, color: "#180b01" }}>{n.message}</p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                <span style={{ fontSize: "0.72rem", color: "rgba(75,35,5,0.45)" }}>{fmt(n.createdAt)}</span>
+                {!n.isRead && (
+                  <button
+                    onClick={() => onMarkRead(n.id)}
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer",
+                      fontSize: "0.72rem", color: "#3c1e6a", padding: 0, fontFamily: "inherit",
+                    }}
+                  >
+                    Marquer comme lu
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </>
   );
 }
 

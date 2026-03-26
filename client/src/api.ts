@@ -141,6 +141,16 @@ export interface AuthUser {
 
 export type ReportStatus = "OPEN" | "IGNORED" | "RESOLVED";
 
+export type NotificationType = "CONTENT_REMOVED" | "USER_BANNED" | "USER_UNBANNED";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export interface AdminReport {
   id: string;
   targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY";
@@ -458,6 +468,10 @@ export const api = {
   reports: {
     create: (data: { targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY"; targetId: string; reason?: string }) =>
       request<{ id: string }>("/reports", { method: "POST", body: JSON.stringify(data) }),
+  },
+  notifications: {
+    mine: () => request<AppNotification[]>("/notifications/mine"),
+    markRead: (id: string) => request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
   },
   admin: {
     listReports: (status?: ReportStatus) =>
