@@ -81,12 +81,12 @@ export function ToastContainer({
   return (
     <div style={{
       position: "fixed",
-      bottom: "8.5rem",
+      top: "1rem",
       right: "1.5rem",
       display: "flex",
-      flexDirection: "column-reverse",
+      flexDirection: "column",
       gap: "0.5rem",
-      zIndex: 9990,
+      zIndex: 10001,
       pointerEvents: "none",
     }}>
       {toasts.map((t) => (
