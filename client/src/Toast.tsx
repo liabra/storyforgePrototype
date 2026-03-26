@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 
 export interface ToastItem {
   id: number;
-  type: "contribution" | "scene";
+  type: "contribution" | "scene" | "error";
   message: string;
 }
 
@@ -13,6 +13,7 @@ const C = {
   textMuted: "rgba(75,35,5,0.58)",
   success: "#194820",
   accent: "#3c1e6a",
+  error: "#b91c1c",
   ui: "'Cinzel', 'Jost', serif",
   sans: "'Jost', system-ui, sans-serif",
 };
@@ -25,7 +26,9 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [onDismiss]);
 
-  const dot = item.type === "scene"
+  const dot = item.type === "error"
+    ? { color: C.error, label: "erreur" }
+    : item.type === "scene"
     ? { color: C.success, label: "scène" }
     : { color: C.accent, label: "contribution" };
 

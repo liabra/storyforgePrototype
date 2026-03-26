@@ -287,11 +287,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...(options?.headers as Record<string, string> | undefined),
     },
   });
-  if (res.status === 401) {
-    tokenStore.clear();
-    throw new Error(`API error 401`);
+  if (!res.ok) {
+    // Lire le message d'erreur backend si disponible
+    let message = `API error ${res.status}`;
+    try {
+      const body = await res.json() as { error?: string };
+      if (body.error) message = body.error;
+    } catch { /* ignore JSON parse errors */ }
+    if (res.status === 401) tokenStore.clear();
+    throw new Error(message);
   }
-  if (!res.ok) throw new Error(`API error ${res.status}`);
   if (res.status === 204) return undefined as T;
   return res.json();
 }

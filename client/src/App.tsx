@@ -909,6 +909,12 @@ export default function App() {
     setContribCharId(characters[0]?.id ?? "");
   };
 
+  // ── Helper : afficher une erreur en toast
+  const addErrorToast = (err: unknown) => {
+    const msg = (err as Error).message ?? "Une erreur est survenue.";
+    setToasts((prev) => [...prev, { id: ++toastIdRef.current, type: "error" as const, message: msg }].slice(-5));
+  };
+
   // ── Create story
   const handleCreateStory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -923,7 +929,7 @@ export default function App() {
       setShowStoryForm(false);
       handleSelectStory(story);
     } catch (err: unknown) {
-      handleAuthError(err);
+      addErrorToast(err);
     }
   };
 
@@ -942,6 +948,8 @@ export default function App() {
       setChapters((p) => p.some((c) => c.id === created.id) ? p : [...p, created]);
       setNewChapter({ title: "", description: "" });
       setShowChapterForm(false);
+    } catch (err: unknown) {
+      addErrorToast(err);
     } finally {
       setCreatingChapter(false);
     }
@@ -974,6 +982,8 @@ export default function App() {
       );
       setNewScene({ title: "", description: "" });
       setShowSceneForm(false);
+    } catch (err: unknown) {
+      addErrorToast(err);
     } finally {
       setCreatingScene(false);
     }
@@ -1023,6 +1033,8 @@ export default function App() {
         return { ...s, contributions: [...(s.contributions ?? []), contrib], _count: { contributions: (s._count?.contributions ?? 0) + 1 } };
       });
       setContribContent("");
+    } catch (err: unknown) {
+      addErrorToast(err);
     } finally {
       setSubmittingContrib(false);
     }
@@ -1046,16 +1058,20 @@ export default function App() {
 
   const handleSaveEdit = async () => {
     if (!editingContribId || !editingContent.trim()) return;
-    const updated = await api.contributions.update(editingContribId, editingContent);
-    setSelectedScene((s) => {
-      if (!s) return s;
-      return {
-        ...s,
-        contributions: (s.contributions ?? []).map((c) => (c.id === updated.id ? updated : c)),
-      };
-    });
-    setEditingContribId(null);
-    setEditingContent("");
+    try {
+      const updated = await api.contributions.update(editingContribId, editingContent);
+      setSelectedScene((s) => {
+        if (!s) return s;
+        return {
+          ...s,
+          contributions: (s.contributions ?? []).map((c) => (c.id === updated.id ? updated : c)),
+        };
+      });
+      setEditingContribId(null);
+      setEditingContent("");
+    } catch (err: unknown) {
+      addErrorToast(err);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -1117,6 +1133,8 @@ export default function App() {
       );
       setShowSettings(false);
       void updated;
+    } catch (err: unknown) {
+      addErrorToast(err);
     } finally {
       setSavingSettings(false);
     }
@@ -1220,14 +1238,18 @@ export default function App() {
   const handleCreateChar = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedStory || (!newChar.name?.trim() && !newChar.nickname?.trim())) return;
-    const created = await api.characters.create(selectedStory.id, {
-      name: newChar.name?.trim() || undefined,
-      nickname: newChar.nickname?.trim() || undefined,
-    });
-    // Déduplication : le socket character:new peut arriver avant la réponse HTTP
-    // (le serveur émet avant res.json). On n'ajoute que si absent.
-    setCharacters((p) => p.some((c) => c.id === created.id) ? p : [...p, created]);
-    setNewChar({ name: "", nickname: "" });
+    try {
+      const created = await api.characters.create(selectedStory.id, {
+        name: newChar.name?.trim() || undefined,
+        nickname: newChar.nickname?.trim() || undefined,
+      });
+      // Déduplication : le socket character:new peut arriver avant la réponse HTTP
+      // (le serveur émet avant res.json). On n'ajoute que si absent.
+      setCharacters((p) => p.some((c) => c.id === created.id) ? p : [...p, created]);
+      setNewChar({ name: "", nickname: "" });
+    } catch (err: unknown) {
+      addErrorToast(err);
+    }
   };
 
   const handleSaveChar = async (char: Character) => {
@@ -1236,6 +1258,8 @@ export default function App() {
       const updated = await api.characters.update(char.id, charEdits[char.id] ?? {});
       setCharacters((p) => p.map((c) => (c.id === updated.id ? updated : c)));
       setExpandedCharId(null);
+    } catch (err: unknown) {
+      addErrorToast(err);
     } finally {
       setSavingChar(null);
     }
