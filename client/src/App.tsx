@@ -31,6 +31,7 @@ import { ToastContainer } from "./Toast";
 import type { ToastItem } from "./Toast";
 import SceneReader from "./SceneReader";
 import { ReportModal } from "./ReportModal";
+import AdminPage from "./AdminPage";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Navigation principale
-  const [appView, setAppView] = useState<"stories" | "battle">("stories");
+  const [appView, setAppView] = useState<"stories" | "battle" | "admin">("stories");
 
   // Stories
   const [stories, setStories] = useState<Story[]>([]);
@@ -1464,6 +1465,15 @@ export default function App() {
     return <BattleApp currentUser={currentUser} onBack={() => setAppView("stories")} />;
   }
 
+  if (appView === "admin") {
+    return (
+      <AdminPage
+        onBack={() => setAppView("stories")}
+        addToast={(msg, type) => setToasts((prev) => [...prev, { id: ++toastIdRef.current, type: type ?? "scene", message: msg }].slice(-5))}
+      />
+    );
+  }
+
   return (
     <div style={s.root}>
       <div style={s.sealTL} className="app-seal-tl" aria-hidden="true">✦</div>
@@ -1515,6 +1525,15 @@ export default function App() {
             </div>
           </div>
           <div style={s.headerRight} className="app-header-right">
+            {currentUser?.isAdmin && (
+              <button
+                style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem", color: "#92400e", borderColor: "rgba(146,64,14,0.35)" }}
+                onClick={() => setAppView("admin")}
+                title="Administration"
+              >
+                ⚑ Admin
+              </button>
+            )}
             <button
               style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem" }}
               onClick={() => setAppView("battle")}

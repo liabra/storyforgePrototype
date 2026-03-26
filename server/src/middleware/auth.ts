@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import prisma from "../prisma/client";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -41,5 +42,35 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
     next();
   } catch {
     res.status(401).json({ error: "Token invalide ou expiré" });
+  }
+};
+
+/** Block banned users from write actions. Must run after requireAuth. */
+export const requireNotBanned = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  if (!req.user) { next(); return; }
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { isBanned: true } });
+    if (user?.isBanned) {
+      res.status(403).json({ error: "Votre compte ne peut pas effectuer cette action." });
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).json({ error: "Erreur de vérification du compte" });
+  }
+};
+
+/** Only admin users may pass. Must run after requireAuth. */
+export const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  if (!req.user) { res.status(401).json({ error: "Non authentifié" }); return; }
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { isAdmin: true } });
+    if (!user?.isAdmin) {
+      res.status(403).json({ error: "Accès refusé" });
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).json({ error: "Erreur de vérification du compte" });
   }
 };

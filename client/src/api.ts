@@ -134,7 +134,23 @@ export interface AuthUser {
   displayName?: string | null;
   color?: string | null;
   bio?: string | null;
+  isAdmin?: boolean;
+  isBanned?: boolean;
   createdAt: string;
+}
+
+export type ReportStatus = "OPEN" | "IGNORED" | "RESOLVED";
+
+export interface AdminReport {
+  id: string;
+  targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY";
+  targetId: string;
+  reason: string | null;
+  status: ReportStatus;
+  createdAt: string;
+  user: { id: string; email: string; displayName: string | null };
+  contentPreview: string | null;
+  contentAuthor: { id: string; email: string; displayName: string | null; isBanned: boolean } | null;
 }
 
 export interface UserProfileInput {
@@ -442,5 +458,17 @@ export const api = {
   reports: {
     create: (data: { targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY"; targetId: string; reason?: string }) =>
       request<{ id: string }>("/reports", { method: "POST", body: JSON.stringify(data) }),
+  },
+  admin: {
+    listReports: (status?: ReportStatus) =>
+      request<AdminReport[]>(`/admin/reports${status ? `?status=${status}` : ""}`),
+    ignoreReport: (id: string) =>
+      request<{ id: string; status: ReportStatus }>(`/admin/reports/${id}/ignore`, { method: "POST" }),
+    deleteContent: (targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY", targetId: string) =>
+      request<{ ok: boolean }>("/admin/content", { method: "DELETE", body: JSON.stringify({ targetType, targetId }) }),
+    banUser: (id: string) =>
+      request<{ id: string; isBanned: boolean }>(`/admin/users/${id}/ban`, { method: "POST" }),
+    unbanUser: (id: string) =>
+      request<{ id: string; isBanned: boolean }>(`/admin/users/${id}/unban`, { method: "POST" }),
   },
 };

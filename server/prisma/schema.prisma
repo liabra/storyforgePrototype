@@ -26,6 +26,8 @@ model User {
   displayName   String?
   color         String?
   bio           String?
+  isAdmin       Boolean              @default(false)
+  isBanned      Boolean              @default(false)
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   characters    Character[]
@@ -261,6 +263,12 @@ enum ReportTargetType {
   STORY
 }
 
+enum ReportStatus {
+  OPEN
+  IGNORED
+  RESOLVED
+}
+
 model Report {
   id         String           @id @default(cuid())
   userId     String
@@ -268,6 +276,7 @@ model Report {
   targetType ReportTargetType
   targetId   String
   reason     String?
+  status     ReportStatus     @default(OPEN)
   createdAt  DateTime         @default(now())
 
   @@unique([userId, targetType, targetId])

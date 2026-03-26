@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireNotBanned } from "../middleware/auth";
 import { create } from "../controllers/report.controller";
 
 const router = Router();
 
-router.post("/reports", requireAuth, create);
+router.post("/reports", requireAuth, requireNotBanned, create);
 
 export default router;

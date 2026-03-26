@@ -3,18 +3,18 @@ import {
   list, getOne, create, join, createMove, startVoting, castVote, closeVoting,
   sendInvite, myInvites, acceptInvite, declineInvite,
 } from "../controllers/battle.controller";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireNotBanned } from "../middleware/auth";
 
 const router = Router();
 
 // ── Battles ──────────────────────────────────────────────────────────────────
 router.get("/battles", requireAuth, list);
-router.post("/battles", requireAuth, create);
+router.post("/battles", requireAuth, requireNotBanned, create);
 router.get("/battles/:id", requireAuth, getOne);
-router.post("/battles/:id/join", requireAuth, join);
-router.post("/battles/:id/moves", requireAuth, createMove);
+router.post("/battles/:id/join", requireAuth, requireNotBanned, join);
+router.post("/battles/:id/moves", requireAuth, requireNotBanned, createMove);
 router.post("/battles/:id/vote/start", requireAuth, startVoting);
-router.post("/battles/:id/vote", requireAuth, castVote);
+router.post("/battles/:id/vote", requireAuth, requireNotBanned, castVote);
 router.post("/battles/:id/vote/close", requireAuth, closeVoting);
 router.post("/battles/:id/invite", requireAuth, sendInvite);
 

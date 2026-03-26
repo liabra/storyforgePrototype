@@ -9,7 +9,7 @@ import {
   generateImage,
   suggestIdea,
 } from "../controllers/scene.controller";
-import { requireAuth, optionalAuth } from "../middleware/auth";
+import { requireAuth, optionalAuth, requireNotBanned } from "../middleware/auth";
 
 const router = Router();
 
@@ -18,8 +18,8 @@ router.post("/scenes/suggest-idea", requireAuth, suggestIdea);
 
 router.get("/chapters/:chapterId/scenes", optionalAuth, getByChapter);
 router.get("/scenes/:id", optionalAuth, getOne);
-router.post("/chapters/:chapterId/scenes", requireAuth, create);
-router.put("/scenes/:id", requireAuth, update);
+router.post("/chapters/:chapterId/scenes", requireAuth, requireNotBanned, create);
+router.put("/scenes/:id", requireAuth, requireNotBanned, update);
 router.put("/scenes/:id/characters", requireAuth, updateCharacters);
 router.delete("/scenes/:id", requireAuth, remove);
 router.post("/scenes/:id/generate-image", requireAuth, generateImage);
