@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as battleService from "../services/battle.service";
 import { BattleStatus, StoryVisibility, BattleInviteRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
+import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
 const MIN_VOTES_TO_CLOSE = 3;
 
@@ -46,6 +47,8 @@ export const create = async (req: Request, res: Response): Promise<void> => {
   const { title, goal, minTurns, maxTurns, visibility } = req.body;
   if (!title?.trim()) { res.status(400).json({ error: "title requis" }); return; }
   if (!goal?.trim()) { res.status(400).json({ error: "goal requis" }); return; }
+  if (!moderateText(title, "battle.title").isAllowed) { res.status(400).json({ error: MOD_REFUSED }); return; }
+  if (!moderateText(goal, "battle.goal").isAllowed) { res.status(400).json({ error: MOD_REFUSED }); return; }
   if (minTurns !== undefined && (!Number.isInteger(minTurns) || minTurns < 2)) {
     res.status(400).json({ error: "minTurns doit être un entier ≥ 2" }); return;
   }
@@ -110,6 +113,7 @@ export const createMove = async (req: Request, res: Response): Promise<void> => 
   const { content } = req.body;
 
   if (!content?.trim()) { res.status(400).json({ error: "content requis" }); return; }
+  if (!moderateText(content, "battle.move").isAllowed) { res.status(400).json({ error: MOD_REFUSED }); return; }
 
   const battle = await battleService.getBattleById(id);
   if (!battle) { res.status(404).json({ error: "Battle introuvable" }); return; }

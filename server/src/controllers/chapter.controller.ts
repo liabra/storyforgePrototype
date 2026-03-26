@@ -5,6 +5,7 @@ import * as storyService from "../services/story.service";
 
 import { ContentStatus, ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
+import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -38,6 +39,11 @@ export const create = async (req: Request, res: Response) => {
     }
   }
 
+  if (!moderateText(title, "chapter.title").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+  if (description && !moderateText(description, "chapter.description").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+
   const chapter = await chapterService.createChapter(storyId, { title, description, order });
   getIO()?.to(`story:${storyId}`).emit("chapter:new", chapter);
   return res.status(201).json(chapter);
@@ -60,6 +66,10 @@ export const update = async (req: Request, res: Response) => {
   if (req.body.status && !Object.values(ContentStatus).includes(req.body.status)) {
     return res.status(400).json({ error: "Statut invalide. Utilisez ACTIVE ou DONE." });
   }
+  if (req.body.title && !moderateText(req.body.title, "chapter.title").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+  if (req.body.description && !moderateText(req.body.description, "chapter.description").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
 
   const chapter = await chapterService.updateChapter(id, req.body);
 

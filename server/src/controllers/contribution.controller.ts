@@ -5,6 +5,7 @@ import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 import prisma from "../prisma/client";
 import { ContentStatus, SceneMode, SceneStatus, ParticipantRole } from "../generated/prisma/client";
+import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
 
 const getSingleParam = (value: string | string[] | undefined): string => {
@@ -23,6 +24,8 @@ export const create = async (req: Request, res: Response) => {
   const { content, characterId } = req.body;
 
   if (!content?.trim()) return res.status(400).json({ error: "content is required" });
+  if (!moderateText(content, "contribution.content").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
 
   const scene = await prisma.scene.findUnique({
     where: { id: sceneId },
@@ -136,6 +139,8 @@ export const update = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
   const { content } = req.body;
   if (!content?.trim()) return res.status(400).json({ error: "content is required" });
+  if (!moderateText(content, "contribution.update").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
 
   const existing = await prisma.contribution.findUnique({
     where: { id },

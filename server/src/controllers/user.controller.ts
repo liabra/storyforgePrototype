@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as userService from "../services/user.service";
+import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
 const isValidHex = (s: string) => /^#[0-9a-f]{6}$/i.test(s);
 
@@ -19,6 +20,14 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
 
   if (color !== undefined && color !== null && !isValidHex(color)) {
     res.status(400).json({ error: "La couleur doit être au format #rrggbb" });
+    return;
+  }
+  if (displayName && !moderateText(displayName, "user.displayName").isAllowed) {
+    res.status(400).json({ error: MOD_REFUSED });
+    return;
+  }
+  if (bio && !moderateText(bio, "user.bio").isAllowed) {
+    res.status(400).json({ error: MOD_REFUSED });
     return;
   }
 

@@ -7,6 +7,7 @@ import * as storyService from "../services/story.service";
 import { getIO } from "../socket";
 import { ContentStatus, ParticipantRole, SceneMode } from "../generated/prisma/client";
 import prisma from "../prisma/client";
+import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -74,6 +75,11 @@ export const create = async (req: Request, res: Response) => {
 
   if (!await assertEditorOrOwner(storyId, req, res)) return;
 
+  if (!moderateText(title, "scene.title").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+  if (description && !moderateText(description, "scene.description").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+
   const scene = await sceneService.createScene(chapterId, { title, description, order });
   const storyInfo = await chapterService.getStoryInfoByChapter(chapterId);
   if (storyInfo) {
@@ -101,6 +107,11 @@ export const update = async (req: Request, res: Response) => {
   const storyId = await participantService.getStoryIdByScene(id);
   if (!storyId) return res.status(404).json({ error: "Scène introuvable" });
   if (!await assertOwner(storyId, req, res)) return;
+
+  if (req.body.title && !moderateText(req.body.title, "scene.title").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+  if (req.body.description && !moderateText(req.body.description, "scene.description").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
 
   // Gestion du changement de mode (FREE ↔ TURN)
   const updateData = { ...req.body };

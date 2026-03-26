@@ -4,6 +4,25 @@ import * as participantService from "../services/participant.service";
 import * as storyService from "../services/story.service";
 import { ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
+import { moderateText, MOD_REFUSED } from "../services/moderation.service";
+
+// Champs texte à modérer sur un personnage (avatarUrl exclu)
+const CHAR_TEXT_FIELDS = [
+  "name", "nickname", "role", "shortDescription",
+  "appearance", "outfit", "accessories", "personality",
+  "traits", "faction", "visualNotes",
+] as const;
+
+function checkCharacterTexts(data: Record<string, unknown>, res: Response): boolean {
+  for (const field of CHAR_TEXT_FIELDS) {
+    const val = data[field];
+    if (typeof val === "string" && val.trim() && !moderateText(val, `character.${field}`).isAllowed) {
+      res.status(400).json({ error: MOD_REFUSED });
+      return false;
+    }
+  }
+  return true;
+}
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -80,6 +99,7 @@ export const create = async (req: Request, res: Response) => {
   }
 
   if (!(await assertEditorOrOwner(storyId, req, res))) return;
+  if (!checkCharacterTexts(data as Record<string, unknown>, res)) return;
 
   const character = await characterService.createCharacter(storyId, req.user!.id, data);
   getIO()?.to(`story:${storyId}`).emit("character:new", character);
@@ -91,6 +111,7 @@ export const update = async (req: Request, res: Response) => {
 
   const meta = await assertCharacterAuthor(characterId, req, res);
   if (!meta) return;
+  if (!checkCharacterTexts(req.body as Record<string, unknown>, res)) return;
 
   const character = await characterService.updateCharacter(characterId, req.body);
   getIO()?.to(`story:${meta.storyId}`).emit("character:update", character);
