@@ -29,6 +29,7 @@ import { scenePresenceLabel } from "./presence";
 import { PresenceAvatar } from "./PresenceAvatar";
 import { ToastContainer } from "./Toast";
 import type { ToastItem } from "./Toast";
+import SceneReader from "./SceneReader";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,7 @@ export default function App() {
   const [creatingScene, setCreatingScene] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [spectatorView, setSpectatorView] = useState(false);
+  const [isReading, setIsReading] = useState(false);
 
   // Scene settings
   const [showSettings, setShowSettings] = useState(false);
@@ -283,6 +285,7 @@ export default function App() {
 
   useEffect(() => {
     selectedSceneIdRef.current = selectedScene?.id ?? null;
+    setIsReading(false);
   }, [selectedScene?.id]);
 
   useEffect(() => { contribContentRef.current = contribContent; }, [contribContent]);
@@ -2555,18 +2558,27 @@ export default function App() {
               )}
 
               {/* Toggle vue */}
-              <div style={s.viewToggleBar}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={s.viewToggleBar}>
+                  <button
+                    style={spectatorView ? s.viewToggleBtnActive : s.viewToggleBtn}
+                    onClick={() => setSpectatorView(false)}
+                  >
+                    ✏️ Auteur
+                  </button>
+                  <button
+                    style={!spectatorView ? s.viewToggleBtnActive : s.viewToggleBtn}
+                    onClick={() => setSpectatorView(true)}
+                  >
+                    👁 Spectateurs
+                  </button>
+                </div>
                 <button
-                  style={spectatorView ? s.viewToggleBtnActive : s.viewToggleBtn}
-                  onClick={() => setSpectatorView(false)}
+                  style={{ ...s.viewToggleBtn, border: "1px solid rgba(75,35,5,0.2)", borderRadius: 4, padding: "0.35rem 0.8rem" }}
+                  onClick={() => setIsReading(true)}
+                  title="Mode lecture immersif"
                 >
-                  ✏️ Auteur
-                </button>
-                <button
-                  style={!spectatorView ? s.viewToggleBtnActive : s.viewToggleBtn}
-                  onClick={() => setSpectatorView(true)}
-                >
-                  👁 Spectateurs
+                  📖 Lire
                 </button>
               </div>
 
@@ -2934,6 +2946,16 @@ export default function App() {
         toasts={toasts}
         onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
       />
+
+      {/* Mode lecture immersif */}
+      {isReading && selectedScene && (
+        <SceneReader
+          scene={selectedScene}
+          chapterTitle={selectedChapter?.title}
+          storyTitle={selectedStory?.title}
+          onClose={() => setIsReading(false)}
+        />
+      )}
     </div>
   );
 }
