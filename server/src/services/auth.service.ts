@@ -18,7 +18,7 @@ function httpError(message: string, status: number): Error {
   return Object.assign(new Error(message), { status });
 }
 
-const USER_SELECT = { id: true, email: true, displayName: true, color: true, bio: true, createdAt: true } as const;
+const USER_SELECT = { id: true, email: true, displayName: true, color: true, bio: true, isAdmin: true, isBanned: true, createdAt: true } as const;
 
 export async function register(email: string, password: string) {
   const existing = await prisma.user.findUnique({ where: { email } });

@@ -6,6 +6,8 @@ const PROFILE_SELECT = {
   displayName: true,
   color: true,
   bio: true,
+  isAdmin: true,
+  isBanned: true,
   createdAt: true,
 } as const;
 
