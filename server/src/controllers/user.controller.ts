@@ -16,7 +16,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
-  const { displayName, color, bio } = req.body;
+  const { displayName, color, bio, notifBattleEnabled, notifInvitesEnabled, notifGeneralEnabled } = req.body;
 
   if (color !== undefined && color !== null && !isValidHex(color)) {
     res.status(400).json({ error: "La couleur doit être au format #rrggbb" });
@@ -31,7 +31,14 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const data: { displayName?: string | null; color?: string | null; bio?: string | null } = {};
+  const data: {
+    displayName?: string | null;
+    color?: string | null;
+    bio?: string | null;
+    notifBattleEnabled?: boolean;
+    notifInvitesEnabled?: boolean;
+    notifGeneralEnabled?: boolean;
+  } = {};
 
   if (displayName !== undefined)
     data.displayName = typeof displayName === "string" ? displayName.trim() || null : null;
@@ -39,6 +46,9 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     data.color = typeof color === "string" ? color.trim() || null : null;
   if (bio !== undefined)
     data.bio = typeof bio === "string" ? bio.trim() || null : null;
+  if (typeof notifBattleEnabled === "boolean") data.notifBattleEnabled = notifBattleEnabled;
+  if (typeof notifInvitesEnabled === "boolean") data.notifInvitesEnabled = notifInvitesEnabled;
+  if (typeof notifGeneralEnabled === "boolean") data.notifGeneralEnabled = notifGeneralEnabled;
 
   try {
     const user = await userService.updateProfile(req.user!.id, data);

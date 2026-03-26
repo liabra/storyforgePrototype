@@ -1348,6 +1348,9 @@ export default function App() {
       displayName: currentUser?.displayName ?? "",
       color: currentUser?.color ?? "",
       bio: currentUser?.bio ?? "",
+      notifBattleEnabled: currentUser?.notifBattleEnabled ?? true,
+      notifInvitesEnabled: currentUser?.notifInvitesEnabled ?? true,
+      notifGeneralEnabled: currentUser?.notifGeneralEnabled ?? true,
     });
     setProfileError(null);
     setShowProfile(true);
@@ -1362,6 +1365,9 @@ export default function App() {
         displayName: profileEdits.displayName || null,
         color: profileEdits.color || null,
         bio: profileEdits.bio || null,
+        notifBattleEnabled: profileEdits.notifBattleEnabled,
+        notifInvitesEnabled: profileEdits.notifInvitesEnabled,
+        notifGeneralEnabled: profileEdits.notifGeneralEnabled,
       });
       setCurrentUser(updated);
       setShowProfile(false);
@@ -1729,6 +1735,33 @@ export default function App() {
                   rows={3}
                   maxLength={200}
                 />
+              </div>
+              {/* Préférences de notifications */}
+              <div style={{ borderTop: "1px solid rgba(75,35,5,0.12)", paddingTop: "0.75rem" }}>
+                <label style={{ ...s.profileLabel, display: "block", marginBottom: "0.5rem" }}>Notifications</label>
+                {(
+                  [
+                    { key: "notifBattleEnabled" as const, label: "Notifications de battle" },
+                    { key: "notifInvitesEnabled" as const, label: "Invitations" },
+                    { key: "notifGeneralEnabled" as const, label: "Infos générales" },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <label
+                    key={key}
+                    style={{ display: "flex", alignItems: "center", gap: "0.55rem", marginBottom: "0.4rem", cursor: "pointer" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={profileEdits[key] ?? true}
+                      onChange={(e) => setProfileEdits((p) => ({ ...p, [key]: e.target.checked }))}
+                      style={{ accentColor: "#3c1e6a", width: 15, height: 15, cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: "0.83rem", color: "#2d1305" }}>{label}</span>
+                  </label>
+                ))}
+                <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "rgba(75,35,5,0.5)", lineHeight: 1.45 }}>
+                  Les notifications importantes liées à la sécurité et au compte restent toujours actives.
+                </p>
               </div>
               {profileError && <p style={s.authErrorMsg}>{profileError}</p>}
               <button style={s.btnAccent} type="submit" disabled={savingProfile}>
@@ -3079,6 +3112,12 @@ function NotifPanel({
   onMarkRead: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 

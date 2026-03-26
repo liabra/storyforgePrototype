@@ -136,12 +136,21 @@ export interface AuthUser {
   bio?: string | null;
   isAdmin?: boolean;
   isBanned?: boolean;
+  notifBattleEnabled?: boolean;
+  notifInvitesEnabled?: boolean;
+  notifGeneralEnabled?: boolean;
   createdAt: string;
 }
 
 export type ReportStatus = "OPEN" | "IGNORED" | "RESOLVED";
 
-export type NotificationType = "CONTENT_REMOVED" | "USER_BANNED" | "USER_UNBANNED";
+export type NotificationType =
+  | "CONTENT_REMOVED"
+  | "USER_BANNED"
+  | "USER_UNBANNED"
+  | "BATTLE_INVITE"
+  | "STORY_INVITE"
+  | "GENERAL";
 
 export interface AppNotification {
   id: string;
@@ -167,6 +176,9 @@ export interface UserProfileInput {
   displayName?: string | null;
   color?: string | null;
   bio?: string | null;
+  notifBattleEnabled?: boolean;
+  notifInvitesEnabled?: boolean;
+  notifGeneralEnabled?: boolean;
 }
 
 export interface AuthResponse {

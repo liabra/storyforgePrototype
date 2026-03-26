@@ -8,6 +8,9 @@ const PROFILE_SELECT = {
   bio: true,
   isAdmin: true,
   isBanned: true,
+  notifBattleEnabled: true,
+  notifInvitesEnabled: true,
+  notifGeneralEnabled: true,
   createdAt: true,
 } as const;
 
@@ -16,5 +19,12 @@ export const getProfile = (userId: string) =>
 
 export const updateProfile = (
   userId: string,
-  data: { displayName?: string | null; color?: string | null; bio?: string | null }
+  data: {
+    displayName?: string | null;
+    color?: string | null;
+    bio?: string | null;
+    notifBattleEnabled?: boolean;
+    notifInvitesEnabled?: boolean;
+    notifGeneralEnabled?: boolean;
+  }
 ) => prisma.user.update({ where: { id: userId }, data, select: PROFILE_SELECT });
