@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Scene } from "./api";
+import type { Scene, Contribution } from "./api";
 
 interface Props {
   scene: Scene;
@@ -16,7 +16,7 @@ const R = {
   accent: "#6b4c2a",
 };
 
-function authorLabel(contrib: Scene["contributions"][number]): string {
+function authorLabel(contrib: Contribution): string {
   if (contrib.character?.name) return contrib.character.name;
   if (contrib.character?.nickname) return contrib.character.nickname;
   if (contrib.user?.displayName) return contrib.user.displayName;
