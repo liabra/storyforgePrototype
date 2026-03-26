@@ -55,9 +55,16 @@ const displayName = (u: { displayName?: string | null; email: string }) =>
   u.displayName || u.email.split("@")[0];
 
 const statusLabel: Record<string, string> = {
+  WAITING: "En attente d'un adversaire",
+  ACTIVE: "Duel en cours",
+  VOTING: "Vote en cours",
+  DONE: "Partie terminée",
+};
+
+const statusLabelShort: Record<string, string> = {
   WAITING: "En attente",
   ACTIVE: "En cours",
-  VOTING: "Vote en cours",
+  VOTING: "Vote",
   DONE: "Terminée",
 };
 
@@ -65,8 +72,27 @@ const statusColor: Record<string, [string, string]> = {
   WAITING: [C.textMuted, "rgba(120,115,140,0.18)"],
   ACTIVE: [C.green, C.greenDim],
   VOTING: [C.accent, C.accentDim],
-  DONE: [C.textMuted, "rgba(120,115,140,0.18)"],
+  DONE: [C.accent, C.accentDim],
 };
+
+// ── Injection CSS animations ──────────────────────────────────────────────────
+
+function ensureBattleStyles() {
+  if (typeof document === "undefined" || document.getElementById("battle-anim")) return;
+  const el = document.createElement("style");
+  el.id = "battle-anim";
+  el.textContent = `
+    @keyframes battleWin {
+      from { opacity: 0; transform: scale(0.88) translateY(12px); }
+      to   { opacity: 1; transform: scale(1)    translateY(0); }
+    }
+    @keyframes victoryPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+      50%       { box-shadow: 0 0 48px 8px rgba(201,168,76,0.22); }
+    }
+  `;
+  document.head.appendChild(el);
+}
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -80,6 +106,8 @@ interface Props {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function BattleApp({ currentUser, onBack }: Props) {
+  ensureBattleStyles();
+
   const [view, setView] = useState<"list" | "detail">("list");
   const [battles, setBattles] = useState<BattleListItem[]>([]);
   const [selectedBattle, setSelectedBattle] = useState<Battle | null>(null);
@@ -547,7 +575,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", marginBottom: "0.35rem", flexWrap: "wrap" as const }}>
                       <span style={{ fontWeight: 600 }}>{b.title}</span>
-                      <span style={s.badge(color, bg)}>{statusLabel[b.status]}</span>
+                      <span style={s.badge(color, bg)}>{statusLabelShort[b.status]}</span>
                       {b.visibility === "PUBLIC" && (
                         <span style={s.badge(C.blue, C.blueDim)}>🌐 Public</span>
                       )}
@@ -603,50 +631,118 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   const showPrivateWarning = b.visibility === "PRIVATE" && (b.status === "WAITING" || b.status === "ACTIVE") && !hasAcceptedSpectator;
   const [statusColor2, statusBg2] = statusColor[b.status] ?? [C.textMuted, "transparent"];
 
+  // ── Bannière de statut contextuelle ────────────────────────────────────────
+  const bannerConfig: Record<string, { bg: string; border: string; icon: string; main: string; sub: string } | null> = {
+    WAITING: {
+      bg: "rgba(120,115,140,0.1)",
+      border: "rgba(120,115,140,0.25)",
+      icon: "⏳",
+      main: "En attente d'un adversaire",
+      sub: isAttacker
+        ? "Invitez un joueur ou rendez la battle publique pour trouver un adversaire."
+        : "La place de défenseur est libre — rejoignez le duel !",
+    },
+    ACTIVE: {
+      bg: "rgba(39,174,96,0.08)",
+      border: "rgba(39,174,96,0.22)",
+      icon: "⚔",
+      main: `Duel en cours · Tour ${b.turnCount} / ${b.maxTurns}`,
+      sub: b.currentTurnUserId === currentUser.id
+        ? "🎯 C'est votre tour — écrivez votre move !"
+        : `En attente de ${b.currentTurnUserId === b.attackerId ? displayName(b.attacker) : b.defender ? displayName(b.defender) : "l'adversaire"}…`,
+    },
+    VOTING: {
+      bg: "rgba(201,168,76,0.1)",
+      border: "rgba(201,168,76,0.28)",
+      icon: "🗳",
+      main: "Vote en cours",
+      sub: isPlayer
+        ? `${spectatorVotes.length} vote${spectatorVotes.length !== 1 ? "s" : ""} spectateur${spectatorVotes.length !== 1 ? "s" : ""} · minimum ${MIN_VOTES_CLOSE} requis`
+        : "Le public décide si l'objectif a été atteint.",
+    },
+    DONE: null,
+  };
+  const banner = bannerConfig[b.status];
+
   return (
     <div style={s.root}>
       {/* Header */}
       <div style={s.header}>
         <button style={s.backBtn} onClick={() => { setView("list"); setSelectedBattle(null); }}>← Liste</button>
         <p style={s.title}>{b.title}</p>
-        <span style={{ marginLeft: "auto", ...s.badge(statusColor2, statusBg2) }}>{statusLabel[b.status]}</span>
+        <span style={{ marginLeft: "auto", ...s.badge(statusColor2, statusBg2) }}>{statusLabelShort[b.status]}</span>
       </div>
+
+      {/* Bannière de statut */}
+      {banner && (
+        <div style={{
+          padding: "0.65rem 1.5rem",
+          background: banner.bg,
+          borderBottom: `1px solid ${banner.border}`,
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+        }}>
+          <span style={{ fontSize: "1.1rem" }}>{banner.icon}</span>
+          <div>
+            <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{banner.main}</span>
+            <span style={{ color: C.textMuted, fontSize: "0.82rem", marginLeft: "0.6rem" }}>{banner.sub}</span>
+          </div>
+        </div>
+      )}
 
       <div style={s.content}>
         {error && <p style={{ color: C.red, fontSize: "0.88rem", marginBottom: "1rem" }}>{error}</p>}
 
         {/* Objectif */}
-        <div style={{ ...s.card, borderColor: C.accent, background: "rgba(201,168,76,0.06)" }}>
-          <p style={{ ...s.sectionLabel, color: C.accent }}>Objectif</p>
-          <p style={{ margin: 0, fontStyle: "italic" }}>{b.goal}</p>
-          {b.status !== "DONE" && (
-            <p style={{ ...s.hint, marginTop: "0.5rem" }}>
-              Tour {b.turnCount} / {b.maxTurns} &nbsp;·&nbsp;
-              {b.status === "ACTIVE" && b.currentTurnUserId && (
-                <>Tour de : <strong>{
-                  b.currentTurnUserId === b.attackerId
-                    ? `⚔ ${displayName(b.attacker)}`
-                    : b.defender ? `🛡️ ${displayName(b.defender)}` : "?"
-                }</strong></>
-              )}
-              {b.status === "WAITING" && "En attente d'un défenseur"}
-              {b.status === "VOTING" && "Phase de vote"}
+        {b.status !== "DONE" && (
+          <div style={{ ...s.card, borderColor: C.accent, background: "rgba(201,168,76,0.05)" }}>
+            <p style={{ ...s.sectionLabel, color: C.accent }}>Objectif du duel</p>
+            <p style={{ margin: 0, fontStyle: "italic", lineHeight: 1.6 }}>{b.goal}</p>
+            <p style={{ ...s.hint, marginTop: "0.4rem" }}>
+              L'attaquant gagne si le public juge que cet objectif a été atteint.
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Joueurs */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
-          <div style={{ ...s.card, margin: 0, borderColor: isAttacker ? C.accent : C.border }}>
-            <p style={s.sectionLabel}>⚔ Attaquant</p>
-            <p style={{ margin: 0, fontWeight: 600 }}>{displayName(b.attacker)}</p>
-            {isAttacker && <p style={s.hint}>C'est vous</p>}
+          {/* Attaquant */}
+          <div style={{
+            ...s.card, margin: 0,
+            borderColor: isAttacker ? C.accent : C.border,
+            background: isAttacker ? "rgba(201,168,76,0.06)" : C.surface,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+              <p style={{ ...s.sectionLabel, margin: 0 }}>⚔ Attaquant</p>
+              {b.status === "ACTIVE" && b.currentTurnUserId === b.attackerId && (
+                <span style={{ fontSize: "0.68rem", background: C.accentDim, color: C.accent, padding: "0.1rem 0.4rem", borderRadius: 3, fontWeight: 700 }}>
+                  ✍ Son tour
+                </span>
+              )}
+            </div>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem" }}>{displayName(b.attacker)}</p>
+            {isAttacker && <p style={{ ...s.hint, color: C.accent, margin: "0.2rem 0 0" }}>← vous</p>}
           </div>
-          <div style={{ ...s.card, margin: 0, borderColor: isDefender ? C.blue : C.border }}>
-            <p style={s.sectionLabel}>🛡️ Défenseur</p>
+          {/* Défenseur */}
+          <div style={{
+            ...s.card, margin: 0,
+            borderColor: isDefender ? C.blue : C.border,
+            background: isDefender ? "rgba(41,128,185,0.06)" : C.surface,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.4rem" }}>
+              <p style={{ ...s.sectionLabel, margin: 0 }}>🛡️ Défenseur</p>
+              {b.status === "ACTIVE" && b.currentTurnUserId === b.defenderId && (
+                <span style={{ fontSize: "0.68rem", background: C.blueDim, color: C.blue, padding: "0.1rem 0.4rem", borderRadius: 3, fontWeight: 700 }}>
+                  ✍ Son tour
+                </span>
+              )}
+            </div>
             {b.defender
-              ? <><p style={{ margin: 0, fontWeight: 600 }}>{displayName(b.defender)}</p>
-                  {isDefender && <p style={s.hint}>C'est vous</p>}</>
+              ? <>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem" }}>{displayName(b.defender)}</p>
+                  {isDefender && <p style={{ ...s.hint, color: C.blue, margin: "0.2rem 0 0" }}>← vous</p>}
+                </>
               : <p style={{ ...s.muted, fontStyle: "italic", margin: 0 }}>En attente…</p>
             }
           </div>
@@ -795,17 +891,19 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </form>
           ) : (
             <div style={{ ...s.card, textAlign: "center" as const, color: C.textMuted, marginBottom: "1.25rem" }}>
-              Ce n'est pas votre tour.
+              <p style={{ margin: "0 0 0.5rem" }}>
+                En attente de {b.currentTurnUserId === b.attackerId ? displayName(b.attacker) : b.defender ? displayName(b.defender) : "l'adversaire"}…
+              </p>
               {reachedMinTurns && (
-                <div style={{ marginTop: "0.75rem" }}>
+                <div style={{ marginTop: "0.5rem" }}>
                   <button style={{ ...s.btn, ...s.btnGhost }} onClick={handleStartVoting} disabled={startingVote}>
-                    {startingVote ? "…" : "Lancer le vote"}
+                    {startingVote ? "…" : "Lancer le vote maintenant"}
                   </button>
                 </div>
               )}
               {!reachedMinTurns && (
-                <p style={{ ...s.hint, marginTop: "0.5rem" }}>
-                  Tour {b.turnCount} / {b.minTurns} avant de pouvoir lancer le vote
+                <p style={s.hint}>
+                  Le vote peut être lancé à partir du tour {b.minTurns} (actuellement {b.turnCount}).
                 </p>
               )}
             </div>
@@ -813,14 +911,15 @@ export default function BattleApp({ currentUser, onBack }: Props) {
         )}
 
         {b.status === "ACTIVE" && !isPlayer && (
-          <div style={{ ...s.card, textAlign: "center" as const, color: C.textMuted, marginBottom: "1.25rem", background: C.blueDim, borderColor: C.blue }}>
-            👁 Vous assistez à ce duel en spectateur.
+          <div style={{ ...s.card, textAlign: "center" as const, color: C.blue, marginBottom: "1.25rem", background: C.blueDim, borderColor: C.blue }}>
+            <p style={{ margin: "0 0 0.25rem", fontWeight: 600 }}>👁 Vous êtes spectateur</p>
+            <p style={{ ...s.hint, margin: 0 }}>Suivez le duel — vous pourrez voter si la phase de vote est lancée.</p>
           </div>
         )}
 
         {b.status === "WAITING" && isAttacker && (
           <p style={{ ...s.muted, textAlign: "center" as const, marginBottom: "1.25rem" }}>
-            En attente d'un adversaire…
+            La battle est prête — invitez un adversaire pour commencer.
           </p>
         )}
 
@@ -832,7 +931,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
 
             {isPlayer ? (
               <p style={{ ...s.muted, fontStyle: "italic" }}>
-                Les joueurs ne participent pas au vote.
+                En tant que joueur, vous ne participez pas au vote — le public décide.
               </p>
             ) : myVote ? (
               <p style={{ ...s.muted, fontStyle: "italic" }}>
@@ -880,28 +979,62 @@ export default function BattleApp({ currentUser, onBack }: Props) {
 
         {/* Résultat final */}
         {b.status === "DONE" && (
-          <div style={{ ...s.card, textAlign: "center" as const, borderColor: C.accent, background: C.accentDim }}>
-            <p style={{ fontSize: "0.75rem", textTransform: "uppercase" as const, letterSpacing: "0.12em", color: C.accent, margin: "0 0 0.75rem", fontWeight: 600 }}>
+          <div style={{
+            ...s.card,
+            borderColor: C.accent,
+            background: "linear-gradient(160deg, rgba(201,168,76,0.12) 0%, rgba(28,27,39,0.0) 55%)",
+            animation: "battleWin 0.5s cubic-bezier(0.16,1,0.3,1) forwards, victoryPulse 2.5s ease-in-out 0.5s 3",
+            overflow: "hidden" as const,
+          }}>
+            {/* Label */}
+            <p style={{
+              fontSize: "0.7rem", textTransform: "uppercase" as const, letterSpacing: "0.14em",
+              color: C.accent, margin: "0 0 1.25rem", fontWeight: 700, textAlign: "center" as const,
+            }}>
               🏁 Partie terminée
             </p>
-            <p style={{ fontSize: "3rem", margin: "0 0 0.4rem", lineHeight: 1 }}>
-              {b.winner === "ATTACKER" ? "🏆" : "🛡️"}
-            </p>
-            <p style={{ fontWeight: 700, fontSize: "1.25rem", margin: "0 0 0.4rem" }}>
-              {b.winner === "ATTACKER"
-                ? `Victoire de ⚔ ${displayName(b.attacker)}`
-                : b.defender ? `Victoire de 🛡️ ${displayName(b.defender)}` : "Victoire du défenseur"}
-            </p>
-            <p style={s.muted}>
-              {b.winner === "ATTACKER"
-                ? "Le public a jugé que l'objectif a été atteint."
-                : "Le public a jugé que l'objectif n'a pas été atteint."}
-            </p>
-            <hr style={s.divider} />
-            <p style={{ ...s.muted, marginBottom: 0 }}>
-              {yesCount} Oui · {noCount} Non · {spectatorVotes.length} vote{spectatorVotes.length !== 1 ? "s" : ""} spectateur{spectatorVotes.length !== 1 ? "s" : ""}
-              &nbsp;·&nbsp; {b.turnCount} tour{b.turnCount !== 1 ? "s" : ""}
-            </p>
+
+            {/* Vainqueur */}
+            <div style={{ textAlign: "center" as const, marginBottom: "1.5rem" }}>
+              <p style={{ fontSize: "3.5rem", margin: "0 0 0.4rem", lineHeight: 1 }}>
+                {b.winner === "ATTACKER" ? "🏆" : "🛡️"}
+              </p>
+              <p style={{ fontWeight: 800, fontSize: "1.5rem", margin: "0 0 0.2rem", letterSpacing: "-0.01em" }}>
+                {b.winner === "ATTACKER" ? displayName(b.attacker) : b.defender ? displayName(b.defender) : "Défenseur"}
+              </p>
+              <p style={{ color: C.accent, fontSize: "0.88rem", margin: 0, fontWeight: 600 }}>
+                {b.winner === "ATTACKER" ? "⚔ Attaquant victorieux" : "🛡️ Défenseur victorieux"}
+              </p>
+            </div>
+
+            {/* Objectif */}
+            <div style={{
+              background: "rgba(0,0,0,0.25)", borderRadius: 6, padding: "0.85rem 1rem",
+              marginBottom: "1rem", borderLeft: `3px solid ${C.accent}`,
+            }}>
+              <p style={{ ...s.sectionLabel, marginBottom: "0.3rem", color: C.accent }}>Objectif du duel</p>
+              <p style={{ margin: "0 0 0.4rem", fontStyle: "italic", lineHeight: 1.55 }}>{b.goal}</p>
+              <p style={{ ...s.hint, margin: 0 }}>
+                {b.winner === "ATTACKER"
+                  ? "✓ Le public a jugé que l'objectif a été atteint."
+                  : "✗ Le public a jugé que l'objectif n'a pas été atteint."}
+              </p>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem" }}>
+              {[
+                { label: "Tours joués", value: String(b.turnCount), color: C.text },
+                { label: "Votes", value: String(spectatorVotes.length), color: C.text },
+                { label: "Oui", value: String(yesCount), color: C.green },
+                { label: "Non", value: String(noCount), color: C.red },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 6, padding: "0.6rem 0.5rem", textAlign: "center" as const }}>
+                  <p style={{ ...s.sectionLabel, margin: "0 0 0.2rem" }}>{label}</p>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: "1.35rem", color }}>{value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
