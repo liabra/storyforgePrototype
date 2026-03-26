@@ -54,13 +54,6 @@ const s = {
 const displayName = (u: { displayName?: string | null; email: string }) =>
   u.displayName || u.email.split("@")[0];
 
-const statusLabel: Record<string, string> = {
-  WAITING: "En attente d'un adversaire",
-  ACTIVE: "Duel en cours",
-  VOTING: "Vote en cours",
-  DONE: "Partie terminée",
-};
-
 const statusLabelShort: Record<string, string> = {
   WAITING: "En attente",
   ACTIVE: "En cours",
