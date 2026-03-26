@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { api } from "./api";
 import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote, BattleVisibility, BattleInviteRole, BattleInviteWithContext } from "./api";
 import { socket } from "./socket";
@@ -435,28 +435,128 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // Vue liste
+  // Vue liste — Homepage Battle
   // ══════════════════════════════════════════════════════════════════════════
 
   if (view === "list") {
+    const activeBattles  = battles.filter((b) => b.status === "ACTIVE" || b.status === "WAITING");
+    const votingBattles  = battles.filter((b) => b.status === "VOTING");
+    const doneBattles    = battles.filter((b) => b.status === "DONE").slice(0, 5);
+
+    const BattleCard = ({ b, cta }: { b: typeof battles[number]; cta?: React.ReactNode }) => {
+      const [color, bg] = statusColor[b.status] ?? [C.textMuted, "transparent"];
+      return (
+        <div
+          style={{ ...s.card, cursor: "pointer", marginBottom: "0.75rem" }}
+          onClick={() => handleSelectBattle(b.id)}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.3rem", flexWrap: "wrap" as const }}>
+                <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{b.title}</span>
+                <span style={s.badge(color, bg)}>{statusLabelShort[b.status]}</span>
+                {b.visibility === "PUBLIC" && <span style={s.badge(C.blue, C.blueDim)}>🌐</span>}
+              </div>
+              <p style={{ ...s.muted, margin: "0 0 0.5rem", fontSize: "0.82rem", lineHeight: 1.45,
+                overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const }}>
+                {b.goal}
+              </p>
+              <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.75rem", color: C.textMuted, flexWrap: "wrap" as const }}>
+                <span>⚔ {displayName(b.attacker)}</span>
+                {b.defender
+                  ? <span>🛡 {displayName(b.defender)}</span>
+                  : <span style={{ fontStyle: "italic", opacity: 0.7 }}>🛡 Défenseur recherché…</span>
+                }
+                {b.status !== "DONE" && <span>Tour {b.turnCount}/{b.maxTurns}</span>}
+                {b.winner && (
+                  <span style={{ color: C.accent, fontWeight: 600 }}>
+                    {b.winner === "ATTACKER" ? "🏆 Attaquant" : "🛡 Défenseur"}
+                  </span>
+                )}
+              </div>
+            </div>
+            {cta ?? <span style={{ color: C.textMuted, flexShrink: 0 }}>→</span>}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div style={s.root}>
+        {/* ── Barre de navigation ──────────────────────────────────────────── */}
         <div style={s.header}>
           <button style={s.backBtn} onClick={onBack}>← Histoires</button>
           <p style={s.title}>⚔ Battle</p>
         </div>
 
-        <div style={s.content}>
-          {error && <p style={{ color: C.red, fontSize: "0.88rem", marginBottom: "1rem" }}>{error}</p>}
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
+        <div style={{
+          background: "linear-gradient(160deg, #1a1428 0%, #0d1520 60%, #12111a 100%)",
+          borderBottom: `1px solid ${C.border}`,
+          padding: "3.5rem 1.5rem 3rem",
+          textAlign: "center" as const,
+          position: "relative" as const,
+          overflow: "hidden" as const,
+        }}>
+          {/* Ornement de fond */}
+          <div aria-hidden="true" style={{
+            position: "absolute" as const, top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            fontSize: "14rem", opacity: 0.025, pointerEvents: "none" as const,
+            userSelect: "none" as const, lineHeight: 1,
+          }}>⚔</div>
 
-          {/* Formulaire de création */}
-          {showCreateForm ? (
-            <div style={s.card}>
-              <p style={{ ...s.sectionLabel, marginBottom: "0.75rem" }}>Nouvelle battle</p>
+          <div style={{ position: "relative" as const, maxWidth: 560, margin: "0 auto" }}>
+            <p style={{
+              fontSize: "0.68rem", letterSpacing: "0.22em", textTransform: "uppercase" as const,
+              color: C.accent, margin: "0 0 0.85rem",
+              fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            }}>
+              Mode Battle · StoryForge
+            </p>
+            <h1 style={{
+              fontSize: "2.4rem", fontWeight: 700, margin: "0 0 0.9rem", lineHeight: 1.15,
+              color: C.text, fontFamily: "'Georgia', serif",
+            }}>
+              Duels littéraires
+            </h1>
+            <p style={{
+              color: C.textMuted, fontSize: "0.95rem", margin: "0 0 2rem", lineHeight: 1.7,
+            }}>
+              Affrontez un adversaire tour par tour.<br />
+              Le public lit, juge, et désigne le vainqueur.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" as const, flexWrap: "wrap" as const }}>
+              <button
+                style={{ ...s.btn, ...s.btnPrimary, fontSize: "0.9rem", padding: "0.6rem 1.4rem" }}
+                onClick={() => setShowCreateForm((v) => !v)}
+              >
+                {showCreateForm ? "✕ Annuler" : "⚔ Créer un duel"}
+              </button>
+              {myInvites.length > 0 && (
+                <span style={{
+                  ...s.btn, ...s.btnGhost, fontSize: "0.85rem", padding: "0.6rem 1.1rem",
+                  background: "rgba(201,168,76,0.1)", borderColor: C.accent, color: C.accent,
+                  cursor: "default",
+                }}>
+                  {myInvites.length} invitation{myInvites.length > 1 ? "s" : ""} en attente
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div style={s.content}>
+          {error && <p style={{ color: C.red, fontSize: "0.88rem", marginBottom: "1.25rem" }}>{error}</p>}
+
+          {/* ── Formulaire de création ──────────────────────────────────── */}
+          {showCreateForm && (
+            <div style={{ ...s.card, marginBottom: "2rem", borderColor: C.accent, background: "rgba(201,168,76,0.04)" }}>
+              <p style={{ ...s.sectionLabel, marginBottom: "0.75rem" }}>Nouveau duel</p>
               <form onSubmit={handleCreate}>
-                <div style={{ ...s.card, background: C.blueDim, borderColor: C.blue, marginBottom: "0.75rem" }}>
+                <div style={{ ...s.card, background: C.blueDim, borderColor: C.blue, marginBottom: "0.85rem" }}>
                   <p style={{ ...s.muted, margin: 0, fontSize: "0.82rem", lineHeight: 1.6 }}>
-                    Pour conclure une battle : 2 joueurs sont nécessaires · au moins 3 spectateurs doivent voter · les joueurs ne participent pas au vote.
+                    2 joueurs requis · 3 votes spectateurs minimum pour clore · les joueurs ne votent pas.
                   </p>
                 </div>
                 <div style={{ marginBottom: "0.75rem" }}>
@@ -488,11 +588,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                       <button
                         key={v}
                         type="button"
-                        style={{
-                          ...s.btn,
-                          ...(newVisibility === v ? s.btnPrimary : s.btnGhost),
-                          fontSize: "0.82rem",
-                        }}
+                        style={{ ...s.btn, ...(newVisibility === v ? s.btnPrimary : s.btnGhost), fontSize: "0.82rem" }}
                         onClick={() => setNewVisibility(v)}
                       >
                         {v === "PRIVATE" ? "🔒 Privée" : "🌐 Publique"}
@@ -502,7 +598,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                   <p style={s.hint}>
                     {newVisibility === "PRIVATE"
                       ? "Visible uniquement par vous et votre adversaire."
-                      : "Visible par tous les joueurs connectés — ils pourront voter."}
+                      : "Visible par tous — ils pourront rejoindre et voter."}
                   </p>
                 </div>
                 <div style={s.row}>
@@ -515,39 +611,29 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                 </div>
               </form>
             </div>
-          ) : (
-            <button style={{ ...s.btn, ...s.btnPrimary, marginBottom: "1.5rem" }} onClick={() => setShowCreateForm(true)}>
-              ⚔ Créer une battle
-            </button>
           )}
 
-          {/* Invitations en attente */}
+          {/* ── Invitations en attente ──────────────────────────────────── */}
           {myInvites.length > 0 && (
-            <div style={{ marginBottom: "1.5rem" }}>
+            <div style={{ marginBottom: "2rem" }}>
               <p style={s.sectionLabel}>Invitations en attente ({myInvites.length})</p>
               {myInvites.map((inv) => (
-                <div key={inv.id} style={{ ...s.card, borderColor: C.accent, background: "rgba(201,168,76,0.06)" }}>
+                <div key={inv.id} style={{ ...s.card, borderColor: C.accent, background: "rgba(201,168,76,0.06)", marginBottom: "0.6rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" as const }}>
                     <div style={{ flex: 1 }}>
                       <span style={{ fontWeight: 600 }}>{inv.battle.title}</span>
                       <span style={{ ...s.badge(C.accent, C.accentDim), marginLeft: "0.5rem" }}>
                         {inv.role === "PLAYER" ? "⚔ Joueur" : "👁 Spectateur"}
                       </span>
-                      <p style={{ ...s.muted, margin: "0.25rem 0 0" }}>
-                        Invitation de {displayName(inv.battle.attacker)}
+                      <p style={{ ...s.muted, margin: "0.2rem 0 0", fontSize: "0.82rem" }}>
+                        De {displayName(inv.battle.attacker)}
                       </p>
                     </div>
                     <div style={s.row}>
-                      <button
-                        style={{ ...s.btn, ...s.btnGreen, fontSize: "0.82rem" }}
-                        onClick={() => handleAcceptInvite(inv.id, inv.battle.id)}
-                      >
+                      <button style={{ ...s.btn, ...s.btnGreen, fontSize: "0.82rem" }} onClick={() => handleAcceptInvite(inv.id, inv.battle.id)}>
                         Accepter
                       </button>
-                      <button
-                        style={{ ...s.btn, ...s.btnGhost, fontSize: "0.82rem" }}
-                        onClick={() => handleDeclineInvite(inv.id)}
-                      >
+                      <button style={{ ...s.btn, ...s.btnGhost, fontSize: "0.82rem" }} onClick={() => handleDeclineInvite(inv.id)}>
                         Refuser
                       </button>
                     </div>
@@ -557,46 +643,71 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </div>
           )}
 
-          {/* Liste */}
-          <p style={s.sectionLabel}>Battles en cours</p>
-          {loading && <p style={s.muted}>Chargement…</p>}
-          {!loading && battles.length === 0 && (
-            <p style={s.muted}>Aucune battle pour l'instant. Créez le premier duel !</p>
+          {loading && <p style={{ ...s.muted, textAlign: "center" as const, padding: "2rem 0" }}>Chargement…</p>}
+
+          {/* ── Section ACTIVE / WAITING ────────────────────────────────── */}
+          {!loading && activeBattles.length > 0 && (
+            <div style={{ marginBottom: "2.5rem" }}>
+              <p style={s.sectionLabel}>
+                Duels en cours
+                <span style={{ marginLeft: "0.5rem", fontWeight: 400, opacity: 0.7 }}>
+                  ({activeBattles.length})
+                </span>
+              </p>
+              {activeBattles.map((b) => (
+                <BattleCard key={b.id} b={b} />
+              ))}
+            </div>
           )}
-          {battles.map((b) => {
-            const [color, bg] = statusColor[b.status] ?? [C.textMuted, "transparent"];
-            return (
-              <div key={b.id} style={{ ...s.card, cursor: "pointer" }} onClick={() => handleSelectBattle(b.id)}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", marginBottom: "0.35rem", flexWrap: "wrap" as const }}>
-                      <span style={{ fontWeight: 600 }}>{b.title}</span>
-                      <span style={s.badge(color, bg)}>{statusLabelShort[b.status]}</span>
-                      {b.visibility === "PUBLIC" && (
-                        <span style={s.badge(C.blue, C.blueDim)}>🌐 Public</span>
-                      )}
-                      {b.winner && (
-                        <span style={s.badge(C.accent, C.accentDim)}>
-                          {b.winner === "ATTACKER" ? "🏆 Attaquant" : "🛡️ Défenseur"}
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ ...s.muted, margin: "0 0 0.4rem" }}>{b.goal}</p>
-                    <div style={{ display: "flex", gap: "1rem", fontSize: "0.78rem", color: C.textMuted }}>
-                      <span>⚔ {displayName(b.attacker)}</span>
-                      {b.defender
-                        ? <span>🛡️ {displayName(b.defender)}</span>
-                        : <span style={{ fontStyle: "italic" }}>🛡️ En attente d'un défenseur…</span>
-                      }
-                      {b.status !== "DONE" && <span>Tour {b.turnCount}/{b.maxTurns}</span>}
-                      <span>{b._count?.moves ?? 0} move{(b._count?.moves ?? 0) !== 1 ? "s" : ""}</span>
-                    </div>
-                  </div>
-                  <span style={{ color: C.textMuted }}>→</span>
-                </div>
+
+          {/* ── Section VOTING ──────────────────────────────────────────── */}
+          {!loading && votingBattles.length > 0 && (
+            <div style={{ marginBottom: "2.5rem" }}>
+              <p style={s.sectionLabel}>
+                Vote ouvert
+                <span style={{ marginLeft: "0.5rem", fontWeight: 400, opacity: 0.7 }}>
+                  ({votingBattles.length})
+                </span>
+              </p>
+              <div style={{ ...s.card, background: "rgba(201,168,76,0.05)", borderColor: "rgba(201,168,76,0.2)", marginBottom: "0.85rem", padding: "0.65rem 1rem" }}>
+                <p style={{ ...s.muted, margin: 0, fontSize: "0.82rem" }}>
+                  🗳 Ces duels attendent votre verdict. Lisez les moves et votez !
+                </p>
               </div>
-            );
-          })}
+              {votingBattles.map((b) => (
+                <BattleCard
+                  key={b.id}
+                  b={b}
+                  cta={
+                    <button
+                      style={{ ...s.btn, background: C.accent, color: "#1a1508", fontSize: "0.8rem", padding: "0.4rem 0.9rem", flexShrink: 0 }}
+                      onClick={(e) => { e.stopPropagation(); handleSelectBattle(b.id); }}
+                    >
+                      Voter →
+                    </button>
+                  }
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Section DONE ─────────────────────────────────────────────── */}
+          {!loading && doneBattles.length > 0 && (
+            <div style={{ marginBottom: "2rem" }}>
+              <p style={s.sectionLabel}>Terminées récemment</p>
+              {doneBattles.map((b) => (
+                <BattleCard key={b.id} b={b} />
+              ))}
+            </div>
+          )}
+
+          {/* ── État vide ────────────────────────────────────────────────── */}
+          {!loading && battles.length === 0 && (
+            <div style={{ textAlign: "center" as const, padding: "3rem 0", color: C.textMuted }}>
+              <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem" }}>Aucun duel pour l'instant.</p>
+              <p style={{ fontSize: "0.85rem", opacity: 0.7 }}>Soyez le premier à lancer un défi !</p>
+            </div>
+          )}
         </div>
       </div>
     );
