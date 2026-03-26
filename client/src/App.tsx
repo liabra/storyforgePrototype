@@ -451,6 +451,11 @@ export default function App() {
 
     const onNotificationNew = (notif: AppNotification) => {
       setNotifications((prev) => [notif, ...prev]);
+      if (notif.type === "USER_BANNED") {
+        setCurrentUser((u) => u ? { ...u, isBanned: true } : u);
+      } else if (notif.type === "USER_UNBANNED") {
+        setCurrentUser((u) => u ? { ...u, isBanned: false } : u);
+      }
     };
 
     socket.on("connect", onConnect);
@@ -3082,8 +3087,8 @@ function NotifPanel({
       {/* Overlay invisible pour fermer en cliquant dehors */}
       <div style={{ position: "fixed", inset: 0, zIndex: 10019 }} onClick={onClose} />
       <div style={{
-        position: "absolute", top: "calc(100% + 6px)", right: 0,
-        width: 320, maxHeight: 420, overflowY: "auto" as const,
+        position: "fixed", top: 58, right: "1rem",
+        width: "min(320px, calc(100vw - 2rem))", maxHeight: 420, overflowY: "auto" as const,
         background: "rgba(252,244,215,0.99)",
         border: "1px solid rgba(75,35,5,0.22)",
         borderRadius: 8,
