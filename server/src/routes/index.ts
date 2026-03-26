@@ -11,6 +11,7 @@ import joinRequestRoutes from "./joinRequest.routes";
 import activityRoutes from "./activity.routes";
 import devRoutes from "./dev.routes";
 import battleRoutes from "./battle.routes";
+import reportRoutes from "./report.routes";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use(joinRequestRoutes);
 router.use(activityRoutes);
 router.use(devRoutes);
 router.use(battleRoutes);
+router.use(reportRoutes);
 
 export default router;

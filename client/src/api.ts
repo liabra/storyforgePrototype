@@ -439,4 +439,8 @@ export const api = {
     accept: (inviteId: string) => request<{ ok: boolean }>(`/battle-invites/${inviteId}/accept`, { method: "POST" }),
     decline: (inviteId: string) => request<{ ok: boolean }>(`/battle-invites/${inviteId}/decline`, { method: "POST" }),
   },
+  reports: {
+    create: (data: { targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY"; targetId: string; reason?: string }) =>
+      request<{ id: string }>("/reports", { method: "POST", body: JSON.stringify(data) }),
+  },
 };

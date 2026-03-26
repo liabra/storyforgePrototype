@@ -37,6 +37,7 @@ model User {
   battleMoves   BattleMove[]         @relation("BattleMoves")
   battleVotes   BattleVote[]         @relation("BattleVotes")
   battleInvites BattleInvite[]       @relation("BattleInvites")
+  reports       Report[]
 }
 
 model Story {
@@ -250,4 +251,24 @@ model BattleVote {
   createdAt DateTime @default(now())
 
   @@unique([battleId, userId])
+}
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+
+enum ReportTargetType {
+  CONTRIBUTION
+  BATTLE_MOVE
+  STORY
+}
+
+model Report {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType ReportTargetType
+  targetId   String
+  reason     String?
+  createdAt  DateTime         @default(now())
+
+  @@unique([userId, targetType, targetId])
 }

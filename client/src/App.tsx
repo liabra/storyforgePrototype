@@ -30,6 +30,7 @@ import { PresenceAvatar } from "./PresenceAvatar";
 import { ToastContainer } from "./Toast";
 import type { ToastItem } from "./Toast";
 import SceneReader from "./SceneReader";
+import { ReportModal } from "./ReportModal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ export default function App() {
   const [submittingContrib, setSubmittingContrib] = useState(false);
   const [editingContribId, setEditingContribId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [reportTarget, setReportTarget] = useState<{ targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY"; targetId: string } | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestingIdea, setSuggestingIdea] = useState(false);
 
@@ -2633,6 +2635,9 @@ export default function App() {
                             {!spectatorView && (isOwn || myRole === "OWNER") && (
                               <button style={s.contribDelete} onClick={() => handleDeleteContrib(contrib.id)} title="Supprimer">✕</button>
                             )}
+                            {currentUser && !isOwn && !isEditing && (
+                              <button style={s.reportBtn} onClick={() => setReportTarget({ targetType: "CONTRIBUTION", targetId: contrib.id })} title="Signaler">🚩</button>
+                            )}
                           </div>
                           {isEditing ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.3rem" }}>
@@ -2958,6 +2963,19 @@ export default function App() {
         onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
       />
 
+      {reportTarget && (
+        <ReportModal
+          targetType={reportTarget.targetType}
+          targetId={reportTarget.targetId}
+          onClose={() => setReportTarget(null)}
+          onSuccess={() => {
+            setReportTarget(null);
+            setToasts((prev) => [...prev, { id: ++toastIdRef.current, type: "scene" as const, message: "Signalement envoyé. Merci." }].slice(-5));
+          }}
+          onError={(err) => addErrorToast(err)}
+        />
+      )}
+
       {/* Mode lecture immersif */}
       {isReading && selectedScene && (
         <SceneReader
@@ -3164,6 +3182,7 @@ const s: Record<string, React.CSSProperties> = {
   contribTime: { fontSize: "0.68rem", color: C.textMuted, fontFamily: C.ui },
   contribDelete: { marginLeft: "0.1rem", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.75rem", opacity: 0.35, padding: "0.1rem 0.3rem" },
   contribAction: { marginLeft: "auto", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.8rem", opacity: 0.45, padding: "0.1rem 0.3rem" },
+  reportBtn: { marginLeft: "0.1rem", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.72rem", opacity: 0.3, padding: "0.1rem 0.3rem" },
   contribSaveBtn: { fontSize: "0.72rem", padding: "0.25rem 0.65rem", background: "rgba(75,35,5,0.12)", border: "1px solid rgba(75,35,5,0.25)", borderRadius: "4px", cursor: "pointer", color: C.text, fontFamily: C.ui },
   contribCancelBtn: { fontSize: "0.72rem", padding: "0.25rem 0.65rem", background: "transparent", border: "1px solid rgba(75,35,5,0.15)", borderRadius: "4px", cursor: "pointer", color: C.textMuted, fontFamily: C.ui },
   contribText: { margin: 0, color: C.text, lineHeight: 2.05, fontFamily: C.serif, fontStyle: "italic", fontSize: "1.02rem", whiteSpace: "pre-wrap" as const },

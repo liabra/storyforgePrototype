@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { api } from "./api";
 import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote, BattleVisibility, BattleInviteRole, BattleInviteWithContext } from "./api";
 import { socket } from "./socket";
+import { ReportModal } from "./ReportModal";
 
 // ── Couleurs / styles ────────────────────────────────────────────────────────
 
@@ -130,6 +131,8 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   const [inviteRole, setInviteRole] = useState<BattleInviteRole>("SPECTATOR");
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ targetId: string } | null>(null);
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null);
 
   const selectedBattleRef = useRef<Battle | null>(null);
   useEffect(() => { selectedBattleRef.current = selectedBattle; }, [selectedBattle]);
@@ -772,6 +775,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   const banner = bannerConfig[b.status];
 
   return (
+    <>
     <div style={s.root}>
       {/* Header */}
       <div style={s.header}>
@@ -958,6 +962,13 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                     {isAtk ? "⚔" : "🛡️"} {displayName(move.user)}
                   </span>
                   <span style={{ fontSize: "0.72rem", color: C.textMuted }}>Tour {move.turnNumber}</span>
+                  {currentUser && move.userId !== currentUser.id && (
+                    <button
+                      onClick={() => setReportTarget({ targetId: move.id })}
+                      title="Signaler"
+                      style={{ marginLeft: "auto", background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: "0.7rem", opacity: 0.3, padding: "0 0.2rem" }}
+                    >🚩</button>
+                  )}
                 </div>
                 <p style={{ margin: 0, lineHeight: 1.55 }}>{move.content}</p>
               </div>
@@ -1146,5 +1157,35 @@ export default function BattleApp({ currentUser, onBack }: Props) {
         )}
       </div>
     </div>
+
+    {reportTarget && (
+      <ReportModal
+        targetType="BATTLE_MOVE"
+        targetId={reportTarget.targetId}
+        onClose={() => setReportTarget(null)}
+        onSuccess={() => {
+          setReportTarget(null);
+          setReportSuccess("Signalement envoyé. Merci.");
+          setTimeout(() => setReportSuccess(null), 4000);
+        }}
+        onError={(err) => {
+          setReportTarget(null);
+          setError((err as Error).message);
+        }}
+      />
+    )}
+
+    {reportSuccess && (
+      <div style={{
+        position: "fixed", top: "1rem", right: "1.5rem", zIndex: 10001,
+        background: "#194820", color: "#d4f0d4", border: "1px solid rgba(100,200,100,0.3)",
+        borderRadius: 6, padding: "0.65rem 1rem", fontSize: 13,
+        fontFamily: "'Jost', system-ui, sans-serif", boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+        pointerEvents: "none",
+      }}>
+        {reportSuccess}
+      </div>
+    )}
+    </>
   );
 }
