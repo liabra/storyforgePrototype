@@ -168,9 +168,9 @@ export default function BattleApp({ currentUser, onBack }: Props) {
         b.id === id ? { ...b, ...(status && { status }), ...(defenderId !== undefined && { defenderId }), ...(winner !== undefined && { winner }) } : b
       ));
     };
-    const onBattleInvited = ({ invite, battle }: { invite: BattleInviteWithContext; battle: unknown }) => {
-      void battle;
-      setMyInvites((prev) => prev.some((i) => i.id === invite.id) ? prev : [invite, ...prev]);
+    const onBattleInvited = ({ invite, battle }: { invite: Omit<BattleInviteWithContext, "battle">; battle: BattleInviteWithContext["battle"] }) => {
+      const full: BattleInviteWithContext = { ...invite, battle };
+      setMyInvites((prev) => prev.some((i) => i.id === full.id) ? prev : [full, ...prev]);
     };
 
     socket.on("battle:created", onBattleCreated);
