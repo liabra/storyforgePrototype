@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import * as battleService from "../services/battle.service";
-import { BattleStatus, StoryVisibility } from "../generated/prisma/client";
+import { BattleStatus, StoryVisibility, BattleInviteRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
+
+const MIN_VOTES_TO_CLOSE = 3;
 
 const p = (v: string | string[] | undefined): string => {
   if (!v) throw new Error("Missing param");
@@ -25,9 +27,13 @@ export const getOne = async (req: Request, res: Response): Promise<void> => {
   try {
     const battle = await battleService.getBattleById(id);
     if (!battle) { res.status(404).json({ error: "Battle introuvable" }); return; }
-    // Accès : PUBLIC ou joueur
-    if (battle.visibility === StoryVisibility.PRIVATE && battle.attackerId !== userId && battle.defenderId !== userId) {
-      res.status(403).json({ error: "Accès refusé à cette battle privée" }); return;
+    // Accès PRIVATE : joueur ou invité accepté
+    if (battle.visibility === StoryVisibility.PRIVATE) {
+      const isPlayer = battle.attackerId === userId || battle.defenderId === userId;
+      const isInvited = battle.invites.some((inv) => inv.userId === userId && inv.status === "ACCEPTED");
+      if (!isPlayer && !isInvited) {
+        res.status(403).json({ error: "Accès refusé à cette battle privée" }); return;
+      }
     }
     res.json(battle);
   } catch (err) {
@@ -57,7 +63,6 @@ export const create = async (req: Request, res: Response): Promise<void> => {
       maxTurns,
       visibility: parsedVisibility,
     });
-    // Notifier tous les clients connectés pour la liste
     getIO()?.emit("battle:created", battle);
     res.status(201).json(battle);
   } catch (err) {
@@ -173,6 +178,11 @@ export const castVote = async (req: Request, res: Response): Promise<void> => {
     res.status(409).json({ error: "Le vote n'est ouvert que pendant la phase VOTING" }); return;
   }
 
+  // Les joueurs ne votent pas
+  if (battle.attackerId === userId || battle.defenderId === userId) {
+    res.status(403).json({ error: "Les joueurs ne participent pas au vote" }); return;
+  }
+
   const existing = await battleService.getUserVote(id, userId);
   if (existing) {
     res.status(409).json({ error: "Vous avez déjà voté pour cette battle" }); return;
@@ -180,8 +190,12 @@ export const castVote = async (req: Request, res: Response): Promise<void> => {
 
   try {
     const newVote = await battleService.castVote(id, userId, vote);
-    const yesCount = battle.votes.filter((v) => v.vote).length + (vote ? 1 : 0);
-    const noCount = battle.votes.filter((v) => !v.vote).length + (vote ? 0 : 1);
+    // Comptage spectateurs uniquement (hors joueurs)
+    const spectatorVotes = battle.votes.filter(
+      (v) => v.userId !== battle.attackerId && v.userId !== battle.defenderId,
+    );
+    const yesCount = spectatorVotes.filter((v) => v.vote).length + (vote ? 1 : 0);
+    const noCount = spectatorVotes.filter((v) => !v.vote).length + (vote ? 0 : 1);
     getIO()?.to(`battle:${id}`).emit("battle:voted", {
       battleId: id,
       vote: newVote,
@@ -197,8 +211,6 @@ export const castVote = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-const MIN_VOTES_TO_CLOSE = 3;
-
 // POST /api/battles/:id/vote/close
 export const closeVoting = async (req: Request, res: Response): Promise<void> => {
   const id = p(req.params.id);
@@ -212,8 +224,15 @@ export const closeVoting = async (req: Request, res: Response): Promise<void> =>
   if (battle.attackerId !== userId && battle.defenderId !== userId) {
     res.status(403).json({ error: "Seuls les joueurs peuvent clore le vote" }); return;
   }
-  if (battle.votes.length < MIN_VOTES_TO_CLOSE) {
-    res.status(409).json({ error: `Il faut au moins ${MIN_VOTES_TO_CLOSE} votes pour clore le scrutin (actuellement ${battle.votes.length})` }); return;
+
+  // Compter uniquement les votes spectateurs
+  const spectatorVotes = battle.votes.filter(
+    (v) => v.userId !== battle.attackerId && v.userId !== battle.defenderId,
+  );
+  if (spectatorVotes.length < MIN_VOTES_TO_CLOSE) {
+    res.status(409).json({
+      error: `Il faut au moins ${MIN_VOTES_TO_CLOSE} votes spectateurs pour clore le scrutin (actuellement ${spectatorVotes.length})`,
+    }); return;
   }
 
   try {
@@ -225,6 +244,112 @@ export const closeVoting = async (req: Request, res: Response): Promise<void> =>
     });
     getIO()?.emit("battle:updated", { id, status: updated.status, winner: updated.winner });
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+};
+
+// ── Invitations ───────────────────────────────────────────────────────────────
+
+// POST /api/battles/:id/invite
+export const sendInvite = async (req: Request, res: Response): Promise<void> => {
+  const battleId = p(req.params.id);
+  const senderId = req.user!.id;
+  const { email, role } = req.body;
+
+  if (!email?.trim()) { res.status(400).json({ error: "email requis" }); return; }
+  if (role !== "PLAYER" && role !== "SPECTATOR") {
+    res.status(400).json({ error: "role doit être PLAYER ou SPECTATOR" }); return;
+  }
+
+  const battle = await battleService.getBattleById(battleId);
+  if (!battle) { res.status(404).json({ error: "Battle introuvable" }); return; }
+  if (battle.attackerId !== senderId && battle.defenderId !== senderId) {
+    res.status(403).json({ error: "Seuls les joueurs peuvent inviter" }); return;
+  }
+  if (role === BattleInviteRole.PLAYER && battle.defenderId) {
+    res.status(409).json({ error: "La place de défenseur est déjà prise" }); return;
+  }
+
+  // Trouver l'utilisateur par email
+  const targetUser = await (await import("../prisma/client")).default.user.findUnique({
+    where: { email: email.trim().toLowerCase() },
+    select: { id: true, email: true },
+  });
+  if (!targetUser) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
+  if (targetUser.id === senderId) {
+    res.status(409).json({ error: "Vous ne pouvez pas vous inviter vous-même" }); return;
+  }
+  if (targetUser.id === battle.attackerId || targetUser.id === battle.defenderId) {
+    res.status(409).json({ error: "Cet utilisateur est déjà joueur" }); return;
+  }
+
+  try {
+    const invite = await battleService.createInvite(battleId, targetUser.id, role as BattleInviteRole);
+    // Notifier l'invité via sa room personnelle
+    getIO()?.to(`user:${targetUser.id}`).emit("battle:invited", {
+      invite,
+      battle: { id: battle.id, title: battle.title, attacker: battle.attacker },
+    });
+    res.status(201).json(invite);
+  } catch (err) {
+    const e = err as { code?: string };
+    if (e.code === "P2002") {
+      res.status(409).json({ error: "Cet utilisateur a déjà une invitation pour cette battle" }); return;
+    }
+    res.status(500).json({ error: (err as Error).message });
+  }
+};
+
+// GET /api/battle-invites/mine
+export const myInvites = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const invites = await battleService.getMyPendingInvites(req.user!.id);
+    res.json(invites);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+};
+
+// POST /api/battle-invites/:id/accept
+export const acceptInvite = async (req: Request, res: Response): Promise<void> => {
+  const inviteId = p(req.params.id);
+  const userId = req.user!.id;
+
+  const invite = await battleService.getInviteById(inviteId);
+  if (!invite) { res.status(404).json({ error: "Invitation introuvable" }); return; }
+  if (invite.userId !== userId) { res.status(403).json({ error: "Cette invitation ne vous est pas destinée" }); return; }
+  if (invite.status !== "PENDING") { res.status(409).json({ error: "Cette invitation a déjà été traitée" }); return; }
+
+  try {
+    const updatedBattle = await battleService.acceptInvite(inviteId);
+    if (updatedBattle) {
+      getIO()?.to(`battle:${invite.battle.id}`).emit("battle:joined", updatedBattle);
+      getIO()?.emit("battle:updated", {
+        id: invite.battle.id,
+        status: updatedBattle.status,
+        defenderId: updatedBattle.defenderId,
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(409).json({ error: (err as Error).message });
+  }
+};
+
+// POST /api/battle-invites/:id/decline
+export const declineInvite = async (req: Request, res: Response): Promise<void> => {
+  const inviteId = p(req.params.id);
+  const userId = req.user!.id;
+
+  const invite = await battleService.getInviteById(inviteId);
+  if (!invite) { res.status(404).json({ error: "Invitation introuvable" }); return; }
+  if (invite.userId !== userId) { res.status(403).json({ error: "Cette invitation ne vous est pas destinée" }); return; }
+  if (invite.status !== "PENDING") { res.status(409).json({ error: "Cette invitation a déjà été traitée" }); return; }
+
+  try {
+    await battleService.declineInvite(inviteId);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

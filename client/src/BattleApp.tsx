@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "./api";
-import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote, BattleVisibility } from "./api";
+import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote, BattleVisibility, BattleInviteRole, BattleInviteWithContext } from "./api";
 import { socket } from "./socket";
 
 // ── Couleurs / styles ────────────────────────────────────────────────────────
@@ -103,6 +103,13 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   const [closing, setClosing] = useState(false);
   const [joining, setJoining] = useState(false);
 
+  // Invitations
+  const [myInvites, setMyInvites] = useState<BattleInviteWithContext[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<BattleInviteRole>("SPECTATOR");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [showInviteForm, setShowInviteForm] = useState(false);
+
   const selectedBattleRef = useRef<Battle | null>(null);
   useEffect(() => { selectedBattleRef.current = selectedBattle; }, [selectedBattle]);
 
@@ -115,6 +122,9 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       .then(setBattles)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    api.battleInvites.mine()
+      .then(setMyInvites)
+      .catch(() => {/* silencieux */});
   }, [currentUser]);
 
   // ── Écoute socket globale (liste) ──────────────────────────────────────────
@@ -137,11 +147,18 @@ export default function BattleApp({ currentUser, onBack }: Props) {
         b.id === id ? { ...b, ...(status && { status }), ...(defenderId !== undefined && { defenderId }), ...(winner !== undefined && { winner }) } : b
       ));
     };
+    const onBattleInvited = ({ invite, battle }: { invite: BattleInviteWithContext; battle: unknown }) => {
+      void battle;
+      setMyInvites((prev) => prev.some((i) => i.id === invite.id) ? prev : [invite, ...prev]);
+    };
+
     socket.on("battle:created", onBattleCreated);
     socket.on("battle:updated", onBattleUpdated);
+    socket.on("battle:invited", onBattleInvited);
     return () => {
       socket.off("battle:created", onBattleCreated);
       socket.off("battle:updated", onBattleUpdated);
+      socket.off("battle:invited", onBattleInvited);
     };
   }, []);
 
@@ -338,6 +355,45 @@ export default function BattleApp({ currentUser, onBack }: Props) {
     }
   };
 
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBattle || !inviteEmail.trim()) return;
+    setSendingInvite(true);
+    setError(null);
+    try {
+      await api.battles.invite(selectedBattle.id, inviteEmail.trim(), inviteRole);
+      setInviteEmail("");
+      setShowInviteForm(false);
+      // Refetch pour mettre à jour la liste des invites dans le détail
+      const updated = await api.battles.get(selectedBattle.id);
+      setSelectedBattle(updated);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const handleAcceptInvite = async (inviteId: string, battleId: string) => {
+    try {
+      await api.battleInvites.accept(inviteId);
+      setMyInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      // Ouvrir la battle
+      await handleSelectBattle(battleId);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    try {
+      await api.battleInvites.decline(inviteId);
+      setMyInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   // ── Guard non-connecté ─────────────────────────────────────────────────────
 
   if (!currentUser) {
@@ -374,6 +430,11 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             <div style={s.card}>
               <p style={{ ...s.sectionLabel, marginBottom: "0.75rem" }}>Nouvelle battle</p>
               <form onSubmit={handleCreate}>
+                <div style={{ ...s.card, background: C.blueDim, borderColor: C.blue, marginBottom: "0.75rem" }}>
+                  <p style={{ ...s.muted, margin: 0, fontSize: "0.82rem", lineHeight: 1.6 }}>
+                    Pour conclure une battle : 2 joueurs sont nécessaires · au moins 3 spectateurs doivent voter · les joueurs ne participent pas au vote.
+                  </p>
+                </div>
                 <div style={{ marginBottom: "0.75rem" }}>
                   <label style={{ ...s.muted, display: "block", marginBottom: "0.3rem" }}>Titre</label>
                   <input
@@ -436,6 +497,42 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </button>
           )}
 
+          {/* Invitations en attente */}
+          {myInvites.length > 0 && (
+            <div style={{ marginBottom: "1.5rem" }}>
+              <p style={s.sectionLabel}>Invitations en attente ({myInvites.length})</p>
+              {myInvites.map((inv) => (
+                <div key={inv.id} style={{ ...s.card, borderColor: C.accent, background: "rgba(201,168,76,0.06)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" as const }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontWeight: 600 }}>{inv.battle.title}</span>
+                      <span style={{ ...s.badge(C.accent, C.accentDim), marginLeft: "0.5rem" }}>
+                        {inv.role === "PLAYER" ? "⚔ Joueur" : "👁 Spectateur"}
+                      </span>
+                      <p style={{ ...s.muted, margin: "0.25rem 0 0" }}>
+                        Invitation de {displayName(inv.battle.attacker)}
+                      </p>
+                    </div>
+                    <div style={s.row}>
+                      <button
+                        style={{ ...s.btn, ...s.btnGreen, fontSize: "0.82rem" }}
+                        onClick={() => handleAcceptInvite(inv.id, inv.battle.id)}
+                      >
+                        Accepter
+                      </button>
+                      <button
+                        style={{ ...s.btn, ...s.btnGhost, fontSize: "0.82rem" }}
+                        onClick={() => handleDeclineInvite(inv.id)}
+                      >
+                        Refuser
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Liste */}
           <p style={s.sectionLabel}>Battles en cours</p>
           {loading && <p style={s.muted}>Chargement…</p>}
@@ -492,13 +589,18 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   const isDefender = currentUser.id === b.defenderId;
   const isPlayer = isAttacker || isDefender;
   const isMyTurn = b.currentTurnUserId === currentUser.id;
+  const bInvites = b.invites ?? [];
   const myVote = bVotes.find((v) => v.userId === currentUser.id);
-  const yesCount = bVotes.filter((v) => v.vote).length;
-  const noCount = bVotes.filter((v) => !v.vote).length;
+  // Seuls les votes spectateurs (non joueurs) comptent
+  const spectatorVotes = bVotes.filter((v) => v.userId !== b.attackerId && v.userId !== b.defenderId);
+  const yesCount = spectatorVotes.filter((v) => v.vote).length;
+  const noCount = spectatorVotes.filter((v) => !v.vote).length;
   const canStartVoting = isPlayer && b.status === "ACTIVE" && b.turnCount >= b.minTurns;
   const reachedMinTurns = b.turnCount >= b.minTurns;
   const MIN_VOTES_CLOSE = 3;
-  const canCloseVoting = isPlayer && b.status === "VOTING" && bVotes.length >= MIN_VOTES_CLOSE;
+  const canCloseVoting = isPlayer && b.status === "VOTING" && spectatorVotes.length >= MIN_VOTES_CLOSE;
+  const hasAcceptedSpectator = bInvites.some((inv) => inv.role === "SPECTATOR" && inv.status === "ACCEPTED");
+  const showPrivateWarning = b.visibility === "PRIVATE" && (b.status === "WAITING" || b.status === "ACTIVE") && !hasAcceptedSpectator;
   const [statusColor2, statusBg2] = statusColor[b.status] ?? [C.textMuted, "transparent"];
 
   return (
@@ -549,6 +651,82 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             }
           </div>
         </div>
+
+        {/* Avertissement battle privée sans spectateur */}
+        {showPrivateWarning && (
+          <div style={{ ...s.card, borderColor: C.accent, background: C.accentDim, marginBottom: "0.75rem" }}>
+            <p style={{ margin: 0, fontSize: "0.88rem" }}>
+              ⚠️ Cette battle est privée. Invitez au moins un spectateur pour permettre le vote.
+            </p>
+          </div>
+        )}
+
+        {/* Invitations envoyées (pour les joueurs) */}
+        {isPlayer && b.status !== "DONE" && (
+          <div style={{ marginBottom: "1rem" }}>
+            {bInvites.length > 0 && (
+              <div style={{ marginBottom: "0.5rem" }}>
+                <p style={s.sectionLabel}>Invitations envoyées</p>
+                {bInvites.map((inv) => (
+                  <div key={inv.id} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.35rem", fontSize: "0.83rem" }}>
+                    <span style={s.badge(
+                      inv.status === "ACCEPTED" ? C.green : inv.status === "DECLINED" ? C.red : C.textMuted,
+                      inv.status === "ACCEPTED" ? C.greenDim : inv.status === "DECLINED" ? C.redDim : "rgba(120,115,140,0.18)",
+                    )}>
+                      {inv.status === "ACCEPTED" ? "✓" : inv.status === "DECLINED" ? "✗" : "…"}
+                    </span>
+                    <span style={{ color: C.textMuted }}>{displayName(inv.user)}</span>
+                    <span style={{ color: inv.role === "PLAYER" ? C.accent : C.blue, fontSize: "0.76rem" }}>
+                      {inv.role === "PLAYER" ? "⚔ Joueur" : "👁 Spectateur"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showInviteForm ? (
+              <form onSubmit={handleSendInvite} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", flexWrap: "wrap" as const }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={{ ...s.muted, display: "block", marginBottom: "0.25rem", fontSize: "0.78rem" }}>Email</label>
+                  <input
+                    style={{ ...s.input, padding: "0.4rem 0.6rem" }}
+                    placeholder="email@exemple.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label style={{ ...s.muted, display: "block", marginBottom: "0.25rem", fontSize: "0.78rem" }}>Rôle</label>
+                  <div style={{ display: "flex", gap: "0.35rem" }}>
+                    {(["SPECTATOR", "PLAYER"] as BattleInviteRole[]).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        style={{ ...s.btn, ...(inviteRole === r ? s.btnPrimary : s.btnGhost), fontSize: "0.78rem", padding: "0.4rem 0.65rem" }}
+                        onClick={() => setInviteRole(r)}
+                        disabled={r === "PLAYER" && !!b.defenderId}
+                      >
+                        {r === "PLAYER" ? "⚔ Joueur" : "👁 Spectateur"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "0.35rem" }}>
+                  <button style={{ ...s.btn, ...s.btnPrimary, fontSize: "0.82rem" }} type="submit" disabled={sendingInvite || !inviteEmail.trim()}>
+                    {sendingInvite ? "…" : "Envoyer"}
+                  </button>
+                  <button style={{ ...s.btn, ...s.btnGhost, fontSize: "0.82rem" }} type="button" onClick={() => setShowInviteForm(false)}>
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button style={{ ...s.btn, ...s.btnGhost, fontSize: "0.82rem" }} onClick={() => setShowInviteForm(true)}>
+                + Inviter
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Rejoindre comme défenseur */}
         {b.status === "WAITING" && !isPlayer && (
@@ -652,30 +830,33 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             <p style={{ ...s.sectionLabel, color: C.accent, textAlign: "center" as const }}>Vote du public</p>
             <p style={{ fontStyle: "italic", margin: "0 0 1rem" }}>L'objectif a-t-il été atteint ?</p>
 
-            {!isPlayer && !myVote && (
-              <p style={{ ...s.hint, marginBottom: "0.75rem", color: C.blue }}>
-                👁 Vous assistez en spectateur — votre vote compte !
+            {isPlayer ? (
+              <p style={{ ...s.muted, fontStyle: "italic" }}>
+                Les joueurs ne participent pas au vote.
               </p>
-            )}
-
-            {myVote ? (
+            ) : myVote ? (
               <p style={{ ...s.muted, fontStyle: "italic" }}>
                 Vote enregistré : <strong>{myVote.vote ? "Oui ✓" : "Non ✗"}</strong>
               </p>
             ) : (
-              <div style={{ ...s.row, justifyContent: "center", gap: "1rem" }}>
-                <button style={{ ...s.btn, ...s.btnGreen, minWidth: 80 }} onClick={() => handleVote(true)} disabled={voting}>
-                  Oui
-                </button>
-                <button style={{ ...s.btn, ...s.btnDanger, minWidth: 80 }} onClick={() => handleVote(false)} disabled={voting}>
-                  Non
-                </button>
-              </div>
+              <>
+                <p style={{ ...s.hint, marginBottom: "0.75rem", color: C.blue }}>
+                  👁 Vous assistez en spectateur — votre vote compte !
+                </p>
+                <div style={{ ...s.row, justifyContent: "center", gap: "1rem" }}>
+                  <button style={{ ...s.btn, ...s.btnGreen, minWidth: 80 }} onClick={() => handleVote(true)} disabled={voting}>
+                    Oui
+                  </button>
+                  <button style={{ ...s.btn, ...s.btnDanger, minWidth: 80 }} onClick={() => handleVote(false)} disabled={voting}>
+                    Non
+                  </button>
+                </div>
+              </>
             )}
 
             <p style={{ ...s.hint, marginTop: "0.75rem" }}>
-              {bVotes.length} vote{bVotes.length !== 1 ? "s" : ""} enregistré{bVotes.length !== 1 ? "s" : ""}
-              {bVotes.length < MIN_VOTES_CLOSE && ` · encore ${MIN_VOTES_CLOSE - bVotes.length} nécessaire${MIN_VOTES_CLOSE - bVotes.length > 1 ? "s" : ""}`}
+              Votes spectateurs : {spectatorVotes.length} / {MIN_VOTES_CLOSE}
+              {spectatorVotes.length < MIN_VOTES_CLOSE && ` · encore ${MIN_VOTES_CLOSE - spectatorVotes.length} nécessaire${MIN_VOTES_CLOSE - spectatorVotes.length > 1 ? "s" : ""}`}
             </p>
 
             {isPlayer && (
@@ -689,7 +870,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                 </button>
                 {!canCloseVoting && (
                   <p style={s.hint}>
-                    En attente d'au moins {MIN_VOTES_CLOSE} votes ({bVotes.length}/{MIN_VOTES_CLOSE})
+                    En attente d'au moins {MIN_VOTES_CLOSE} votes spectateurs ({spectatorVotes.length}/{MIN_VOTES_CLOSE})
                   </p>
                 )}
               </div>
@@ -718,7 +899,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </p>
             <hr style={s.divider} />
             <p style={{ ...s.muted, marginBottom: 0 }}>
-              {yesCount} Oui · {noCount} Non · {bVotes.length} vote{bVotes.length !== 1 ? "s" : ""}
+              {yesCount} Oui · {noCount} Non · {spectatorVotes.length} vote{spectatorVotes.length !== 1 ? "s" : ""} spectateur{spectatorVotes.length !== 1 ? "s" : ""}
               &nbsp;·&nbsp; {b.turnCount} tour{b.turnCount !== 1 ? "s" : ""}
             </p>
           </div>

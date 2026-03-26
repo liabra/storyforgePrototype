@@ -1,5 +1,5 @@
 import prisma from "../prisma/client";
-import { BattleStatus, BattleWinner, StoryVisibility } from "../generated/prisma/client";
+import { BattleStatus, BattleWinner, StoryVisibility, BattleInviteRole, BattleInviteStatus } from "../generated/prisma/client";
 
 const userSelect = {
   id: true,
@@ -27,6 +27,10 @@ const battleDetailInclude = {
     include: { user: { select: userSelect } },
     orderBy: { createdAt: "asc" as const },
   },
+  invites: {
+    include: { user: { select: userSelect } },
+    orderBy: { createdAt: "asc" as const },
+  },
 } as const;
 
 export const listBattles = (userId: string) =>
@@ -36,6 +40,7 @@ export const listBattles = (userId: string) =>
         { visibility: StoryVisibility.PUBLIC },
         { attackerId: userId },
         { defenderId: userId },
+        { invites: { some: { userId, status: BattleInviteStatus.ACCEPTED } } },
       ],
     },
     include: battleListInclude,
@@ -123,7 +128,7 @@ export const startVoting = (id: string) =>
     include: battleDetailInclude,
   });
 
-// Voter
+// Voter (spectateurs uniquement — vérification en amont dans le contrôleur)
 export const castVote = (battleId: string, userId: string, vote: boolean) =>
   prisma.battleVote.create({
     data: { battleId, userId, vote },
@@ -135,11 +140,21 @@ export const getUserVote = (battleId: string, userId: string) =>
     where: { battleId_userId: { battleId, userId } },
   });
 
-// Clore le vote et calculer le gagnant
+// Clore le vote et calculer le gagnant sur les seuls votes spectateurs
 export const closeVoting = async (battleId: string) => {
+  const battle = await prisma.battle.findUnique({
+    where: { id: battleId },
+    select: { attackerId: true, defenderId: true },
+  });
+  if (!battle) throw new Error("Battle introuvable");
+
   const votes = await prisma.battleVote.findMany({ where: { battleId } });
-  const yesCount = votes.filter((v) => v.vote).length;
-  const noCount = votes.filter((v) => !v.vote).length;
+  // Seuls les votes des spectateurs (non joueurs) comptent
+  const spectatorVotes = votes.filter(
+    (v) => v.userId !== battle.attackerId && v.userId !== battle.defenderId,
+  );
+  const yesCount = spectatorVotes.filter((v) => v.vote).length;
+  const noCount = spectatorVotes.filter((v) => !v.vote).length;
   // En cas d'égalité → victoire défenseur (l'objectif n'est pas atteint)
   const winner = yesCount > noCount ? BattleWinner.ATTACKER : BattleWinner.DEFENDER;
 
@@ -149,3 +164,78 @@ export const closeVoting = async (battleId: string) => {
     include: battleDetailInclude,
   });
 };
+
+// ── Invitations ──────────────────────────────────────────────────────────────
+
+export const getInviteById = (id: string) =>
+  prisma.battleInvite.findUnique({
+    where: { id },
+    include: {
+      battle: { select: { id: true, title: true, attackerId: true, defenderId: true, status: true, visibility: true } },
+      user: { select: userSelect },
+    },
+  });
+
+export const createInvite = (battleId: string, userId: string, role: BattleInviteRole) =>
+  prisma.battleInvite.create({
+    data: { battleId, userId, role, status: BattleInviteStatus.PENDING },
+    include: { user: { select: userSelect } },
+  });
+
+export const getMyPendingInvites = (userId: string) =>
+  prisma.battleInvite.findMany({
+    where: { userId, status: BattleInviteStatus.PENDING },
+    include: {
+      user: { select: userSelect },
+      battle: {
+        select: {
+          id: true,
+          title: true,
+          visibility: true,
+          attacker: { select: userSelect },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+// Accepter une invitation
+export const acceptInvite = async (inviteId: string) => {
+  const invite = await prisma.battleInvite.findUnique({
+    where: { id: inviteId },
+    include: { battle: { select: { id: true, attackerId: true, defenderId: true, status: true } } },
+  });
+  if (!invite) throw new Error("Invitation introuvable");
+
+  if (invite.role === BattleInviteRole.PLAYER) {
+    if (invite.battle.defenderId) throw new Error("La place de défenseur est déjà prise");
+    // Transaction : accepter + activer la battle
+    const [, , updatedBattle] = await prisma.$transaction([
+      prisma.battleInvite.update({ where: { id: inviteId }, data: { status: BattleInviteStatus.ACCEPTED } }),
+      prisma.battleInvite.updateMany({
+        where: { battleId: invite.battle.id, role: BattleInviteRole.PLAYER, status: BattleInviteStatus.PENDING, id: { not: inviteId } },
+        data: { status: BattleInviteStatus.DECLINED },
+      }),
+      prisma.battle.update({
+        where: { id: invite.battle.id },
+        data: {
+          defenderId: invite.userId,
+          status: BattleStatus.ACTIVE,
+          currentTurnUserId: invite.battle.attackerId,
+        },
+        include: battleDetailInclude,
+      }),
+    ]);
+    return updatedBattle;
+  } else {
+    // SPECTATOR : juste accepter
+    await prisma.battleInvite.update({ where: { id: inviteId }, data: { status: BattleInviteStatus.ACCEPTED } });
+    return prisma.battle.findUnique({ where: { id: invite.battle.id }, include: battleDetailInclude });
+  }
+};
+
+export const declineInvite = (inviteId: string) =>
+  prisma.battleInvite.update({
+    where: { id: inviteId },
+    data: { status: BattleInviteStatus.DECLINED },
+  });

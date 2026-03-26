@@ -203,6 +203,27 @@ export interface BattleVote {
 }
 
 export type BattleVisibility = "PUBLIC" | "PRIVATE";
+export type BattleInviteRole = "PLAYER" | "SPECTATOR";
+export type BattleInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED";
+
+export interface BattleInvite {
+  id: string;
+  battleId: string;
+  userId: string;
+  user: BattleUser;
+  role: BattleInviteRole;
+  status: BattleInviteStatus;
+  createdAt: string;
+}
+
+export interface BattleInviteWithContext extends BattleInvite {
+  battle: {
+    id: string;
+    title: string;
+    visibility: BattleVisibility;
+    attacker: BattleUser;
+  };
+}
 
 export interface Battle {
   id: string;
@@ -221,6 +242,7 @@ export interface Battle {
   winner: BattleWinner | null;
   moves: BattleMove[];
   votes: BattleVote[];
+  invites: BattleInvite[];
   createdAt: string;
   updatedAt: string;
 }
@@ -404,5 +426,12 @@ export const api = {
       request<BattleVote>(`/battles/${id}/vote`, { method: "POST", body: JSON.stringify({ vote }) }),
     closeVoting: (id: string) =>
       request<Battle>(`/battles/${id}/vote/close`, { method: "POST" }),
+    invite: (id: string, email: string, role: BattleInviteRole) =>
+      request<BattleInvite>(`/battles/${id}/invite`, { method: "POST", body: JSON.stringify({ email, role }) }),
+  },
+  battleInvites: {
+    mine: () => request<BattleInviteWithContext[]>("/battle-invites/mine"),
+    accept: (inviteId: string) => request<{ ok: boolean }>(`/battle-invites/${inviteId}/accept`, { method: "POST" }),
+    decline: (inviteId: string) => request<{ ok: boolean }>(`/battle-invites/${inviteId}/decline`, { method: "POST" }),
   },
 };

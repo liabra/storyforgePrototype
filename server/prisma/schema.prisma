@@ -36,6 +36,7 @@ model User {
   battlesAsDefender Battle[]         @relation("BattleDefender")
   battleMoves   BattleMove[]         @relation("BattleMoves")
   battleVotes   BattleVote[]         @relation("BattleVotes")
+  battleInvites BattleInvite[]       @relation("BattleInvites")
 }
 
 model Story {
@@ -182,6 +183,17 @@ enum BattleWinner {
   DEFENDER
 }
 
+enum BattleInviteRole {
+  PLAYER
+  SPECTATOR
+}
+
+enum BattleInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model Battle {
   id                String          @id @default(cuid())
   title             String
@@ -189,18 +201,32 @@ model Battle {
   status            BattleStatus    @default(WAITING)
   visibility        StoryVisibility @default(PRIVATE)
   attackerId        String
-  attacker          User          @relation("BattleAttacker", fields: [attackerId], references: [id])
+  attacker          User            @relation("BattleAttacker", fields: [attackerId], references: [id])
   defenderId        String?
-  defender          User?         @relation("BattleDefender", fields: [defenderId], references: [id])
+  defender          User?           @relation("BattleDefender", fields: [defenderId], references: [id])
   currentTurnUserId String?
-  turnCount         Int           @default(0)
-  minTurns          Int           @default(4)
-  maxTurns          Int           @default(8)
+  turnCount         Int             @default(0)
+  minTurns          Int             @default(4)
+  maxTurns          Int             @default(8)
   winner            BattleWinner?
   moves             BattleMove[]
   votes             BattleVote[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  invites           BattleInvite[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model BattleInvite {
+  id        String             @id @default(cuid())
+  battleId  String
+  battle    Battle             @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User               @relation("BattleInvites", fields: [userId], references: [id])
+  role      BattleInviteRole
+  status    BattleInviteStatus @default(PENDING)
+  createdAt DateTime           @default(now())
+
+  @@unique([battleId, userId])
 }
 
 model BattleMove {
