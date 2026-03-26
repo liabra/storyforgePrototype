@@ -430,6 +430,14 @@ export default function App() {
       }
     };
 
+    const onBattleInvited = ({ invite, battle }: { invite: { role: string }; battle: { title: string } }) => {
+      const roleLabel = invite.role === "PLAYER" ? "joueur" : "spectateur";
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "scene" as const, message: `Invitation battle : "${battle.title}" — rôle ${roleLabel}` }].slice(-5);
+      });
+    };
+
     socket.on("connect", onConnect);
     socket.on("presence:update", onPresenceUpdate);
     socket.on("activity:new", onActivityNew);
@@ -437,6 +445,7 @@ export default function App() {
     socket.on("join-request:received", onJoinRequestReceived);
     socket.on("join-request:response", onJoinRequestResponse);
     socket.on("participant:update", onParticipantUpdateGlobal);
+    socket.on("battle:invited", onBattleInvited);
     socket.connect();
 
     return () => {
@@ -447,6 +456,7 @@ export default function App() {
       socket.off("join-request:received", onJoinRequestReceived);
       socket.off("join-request:response", onJoinRequestResponse);
       socket.off("participant:update", onParticipantUpdateGlobal);
+      socket.off("battle:invited", onBattleInvited);
       socket.disconnect();
     };
   }, [currentUser]);
