@@ -3,6 +3,7 @@ import * as joinRequestService from "../services/joinRequest.service";
 import * as participantService from "../services/participant.service";
 import { ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
+import { dispatchNotification } from "../services/notification.service";
 
 const p = (v: string | string[]): string => (Array.isArray(v) ? v[0] : v);
 
@@ -32,18 +33,26 @@ export const create = async (req: Request, res: Response): Promise<void> => {
   try {
     const request = await joinRequestService.createRequest(storyId, userId);
 
-    // Notifier le propriétaire via socket
+    // Notifier le propriétaire selon ses préférences (GENERAL filtre sur notifGeneralEnabled)
     const ownerId = await joinRequestService.getStoryOwnerUserId(storyId);
     if (ownerId) {
-      const io = getIO();
-      if (io) {
-        io.to(`user:${ownerId}`).emit("join-request:received", {
-          requestId: request.id,
-          storyId,
-          storyTitle: request.story.title,
-          userId,
-          userDisplayName: request.user.displayName || request.user.email,
-        });
+      const notif = await dispatchNotification(
+        ownerId,
+        "GENERAL",
+        `${request.user.displayName || request.user.email} souhaite rejoindre « ${request.story.title} ».`,
+      );
+      if (notif) {
+        const io = getIO();
+        if (io) {
+          io.to(`user:${ownerId}`).emit("join-request:received", {
+            requestId: request.id,
+            storyId,
+            storyTitle: request.story.title,
+            userId,
+            userDisplayName: request.user.displayName || request.user.email,
+          });
+          io.to(`user:${ownerId}`).emit("notification:new", notif);
+        }
       }
     }
 

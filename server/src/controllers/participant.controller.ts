@@ -3,6 +3,7 @@ import * as participantService from "../services/participant.service";
 import prisma from "../prisma/client";
 import { ParticipantRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
+import { dispatchNotification } from "../services/notification.service";
 
 const ASSIGNABLE_ROLES: ParticipantRole[] = [ParticipantRole.EDITOR, ParticipantRole.VIEWER];
 
@@ -37,15 +38,25 @@ export const add = async (req: Request, res: Response): Promise<void> => {
   try {
     const participant = await participantService.addParticipant(storyId, targetUser.id, role as ParticipantRole);
 
-    // Notifier l'utilisateur invité via socket
+    // Notifier l'utilisateur invité selon ses préférences (STORY_INVITE filtre sur notifInvitesEnabled)
     const story = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
-    const io = getIO();
-    if (io && story) {
-      io.to(`user:${targetUser.id}`).emit("invitation:received", {
-        storyId,
-        storyTitle: story.title,
-        role: participant.role,
-      });
+    if (story) {
+      const notif = await dispatchNotification(
+        targetUser.id,
+        "STORY_INVITE",
+        `Vous avez été invité à rejoindre l'histoire « ${story.title} ».`,
+      );
+      if (notif) {
+        const io = getIO();
+        if (io) {
+          io.to(`user:${targetUser.id}`).emit("invitation:received", {
+            storyId,
+            storyTitle: story.title,
+            role: participant.role,
+          });
+          io.to(`user:${targetUser.id}`).emit("notification:new", notif);
+        }
+      }
     }
 
     res.status(201).json(participant);

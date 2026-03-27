@@ -3,6 +3,7 @@ import * as battleService from "../services/battle.service";
 import { BattleStatus, StoryVisibility, BattleInviteRole } from "../generated/prisma/client";
 import { getIO } from "../socket";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
+import { dispatchNotification } from "../services/notification.service";
 
 const MIN_VOTES_TO_CLOSE = 3;
 
@@ -296,11 +297,19 @@ export const sendInvite = async (req: Request, res: Response): Promise<void> => 
 
   try {
     const invite = await battleService.createInvite(battleId, targetUser.id, role as BattleInviteRole);
-    // Notifier l'invité via sa room personnelle
-    getIO()?.to(`user:${targetUser.id}`).emit("battle:invited", {
-      invite,
-      battle: { id: battle.id, title: battle.title, attacker: battle.attacker },
-    });
+    // Notifier l'invité selon ses préférences (BATTLE_INVITE filtre sur notifBattleEnabled)
+    const notif = await dispatchNotification(
+      targetUser.id,
+      "BATTLE_INVITE",
+      `Vous avez été invité à rejoindre la battle « ${battle.title} ».`,
+    );
+    if (notif) {
+      getIO()?.to(`user:${targetUser.id}`).emit("battle:invited", {
+        invite,
+        battle: { id: battle.id, title: battle.title, attacker: battle.attacker },
+      });
+      getIO()?.to(`user:${targetUser.id}`).emit("notification:new", notif);
+    }
     res.status(201).json(invite);
   } catch (err) {
     const e = err as { code?: string };
