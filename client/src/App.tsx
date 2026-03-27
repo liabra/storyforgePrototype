@@ -3112,7 +3112,7 @@ function NotifPanel({
   onMarkRead: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
-  React.useEffect(() => {
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
