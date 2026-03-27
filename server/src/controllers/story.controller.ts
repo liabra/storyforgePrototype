@@ -99,3 +99,35 @@ export const remove = async (req: Request, res: Response) => {
   await storyService.deleteStory(storyId);
   return res.status(204).send();
 };
+
+// GET /api/stories/archived — histoires archivées du propriétaire connecté
+export const getArchived = async (req: Request, res: Response) => {
+  const stories = await storyService.getArchivedStories(req.user!.id);
+  return res.json(stories);
+};
+
+// PATCH /api/stories/:id/archive
+export const archive = async (req: Request, res: Response) => {
+  const storyId = getSingleParam(req.params.id);
+
+  const role = await participantService.getUserRole(storyId, req.user!.id);
+  if (role !== ParticipantRole.OWNER) {
+    return res.status(403).json({ error: "Seul le propriétaire peut archiver cette histoire" });
+  }
+
+  const story = await storyService.archiveStory(storyId);
+  return res.json(story);
+};
+
+// PATCH /api/stories/:id/unarchive
+export const unarchive = async (req: Request, res: Response) => {
+  const storyId = getSingleParam(req.params.id);
+
+  const role = await participantService.getUserRole(storyId, req.user!.id);
+  if (role !== ParticipantRole.OWNER) {
+    return res.status(403).json({ error: "Seul le propriétaire peut restaurer cette histoire" });
+  }
+
+  const story = await storyService.unarchiveStory(storyId);
+  return res.json(story);
+};

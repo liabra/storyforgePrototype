@@ -20,6 +20,7 @@ export interface Story {
   description?: string;
   status: ContentStatus;
   visibility: StoryVisibility;
+  isArchived?: boolean;
 }
 
 export interface PublicStory {
@@ -355,12 +356,16 @@ export const api = {
   stories: {
     list: () => request<Story[]>("/stories"),
     listPublic: () => request<PublicStory[]>("/stories/public"),
+    listArchived: () => request<Story[]>("/stories/archived"),
     create: (data: { title: string; description?: string }) =>
       request<Story>("/stories", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: string, status: ContentStatus) =>
       request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ status }) }),
     updateVisibility: (id: string, visibility: StoryVisibility) =>
       request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ visibility }) }),
+    archive: (id: string) => request<Story>(`/stories/${id}/archive`, { method: "PATCH" }),
+    unarchive: (id: string) => request<Story>(`/stories/${id}/unarchive`, { method: "PATCH" }),
+    delete: (id: string) => request<void>(`/stories/${id}`, { method: "DELETE" }),
   },
   chapters: {
     list: (storyId: string) => request<Chapter[]>(`/stories/${storyId}/chapters`),

@@ -3,12 +3,18 @@ import { ContentStatus, ParticipantRole, StoryVisibility } from "../generated/pr
 
 export const getUserStories = (userId: string) =>
   prisma.story.findMany({
-    where: { participants: { some: { userId } } },
+    where: { participants: { some: { userId } }, isArchived: false },
     orderBy: { createdAt: "desc" },
   });
 
+export const getArchivedStories = (userId: string) =>
+  prisma.story.findMany({
+    where: { participants: { some: { userId, role: ParticipantRole.OWNER } }, isArchived: true },
+    orderBy: { updatedAt: "desc" },
+  });
+
 export const getAllStories = () =>
-  prisma.story.findMany({ orderBy: { createdAt: "desc" } });
+  prisma.story.findMany({ where: { isArchived: false }, orderBy: { createdAt: "desc" } });
 
 export const getStoryById = (id: string) =>
   prisma.story.findUnique({
@@ -29,9 +35,15 @@ export const updateStory = (
   data: { title?: string; description?: string; status?: ContentStatus; visibility?: StoryVisibility }
 ) => prisma.story.update({ where: { id }, data });
 
+export const archiveStory = (id: string) =>
+  prisma.story.update({ where: { id }, data: { isArchived: true } });
+
+export const unarchiveStory = (id: string) =>
+  prisma.story.update({ where: { id }, data: { isArchived: false } });
+
 export const getPublicStories = () =>
   prisma.story.findMany({
-    where: { visibility: StoryVisibility.PUBLIC },
+    where: { visibility: StoryVisibility.PUBLIC, isArchived: false },
     orderBy: { updatedAt: "desc" },
     select: {
       id: true,
@@ -46,6 +58,12 @@ export const getPublicStories = () =>
 
 export const deleteStory = (id: string) =>
   prisma.story.delete({ where: { id } });
+
+// Retourne status + isArchived en un seul appel (utilisé par les gardes d'écriture)
+export const getStoryMeta = async (storyId: string): Promise<{ status: ContentStatus; isArchived: boolean } | null> => {
+  const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true, isArchived: true } });
+  return story ?? null;
+};
 
 export const getStoryStatus = async (storyId: string): Promise<ContentStatus | null> => {
   const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true } });

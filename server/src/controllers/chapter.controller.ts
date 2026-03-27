@@ -26,9 +26,10 @@ export const create = async (req: Request, res: Response) => {
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
 
-  const storyStatus = await storyService.getStoryStatus(storyId);
-  if (storyStatus === null) return res.status(404).json({ error: "Histoire introuvable" });
-  if (storyStatus === ContentStatus.DONE) {
+  const storyMeta = await storyService.getStoryMeta(storyId);
+  if (!storyMeta) return res.status(404).json({ error: "Histoire introuvable" });
+  if (storyMeta.isArchived) return res.status(409).json({ error: "Cette histoire est archivée." });
+  if (storyMeta.status === ContentStatus.DONE) {
     return res.status(409).json({ error: "Impossible de créer un chapitre dans une histoire terminée" });
   }
 

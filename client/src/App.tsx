@@ -163,6 +163,8 @@ export default function App() {
 
   // Stories
   const [stories, setStories] = useState<Story[]>([]);
+  const [archivedStories, setArchivedStories] = useState<Story[]>([]);
+  const [showArchivedStories, setShowArchivedStories] = useState(false);
   const [showStoryForm, setShowStoryForm] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDesc, setStoryDesc] = useState("");
@@ -764,10 +766,11 @@ export default function App() {
 
   // ── Load stories (uniquement si connecté)
   useEffect(() => {
-    if (!currentUser) { setStories([]); setStoriesLoaded(false); return; }
+    if (!currentUser) { setStories([]); setArchivedStories([]); setStoriesLoaded(false); return; }
     api.stories.list()
       .then((data) => { setStories(data); setStoriesLoaded(true); })
       .catch(() => setError("Impossible de charger les histoires."));
+    api.stories.listArchived().then(setArchivedStories).catch(() => {});
   }, [currentUser]);
 
   // ── Load public stories (toujours, connecté ou non)
@@ -1244,6 +1247,42 @@ export default function App() {
       const id = ++toastIdRef.current;
       return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
     });
+  };
+
+  // ── Archive / Restaurer / Supprimer (OWNER)
+  const handleArchiveStory = async () => {
+    if (!selectedStory) return;
+    if (!window.confirm(`Archiver « ${selectedStory.title} » ? L'histoire ne sera plus visible dans vos listes.`)) return;
+    try {
+      const updated = await api.stories.archive(selectedStory.id);
+      setStories((p) => p.filter((s) => s.id !== updated.id));
+      setArchivedStories((p) => [updated, ...p]);
+      setSelectedStory(null);
+      setToasts((prev) => { const id = ++toastIdRef.current; return [...prev, { id, type: "scene" as const, message: "Histoire archivée" }].slice(-5); });
+    } catch (err) { addErrorToast(err); }
+  };
+
+  const handleUnarchiveStory = async () => {
+    if (!selectedStory) return;
+    try {
+      const updated = await api.stories.unarchive(selectedStory.id);
+      setArchivedStories((p) => p.filter((s) => s.id !== updated.id));
+      setStories((p) => [updated, ...p]);
+      setSelectedStory(updated);
+      setToasts((prev) => { const id = ++toastIdRef.current; return [...prev, { id, type: "scene" as const, message: "Histoire restaurée" }].slice(-5); });
+    } catch (err) { addErrorToast(err); }
+  };
+
+  const handleDeleteStory = async () => {
+    if (!selectedStory) return;
+    if (!window.confirm(`Supprimer définitivement « ${selectedStory.title} » ? Cette action est irréversible.`)) return;
+    try {
+      await api.stories.delete(selectedStory.id);
+      setStories((p) => p.filter((s) => s.id !== selectedStory.id));
+      setArchivedStories((p) => p.filter((s) => s.id !== selectedStory.id));
+      setSelectedStory(null);
+      setToasts((prev) => { const id = ++toastIdRef.current; return [...prev, { id, type: "scene" as const, message: "Histoire supprimée" }].slice(-5); });
+    } catch (err) { addErrorToast(err); }
   };
 
   // ── Save scene characters
@@ -1827,6 +1866,34 @@ export default function App() {
             })}
             {stories.length === 0 && <p style={s.mutedSmall}>Aucune histoire pour l'instant.</p>}
           </ul>
+
+          {/* ── Archives */}
+          {archivedStories.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <button
+                style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: "0.75rem", padding: "0.1rem 0", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                onClick={() => setShowArchivedStories((v) => !v)}
+              >
+                {showArchivedStories ? "▾" : "▸"} Archives ({archivedStories.length})
+              </button>
+              {showArchivedStories && (
+                <ul style={{ ...s.storyList, marginTop: "0.4rem", opacity: 0.7 }}>
+                  {archivedStories.map((story) => {
+                    const active = selectedStory?.id === story.id;
+                    return (
+                      <li key={story.id} style={{ ...s.storyItem, ...(active ? s.storyItemActive : {}) }} className={`story-item${active ? " is-active" : ""}`} onClick={() => handleSelectStory(story)}>
+                        <div style={s.storyItemDot}>{active ? "▶" : "○"}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={s.storyItemTitle}>{story.title}</div>
+                          {story.description && <div style={s.storyItemDesc}>{story.description}</div>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
         </aside>
 
         {sidebarOpen && <div style={s.sidebarOverlay} onClick={() => { setSidebarOpen(false); closeStoryForm(); }} />}
@@ -1991,19 +2058,48 @@ export default function App() {
                       Terminée
                     </span>
                   )}
+                  {(selectedStory as Story).isArchived && (
+                    <span style={{ ...s.statusBadge, background: "rgba(75,35,5,0.08)", color: C.textMuted, border: `1px solid ${C.border}`, fontSize: "0.7rem" }}>
+                      Archivée
+                    </span>
+                  )}
                   {myRole === "OWNER" && (
-                    <div style={{ display: "flex", gap: "0.4rem", marginLeft: "auto" }}>
+                    <div style={{ display: "flex", gap: "0.4rem", marginLeft: "auto", flexWrap: "wrap" as const }}>
+                      {!(selectedStory as Story).isArchived && (
+                        <>
+                          <button
+                            style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                            onClick={handleToggleVisibility}
+                          >
+                            {selectedStory.visibility === "PUBLIC" ? "Rendre privée" : "Rendre publique"}
+                          </button>
+                          <button
+                            style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                            onClick={handleToggleStoryStatus}
+                          >
+                            {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? "Réouvrir l'histoire" : "Terminer l'histoire"}
+                          </button>
+                          <button
+                            style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                            onClick={handleArchiveStory}
+                          >
+                            Archiver
+                          </button>
+                        </>
+                      )}
+                      {(selectedStory as Story).isArchived && (
+                        <button
+                          style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
+                          onClick={handleUnarchiveStory}
+                        >
+                          Restaurer
+                        </button>
+                      )}
                       <button
-                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
-                        onClick={handleToggleVisibility}
+                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem", color: "#b91c1c", borderColor: "rgba(185,28,28,0.3)" }}
+                        onClick={handleDeleteStory}
                       >
-                        {selectedStory.visibility === "PUBLIC" ? "Rendre privée" : "Rendre publique"}
-                      </button>
-                      <button
-                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
-                        onClick={handleToggleStoryStatus}
-                      >
-                        {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" ? "Réouvrir l'histoire" : "Terminer l'histoire"}
+                        Supprimer
                       </button>
                     </div>
                   )}

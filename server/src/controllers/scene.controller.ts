@@ -61,11 +61,12 @@ export const create = async (req: Request, res: Response) => {
 
   const chapterInfo = await prisma.chapter.findUnique({
     where: { id: chapterId },
-    select: { storyId: true, status: true, story: { select: { status: true } } },
+    select: { storyId: true, status: true, story: { select: { status: true, isArchived: true } } },
   });
   if (!chapterInfo) return res.status(404).json({ error: "Chapitre introuvable" });
   const storyId = chapterInfo.storyId;
 
+  if (chapterInfo.story.isArchived) return res.status(409).json({ error: "Cette histoire est archivée." });
   if (chapterInfo.story.status === ContentStatus.DONE) {
     return res.status(409).json({ error: "Impossible de créer une scène dans une histoire terminée" });
   }
