@@ -202,26 +202,41 @@ enum BattleInviteStatus {
   DECLINED
 }
 
+enum PaceMode {
+  SYNC
+  ASYNC
+}
+
+enum BattleEndReason {
+  FORFEIT
+}
+
 model Battle {
-  id                String          @id @default(cuid())
-  title             String
-  goal              String
-  status            BattleStatus    @default(WAITING)
-  visibility        StoryVisibility @default(PRIVATE)
-  attackerId        String
-  attacker          User            @relation("BattleAttacker", fields: [attackerId], references: [id])
-  defenderId        String?
-  defender          User?           @relation("BattleDefender", fields: [defenderId], references: [id])
-  currentTurnUserId String?
-  turnCount         Int             @default(0)
-  minTurns          Int             @default(4)
-  maxTurns          Int             @default(8)
-  winner            BattleWinner?
-  moves             BattleMove[]
-  votes             BattleVote[]
-  invites           BattleInvite[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id                   String           @id @default(cuid())
+  title                String
+  goal                 String
+  status               BattleStatus     @default(WAITING)
+  visibility           StoryVisibility  @default(PRIVATE)
+  paceMode             PaceMode         @default(ASYNC)
+  attackerId           String
+  attacker             User             @relation("BattleAttacker", fields: [attackerId], references: [id])
+  defenderId           String?
+  defender             User?            @relation("BattleDefender", fields: [defenderId], references: [id])
+  currentTurnUserId    String?
+  turnCount            Int              @default(0)
+  minTurns             Int              @default(4)
+  maxTurns             Int              @default(8)
+  winner               BattleWinner?
+  endReason            BattleEndReason?
+  lastTurnAt           DateTime?
+  turnDeadlineAt       DateTime?
+  attackerMissedTurns  Int              @default(0)
+  defenderMissedTurns  Int              @default(0)
+  moves                BattleMove[]
+  votes                BattleVote[]
+  invites              BattleInvite[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 }
 
 model BattleInvite {
@@ -232,6 +247,7 @@ model BattleInvite {
   user      User               @relation("BattleInvites", fields: [userId], references: [id])
   role      BattleInviteRole
   status    BattleInviteStatus @default(PENDING)
+  expiresAt DateTime?
   createdAt DateTime           @default(now())
 
   @@unique([battleId, userId])

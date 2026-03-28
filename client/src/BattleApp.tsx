@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "./api";
-import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote, BattleVisibility, BattleInviteRole, BattleInviteWithContext } from "./api";
+import type { AuthUser, Battle, BattleListItem, BattleMove, BattleVote, BattleVisibility, BattleInviteRole, BattleInviteWithContext, PaceMode } from "./api";
 import { socket } from "./socket";
 import { ReportModal } from "./ReportModal";
 
@@ -113,7 +113,12 @@ export default function BattleApp({ currentUser, onBack }: Props) {
   const [newTitle, setNewTitle] = useState("");
   const [newGoal, setNewGoal] = useState("");
   const [newVisibility, setNewVisibility] = useState<BattleVisibility>("PRIVATE");
+  const [newPaceMode, setNewPaceMode] = useState<PaceMode>("ASYNC");
   const [creating, setCreating] = useState(false);
+
+  // Timer
+  const [timerDisplay, setTimerDisplay] = useState<string | null>(null);
+  const [turnSkippedMsg, setTurnSkippedMsg] = useState<string | null>(null);
 
   // Move
   const [moveContent, setMoveContent] = useState("");
@@ -136,6 +141,30 @@ export default function BattleApp({ currentUser, onBack }: Props) {
 
   const selectedBattleRef = useRef<Battle | null>(null);
   useEffect(() => { selectedBattleRef.current = selectedBattle; }, [selectedBattle]);
+
+  // ── Timer countdown ─────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const deadline = selectedBattle?.turnDeadlineAt;
+    if (!deadline || selectedBattle?.status !== "ACTIVE") {
+      setTimerDisplay(null);
+      return;
+    }
+    const update = () => {
+      const diff = new Date(deadline).getTime() - Date.now();
+      if (diff <= 0) { setTimerDisplay("00:00"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimerDisplay(h > 0
+        ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+        : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      );
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [selectedBattle?.turnDeadlineAt, selectedBattle?.status]);
 
   // ── Charge la liste ────────────────────────────────────────────────────────
 
@@ -200,8 +229,9 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       setSelectedBattle(battle);
     };
 
-    const onMoveCreated = ({ move, turnCount, currentTurnUserId, status }: {
+    const onMoveCreated = ({ move, turnCount, currentTurnUserId, status, lastTurnAt, turnDeadlineAt }: {
       battleId: string; move: BattleMove; turnCount: number; currentTurnUserId: string | null; status: Battle["status"];
+      lastTurnAt?: string | null; turnDeadlineAt?: string | null;
     }) => {
       setSelectedBattle((prev) => {
         if (!prev) return prev;
@@ -214,6 +244,8 @@ export default function BattleApp({ currentUser, onBack }: Props) {
           turnCount,
           currentTurnUserId,
           status,
+          ...(lastTurnAt !== undefined && { lastTurnAt }),
+          ...(turnDeadlineAt !== undefined && { turnDeadlineAt }),
         };
       });
     };
@@ -237,11 +269,31 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       setSelectedBattle((prev) => prev ? { ...prev, status, winner } : prev);
     };
 
+    const onTurnSkipped = ({ currentTurnUserId, turnDeadlineAt }: {
+      battleId: string; currentTurnUserId: string | null; turnDeadlineAt: string | null;
+    }) => {
+      setSelectedBattle((prev) => {
+        if (!prev) return prev;
+        const skippedName = prev.currentTurnUserId === prev.attackerId
+          ? displayName(prev.attacker)
+          : prev.defender ? displayName(prev.defender) : "Un joueur";
+        setTurnSkippedMsg(`⏭ Tour sauté — ${skippedName} n'a pas joué à temps.`);
+        setTimeout(() => setTurnSkippedMsg(null), 5000);
+        return { ...prev, currentTurnUserId, turnDeadlineAt };
+      });
+    };
+
+    const onForfeit = ({ winner }: { battleId: string; winner: Battle["winner"] }) => {
+      setSelectedBattle((prev) => prev ? { ...prev, status: "DONE", winner, endReason: "FORFEIT", currentTurnUserId: null, turnDeadlineAt: null } : prev);
+    };
+
     socket.on("battle:joined", onJoined);
     socket.on("battle:moveCreated", onMoveCreated);
     socket.on("battle:statusUpdated", onStatusUpdated);
     socket.on("battle:voted", onVoted);
     socket.on("battle:finished", onFinished);
+    socket.on("battle:turnSkipped", onTurnSkipped);
+    socket.on("battle:forfeit", onForfeit);
 
     return () => {
       socket.emit("battle:leave", { battleId });
@@ -250,6 +302,8 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       socket.off("battle:statusUpdated", onStatusUpdated);
       socket.off("battle:voted", onVoted);
       socket.off("battle:finished", onFinished);
+      socket.off("battle:turnSkipped", onTurnSkipped);
+      socket.off("battle:forfeit", onForfeit);
     };
   }, [selectedBattle?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -276,12 +330,13 @@ export default function BattleApp({ currentUser, onBack }: Props) {
     setCreating(true);
     setError(null);
     try {
-      const created = await api.battles.create({ title: newTitle.trim(), goal: newGoal.trim(), visibility: newVisibility });
+      const created = await api.battles.create({ title: newTitle.trim(), goal: newGoal.trim(), visibility: newVisibility, paceMode: newPaceMode });
       // Refetch explicite pour garantir le détail complet (moves:[], votes:[])
       const full = await api.battles.get(created.id);
       setNewTitle("");
       setNewGoal("");
       setNewVisibility("PRIVATE");
+      setNewPaceMode("ASYNC");
       setShowCreateForm(false);
       setMoveContent("");
       setSelectedBattle(full);
@@ -326,6 +381,8 @@ export default function BattleApp({ currentUser, onBack }: Props) {
           turnCount: updatedBattle.turnCount,
           currentTurnUserId: updatedBattle.currentTurnUserId,
           status: updatedBattle.status,
+          lastTurnAt: updatedBattle.lastTurnAt ?? prev.lastTurnAt,
+          turnDeadlineAt: updatedBattle.turnDeadlineAt ?? null,
         };
       });
     } catch (e) {
@@ -584,7 +641,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                   />
                   <p style={s.hint}>L'attaquant gagne si le public juge que l'objectif a été atteint.</p>
                 </div>
-                <div style={{ marginBottom: "1rem" }}>
+                <div style={{ marginBottom: "0.75rem" }}>
                   <label style={{ ...s.muted, display: "block", marginBottom: "0.4rem" }}>Visibilité</label>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     {(["PRIVATE", "PUBLIC"] as BattleVisibility[]).map((v) => (
@@ -602,6 +659,26 @@ export default function BattleApp({ currentUser, onBack }: Props) {
                     {newVisibility === "PRIVATE"
                       ? "Visible uniquement par vous et votre adversaire."
                       : "Visible par tous — ils pourront rejoindre et voter."}
+                  </p>
+                </div>
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ ...s.muted, display: "block", marginBottom: "0.4rem" }}>Rythme</label>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    {(["ASYNC", "SYNC"] as PaceMode[]).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        style={{ ...s.btn, ...(newPaceMode === p ? s.btnPrimary : s.btnGhost), fontSize: "0.82rem" }}
+                        onClick={() => setNewPaceMode(p)}
+                      >
+                        {p === "ASYNC" ? "⏳ Async (24h/tour)" : "⚡ Sync (2min/tour)"}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={s.hint}>
+                    {newPaceMode === "ASYNC"
+                      ? "Chaque joueur a 24h pour écrire son move."
+                      : "Mode rapide — 2 minutes par tour, idéal en live."}
                   </p>
                 </div>
                 <div style={s.row}>
@@ -805,6 +882,13 @@ export default function BattleApp({ currentUser, onBack }: Props) {
       <div style={s.content}>
         {error && <p style={{ color: C.red, fontSize: "0.88rem", marginBottom: "1rem" }}>{error}</p>}
 
+        {/* Tour sauté — notification éphémère */}
+        {turnSkippedMsg && (
+          <div style={{ ...s.card, borderColor: C.accent, background: C.accentDim, marginBottom: "0.75rem" }}>
+            <p style={{ margin: 0, fontSize: "0.88rem" }}>{turnSkippedMsg}</p>
+          </div>
+        )}
+
         {/* Objectif */}
         {b.status !== "DONE" && (
           <div style={{ ...s.card, borderColor: C.accent, background: "rgba(201,168,76,0.05)" }}>
@@ -834,6 +918,11 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </div>
             <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem" }}>{displayName(b.attacker)}</p>
             {isAttacker && <p style={{ ...s.hint, color: C.accent, margin: "0.2rem 0 0" }}>← vous</p>}
+            {b.attackerMissedTurns > 0 && (
+              <p style={{ ...s.hint, color: C.red, margin: "0.2rem 0 0", fontSize: "0.76rem" }}>
+                ⏭ {b.attackerMissedTurns} tour{b.attackerMissedTurns > 1 ? "s" : ""} sauté{b.attackerMissedTurns > 1 ? "s" : ""} / 3
+              </p>
+            )}
           </div>
           {/* Défenseur */}
           <div style={{
@@ -853,11 +942,36 @@ export default function BattleApp({ currentUser, onBack }: Props) {
               ? <>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem" }}>{displayName(b.defender)}</p>
                   {isDefender && <p style={{ ...s.hint, color: C.blue, margin: "0.2rem 0 0" }}>← vous</p>}
+                  {b.defenderMissedTurns > 0 && (
+                    <p style={{ ...s.hint, color: C.red, margin: "0.2rem 0 0", fontSize: "0.76rem" }}>
+                      ⏭ {b.defenderMissedTurns} tour{b.defenderMissedTurns > 1 ? "s" : ""} sauté{b.defenderMissedTurns > 1 ? "s" : ""} / 3
+                    </p>
+                  )}
                 </>
               : <p style={{ ...s.muted, fontStyle: "italic", margin: 0 }}>En attente…</p>
             }
           </div>
         </div>
+
+        {/* Timer de tour */}
+        {b.status === "ACTIVE" && timerDisplay && (
+          <div style={{
+            ...s.card, marginBottom: "0.75rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            borderColor: timerDisplay === "00:00" ? C.red : C.border,
+            background: timerDisplay === "00:00" ? C.redDim : "transparent",
+          }}>
+            <span style={{ ...s.muted, fontSize: "0.82rem" }}>
+              {b.paceMode === "SYNC" ? "⚡ Mode sync" : "⏳ Mode async"} · Temps restant
+            </span>
+            <span style={{
+              fontFamily: "monospace", fontWeight: 700, fontSize: "1.1rem",
+              color: timerDisplay === "00:00" ? C.red : C.text,
+            }}>
+              {timerDisplay}
+            </span>
+          </div>
+        )}
 
         {/* Avertissement battle privée sans spectateur */}
         {showPrivateWarning && (
@@ -1109,7 +1223,7 @@ export default function BattleApp({ currentUser, onBack }: Props) {
               fontSize: "0.7rem", textTransform: "uppercase" as const, letterSpacing: "0.14em",
               color: C.accent, margin: "0 0 1.25rem", fontWeight: 700, textAlign: "center" as const,
             }}>
-              🏁 Partie terminée
+              {b.endReason === "FORFEIT" ? "🏳 Victoire par abandon" : "🏁 Partie terminée"}
             </p>
 
             {/* Vainqueur */}
@@ -1123,6 +1237,11 @@ export default function BattleApp({ currentUser, onBack }: Props) {
               <p style={{ color: C.accent, fontSize: "0.88rem", margin: 0, fontWeight: 600 }}>
                 {b.winner === "ATTACKER" ? "⚔ Attaquant victorieux" : "🛡️ Défenseur victorieux"}
               </p>
+              {b.endReason === "FORFEIT" && (
+                <p style={{ ...s.hint, marginTop: "0.35rem", color: C.textMuted }}>
+                  L'adversaire n'a pas joué à temps — victoire par forfait.
+                </p>
+              )}
             </div>
 
             {/* Objectif */}
@@ -1140,13 +1259,16 @@ export default function BattleApp({ currentUser, onBack }: Props) {
             </div>
 
             {/* Stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem" }}>
-              {[
+            <div style={{ display: "grid", gridTemplateColumns: b.endReason === "FORFEIT" ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "0.5rem" }}>
+              {(b.endReason === "FORFEIT" ? [
+                { label: "Tours joués", value: String(b.turnCount), color: C.text },
+                { label: "Abandons", value: String(Math.max(b.attackerMissedTurns, b.defenderMissedTurns)), color: C.red },
+              ] : [
                 { label: "Tours joués", value: String(b.turnCount), color: C.text },
                 { label: "Votes", value: String(spectatorVotes.length), color: C.text },
                 { label: "Oui", value: String(yesCount), color: C.green },
                 { label: "Non", value: String(noCount), color: C.red },
-              ].map(({ label, value, color }) => (
+              ]).map(({ label, value, color }) => (
                 <div key={label} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 6, padding: "0.6rem 0.5rem", textAlign: "center" as const }}>
                   <p style={{ ...s.sectionLabel, margin: "0 0 0.2rem" }}>{label}</p>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: "1.35rem", color }}>{value}</p>

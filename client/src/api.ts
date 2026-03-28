@@ -214,6 +214,8 @@ export interface JoinRequest {
 
 export type BattleStatus = "WAITING" | "ACTIVE" | "VOTING" | "DONE";
 export type BattleWinner = "ATTACKER" | "DEFENDER";
+export type PaceMode = "SYNC" | "ASYNC";
+export type BattleEndReason = "FORFEIT";
 
 export interface BattleUser {
   id: string;
@@ -252,6 +254,7 @@ export interface BattleInvite {
   user: BattleUser;
   role: BattleInviteRole;
   status: BattleInviteStatus;
+  expiresAt?: string | null;
   createdAt: string;
 }
 
@@ -270,6 +273,7 @@ export interface Battle {
   goal: string;
   status: BattleStatus;
   visibility: BattleVisibility;
+  paceMode: PaceMode;
   attackerId: string;
   attacker: BattleUser;
   defenderId: string | null;
@@ -279,6 +283,11 @@ export interface Battle {
   minTurns: number;
   maxTurns: number;
   winner: BattleWinner | null;
+  endReason?: BattleEndReason | null;
+  lastTurnAt?: string | null;
+  turnDeadlineAt?: string | null;
+  attackerMissedTurns: number;
+  defenderMissedTurns: number;
   moves: BattleMove[];
   votes: BattleVote[];
   invites: BattleInvite[];
@@ -292,6 +301,7 @@ export interface BattleListItem {
   goal: string;
   status: BattleStatus;
   visibility: BattleVisibility;
+  paceMode: PaceMode;
   attackerId: string;
   attacker: BattleUser;
   defenderId: string | null;
@@ -301,6 +311,8 @@ export interface BattleListItem {
   minTurns: number;
   maxTurns: number;
   winner: BattleWinner | null;
+  endReason?: BattleEndReason | null;
+  turnDeadlineAt?: string | null;
   _count: { moves: number; votes: number };
   createdAt: string;
   updatedAt: string;
@@ -313,6 +325,8 @@ export interface BattleMoveResult {
     turnCount: number;
     currentTurnUserId: string | null;
     status: BattleStatus;
+    lastTurnAt?: string | null;
+    turnDeadlineAt?: string | null;
   };
 }
 
@@ -462,7 +476,7 @@ export const api = {
   battles: {
     list: () => request<BattleListItem[]>("/battles"),
     get: (id: string) => request<Battle>(`/battles/${id}`),
-    create: (data: { title: string; goal: string; minTurns?: number; maxTurns?: number; visibility?: BattleVisibility }) =>
+    create: (data: { title: string; goal: string; minTurns?: number; maxTurns?: number; visibility?: BattleVisibility; paceMode?: PaceMode }) =>
       request<Battle>("/battles", { method: "POST", body: JSON.stringify(data) }),
     join: (id: string) =>
       request<Battle>(`/battles/${id}/join`, { method: "POST" }),

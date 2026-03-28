@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import * as battleService from "../services/battle.service";
-import { BattleStatus, StoryVisibility, BattleInviteRole } from "../generated/prisma/client";
+import { BattleStatus, StoryVisibility, BattleInviteRole, PaceMode } from "../generated/prisma/client";
 import { getIO } from "../socket";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 import { dispatchNotification } from "../services/notification.service";
@@ -11,6 +11,27 @@ const p = (v: string | string[] | undefined): string => {
   if (!v) throw new Error("Missing param");
   return Array.isArray(v) ? v[0] : v;
 };
+
+// Applique les timeouts de tour et émet les events socket si nécessaire
+async function applyAndEmitTimeouts(battleId: string): Promise<"none" | "skip" | "forfeit"> {
+  const result = await battleService.checkBattleTimeouts(battleId);
+  if (result.action === "none") return "none";
+
+  if (result.action === "skip") {
+    getIO()?.to(`battle:${battleId}`).emit("battle:turnSkipped", {
+      battleId,
+      currentTurnUserId: result.newCurrentTurnUserId,
+      turnDeadlineAt: result.newTurnDeadlineAt?.toISOString() ?? null,
+    });
+  } else if (result.action === "forfeit") {
+    getIO()?.to(`battle:${battleId}`).emit("battle:forfeit", {
+      battleId,
+      winner: result.winner,
+    });
+    getIO()?.emit("battle:updated", { id: battleId, status: "DONE", winner: result.winner });
+  }
+  return result.action;
+}
 
 // GET /api/battles
 export const list = async (req: Request, res: Response): Promise<void> => {
@@ -27,6 +48,9 @@ export const getOne = async (req: Request, res: Response): Promise<void> => {
   const id = p(req.params.id);
   const userId = req.user!.id;
   try {
+    // Traiter les timeouts éventuels avant de renvoyer l'état
+    await applyAndEmitTimeouts(id);
+
     const battle = await battleService.getBattleById(id);
     if (!battle) { res.status(404).json({ error: "Battle introuvable" }); return; }
     // Accès PRIVATE : joueur ou invité accepté
@@ -45,7 +69,7 @@ export const getOne = async (req: Request, res: Response): Promise<void> => {
 
 // POST /api/battles
 export const create = async (req: Request, res: Response): Promise<void> => {
-  const { title, goal, minTurns, maxTurns, visibility } = req.body;
+  const { title, goal, minTurns, maxTurns, visibility, paceMode } = req.body;
   if (!title?.trim()) { res.status(400).json({ error: "title requis" }); return; }
   if (!goal?.trim()) { res.status(400).json({ error: "goal requis" }); return; }
   if (!moderateText(title, "battle.title").isAllowed) { res.status(400).json({ error: MOD_REFUSED }); return; }
@@ -57,6 +81,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: "maxTurns doit être ≥ minTurns" }); return;
   }
   const parsedVisibility = visibility === "PUBLIC" ? StoryVisibility.PUBLIC : StoryVisibility.PRIVATE;
+  const parsedPaceMode = paceMode === "SYNC" ? PaceMode.SYNC : PaceMode.ASYNC;
 
   try {
     const battle = await battleService.createBattle({
@@ -66,9 +91,8 @@ export const create = async (req: Request, res: Response): Promise<void> => {
       minTurns,
       maxTurns,
       visibility: parsedVisibility,
+      paceMode: parsedPaceMode,
     });
-    // PRIVATE : notifier uniquement le créateur — les autres n'y ont pas accès
-    // PUBLIC  : broadcast global pour que tout le monde puisse rejoindre
     if (parsedVisibility === StoryVisibility.PUBLIC) {
       getIO()?.emit("battle:created", battle);
     } else {
@@ -98,7 +122,7 @@ export const join = async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const updated = await battleService.joinAndActivate(id, userId, battle.attackerId);
+    const updated = await battleService.joinAndActivate(id, userId, battle.attackerId, battle.paceMode);
     getIO()?.to(`battle:${id}`).emit("battle:joined", updated);
     getIO()?.emit("battle:updated", { id, status: updated.status, defenderId: updated.defenderId });
     res.json(updated);
@@ -115,6 +139,12 @@ export const createMove = async (req: Request, res: Response): Promise<void> => 
 
   if (!content?.trim()) { res.status(400).json({ error: "content requis" }); return; }
   if (!moderateText(content, "battle.move").isAllowed) { res.status(400).json({ error: MOD_REFUSED }); return; }
+
+  // Traiter les timeouts avant d'accepter le move
+  const timeoutAction = await applyAndEmitTimeouts(id);
+  if (timeoutAction === "forfeit") {
+    res.status(409).json({ error: "La battle s'est terminée par forfait." }); return;
+  }
 
   const battle = await battleService.getBattleById(id);
   if (!battle) { res.status(404).json({ error: "Battle introuvable" }); return; }
@@ -136,6 +166,8 @@ export const createMove = async (req: Request, res: Response): Promise<void> => 
       turnCount: updatedBattle.turnCount,
       currentTurnUserId: updatedBattle.currentTurnUserId,
       status: updatedBattle.status,
+      lastTurnAt: updatedBattle.lastTurnAt?.toISOString() ?? null,
+      turnDeadlineAt: updatedBattle.turnDeadlineAt?.toISOString() ?? null,
     });
     res.status(201).json({ move, updatedBattle });
   } catch (err) {
@@ -201,7 +233,6 @@ export const castVote = async (req: Request, res: Response): Promise<void> => {
 
   try {
     const newVote = await battleService.castVote(id, userId, vote);
-    // Comptage spectateurs uniquement (hors joueurs)
     const spectatorVotes = battle.votes.filter(
       (v) => v.userId !== battle.attackerId && v.userId !== battle.defenderId,
     );
@@ -236,7 +267,6 @@ export const closeVoting = async (req: Request, res: Response): Promise<void> =>
     res.status(403).json({ error: "Seuls les joueurs peuvent clore le vote" }); return;
   }
 
-  // Compter uniquement les votes spectateurs
   const spectatorVotes = battle.votes.filter(
     (v) => v.userId !== battle.attackerId && v.userId !== battle.defenderId,
   );
@@ -278,12 +308,21 @@ export const sendInvite = async (req: Request, res: Response): Promise<void> => 
   if (battle.attackerId !== senderId && battle.defenderId !== senderId) {
     res.status(403).json({ error: "Seuls les joueurs peuvent inviter" }); return;
   }
-  if (role === BattleInviteRole.PLAYER && battle.defenderId) {
-    res.status(409).json({ error: "La place de défenseur est déjà prise" }); return;
+  if (role === BattleInviteRole.PLAYER) {
+    if (battle.defenderId) {
+      res.status(409).json({ error: "La place de défenseur est déjà prise" }); return;
+    }
+    // Max 3 invitations joueur simultanées
+    const pendingPlayerInvites = (battle.invites ?? []).filter(
+      (i) => i.role === "PLAYER" && i.status === "PENDING",
+    );
+    if (pendingPlayerInvites.length >= 3) {
+      res.status(409).json({ error: "Maximum 3 invitations joueur simultanées" }); return;
+    }
   }
 
-  // Trouver l'utilisateur par email
-  const targetUser = await (await import("../prisma/client")).default.user.findUnique({
+  const prismaClient = (await import("../prisma/client")).default;
+  const targetUser = await prismaClient.user.findUnique({
     where: { email: email.trim().toLowerCase() },
     select: { id: true, email: true },
   });
@@ -297,7 +336,6 @@ export const sendInvite = async (req: Request, res: Response): Promise<void> => 
 
   try {
     const invite = await battleService.createInvite(battleId, targetUser.id, role as BattleInviteRole);
-    // Notifier l'invité selon ses préférences (BATTLE_INVITE filtre sur notifBattleEnabled)
     const notif = await dispatchNotification(
       targetUser.id,
       "BATTLE_INVITE",
@@ -339,6 +377,10 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
   if (!invite) { res.status(404).json({ error: "Invitation introuvable" }); return; }
   if (invite.userId !== userId) { res.status(403).json({ error: "Cette invitation ne vous est pas destinée" }); return; }
   if (invite.status !== "PENDING") { res.status(409).json({ error: "Cette invitation a déjà été traitée" }); return; }
+  // Vérifier l'expiration
+  if (invite.expiresAt && new Date() > invite.expiresAt) {
+    res.status(409).json({ error: "Cette invitation a expiré" }); return;
+  }
 
   try {
     const updatedBattle = await battleService.acceptInvite(inviteId);
