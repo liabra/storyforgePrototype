@@ -2670,11 +2670,11 @@ export default function App() {
                   gap: "0.65rem",
                 }}>
                   <span style={{ fontSize: "1.1rem", flexShrink: 0, lineHeight: 1.4 }}>🎭</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: 1, minWidth: 0, overflow: "visible" }}>
                     <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em", color: "#c0a060", textTransform: "uppercase" as const, marginBottom: "0.3rem" }}>
                       Maître du jeu
                     </div>
-                    <p style={{ margin: 0, fontStyle: "italic", color: "rgba(255,235,170,0.88)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                    <p style={{ margin: 0, fontStyle: "italic", color: "rgba(255,235,170,0.88)", fontSize: "0.92rem", lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word" }}>
                       {gmSuggestion}
                     </p>
                   </div>

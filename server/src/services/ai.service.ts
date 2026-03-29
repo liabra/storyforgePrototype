@@ -41,6 +41,27 @@ function truncateToTwoSentences(text: string): string {
   return sentences.slice(0, 2).join(" ").trim();
 }
 
+/** Score de richesse du contexte = somme des caractères narratifs utiles. */
+function contextScore(
+  storyTitle: string,
+  storyDesc: string | null,
+  sceneTitle: string,
+  sceneDesc: string | null,
+  contribs: { content: string }[]
+): number {
+  return (
+    storyTitle.trim().length +
+    (storyDesc?.trim().length ?? 0) +
+    sceneTitle.trim().length +
+    (sceneDesc?.trim().length ?? 0) +
+    contribs.reduce((sum, c) => sum + c.content.trim().length, 0)
+  );
+}
+
+const MIN_CONTEXT_SCORE = 80;
+export const WEAK_CONTEXT_MSG =
+  "Le maître du jeu a besoin d'un peu plus de matière pour intervenir.";
+
 export async function generateGmSuggestion(
   sceneId: string,
   mode: GmMode
@@ -60,6 +81,19 @@ export async function generateGmSuggestion(
   });
 
   if (!scene) throw new Error("Scène introuvable");
+
+  const score = contextScore(
+    scene.story.title,
+    scene.story.description ?? null,
+    scene.title,
+    scene.description ?? null,
+    scene.contributions
+  );
+
+  if (score < MIN_CONTEXT_SCORE) {
+    console.log(`[ai.service] contexte trop pauvre (score=${score}) — appel Gemini annulé`);
+    return WEAK_CONTEXT_MSG;
+  }
 
   const lastContribs = [...scene.contributions]
     .reverse()
