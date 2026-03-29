@@ -1,8 +1,8 @@
 /**
- * ai.service.ts
+ * ai.service.ts — V2
  *
  * Service "Maître du jeu" — génère une courte intervention narrative
- * à partir du contexte d'une scène collaborative.
+ * à partir d'un contexte de scène enrichi (personnages, locuteurs, phase).
  *
  * Provider : Google Gemini Flash (économique, réponse courte)
  * Clé      : process.env.GEMINI_API_KEY
@@ -13,54 +13,89 @@ import prisma from "../prisma/client";
 
 export type GmMode = "twist" | "nudge" | "ending_hint";
 
-const SYSTEM_PROMPT = `Tu es le maître du jeu discret d'une application d'écriture collaborative.
-Ton rôle est d'enrichir l'histoire sans jamais écrire à la place des joueurs.
-Tu produis exactement 1 à 2 phrases, jamais plus.
+// ── Prompt système V2 ──────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `Tu es le maître du jeu discret d'une application d'écriture collaborative de fiction.
+Tu lis une scène de fiction en cours : certaines lignes sont de la narration, d'autres sont des dialogues ou des actions attribuées à des personnages.
+Ton rôle est d'enrichir la scène sans jamais écrire à la place des joueurs.
+
+Règles absolues :
+- Tu produis exactement 1 à 2 phrases, jamais plus, jamais moins.
+- Tu ne fais jamais parler ou agir un personnage de façon contradictoire avec ce qui a déjà été établi.
+- Tu respectes le ton dominant de la scène : si elle est légère ou absurde, tu restes dans ce registre ; si elle est tendue ou dramatique, tu amplifies sans brutaliser.
+- Tu ne résous jamais l'histoire : tu ouvres, tu suggères, tu relances.
+- Tu retournes uniquement le texte final, sans explication, sans balise, sans guillemets englobants.
+- Si des personnages sont listés, ton intervention doit être cohérente avec leur présence et leur nature.
+
 Selon le mode demandé :
-- twist : introduis un rebondissement, un obstacle inattendu ou un mystère qui relance la scène
-- nudge : relance doucement la scène si elle semble stagner, sans brusquer les joueurs
-- ending_hint : suggère subtilement qu'une fin de scène approche, laisse la porte ouverte
-Tu restes strictement cohérent avec le contexte fourni.
-Tu ne résous jamais totalement l'histoire.
-Tu retournes uniquement le texte final, sans explication ni balise.`;
+- twist : introduis un rebondissement ou un élément inattendu, cohérent avec le ton et les personnages présents — ne change pas de registre dramatique sans raison
+- nudge : relance doucement la scène si elle semble stagner, sans forcer la main des joueurs ni rompre le ton établi
+- ending_hint : suggère subtilement qu'une fin de scène approche, en respectant l'atmosphère`;
+
+// ── Instructions par mode ──────────────────────────────────────────────────────
 
 const MODE_INSTRUCTION: Record<GmMode, string> = {
-  twist: "Propose un rebondissement ou un élément imprévu qui relance la scène.",
-  nudge: "La scène stagne. Relance-la subtilement sans forcer la main des joueurs.",
-  ending_hint: "Suggère discrètement qu'une fin de scène semble proche.",
+  twist:
+    "Propose un rebondissement ou un élément imprévu, cohérent avec le ton de la scène et les personnages présents. Ne bascule pas dans un registre dramatique différent sans justification narrative.",
+  nudge:
+    "La scène semble stagner. Relance-la subtilement sans imposer une direction aux joueurs, en restant fidèle au ton et à l'ambiance déjà installés.",
+  ending_hint:
+    "Suggère discrètement qu'une fin de scène semble proche, en respectant l'atmosphère et en laissant la porte ouverte.",
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Garantit que la réponse ne dépasse pas 2 phrases.
- * Découpe sur les fins de phrase (. ! ?) et reconstruit proprement.
  */
 function truncateToTwoSentences(text: string): string {
-  // Découpe en phrases en conservant le signe de ponctuation
   const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [];
   if (sentences.length <= 2) return text.trim();
   return sentences.slice(0, 2).join(" ").trim();
 }
 
-/** Score de richesse du contexte = somme des caractères narratifs utiles. */
-function contextScore(
-  storyTitle: string,
-  storyDesc: string | null,
-  sceneTitle: string,
-  sceneDesc: string | null,
-  contribs: { content: string }[]
-): number {
-  return (
-    storyTitle.trim().length +
-    (storyDesc?.trim().length ?? 0) +
-    sceneTitle.trim().length +
-    (sceneDesc?.trim().length ?? 0) +
-    contribs.reduce((sum, c) => sum + c.content.trim().length, 0)
-  );
+/**
+ * Détermine le label du locuteur pour une contribution.
+ * Priorité : character.name > character.nickname > user.displayName (narration) > "Narration"
+ */
+function speakerLabel(contrib: {
+  character: { name: string | null; nickname: string | null } | null;
+  user: { displayName: string | null } | null;
+}): string {
+  if (contrib.character?.name) return contrib.character.name;
+  if (contrib.character?.nickname) return contrib.character.nickname;
+  if (contrib.user?.displayName) return `${contrib.user.displayName} (narration)`;
+  return "Narration";
 }
 
-const MIN_CONTEXT_SCORE = 80;
+/**
+ * Phase narrative approximative basée sur le nombre de contributions de la scène.
+ */
+function narrativePhase(contribCount: number): string {
+  if (contribCount <= 2) return "Ouverture";
+  if (contribCount <= 6) return "Développement";
+  return "Climax / Dénouement";
+}
+
+/**
+ * Règle de matière narrative suffisante (remplace l'ancien score 80 chars) :
+ * - au moins 2 contributions non-vides
+ * - OU 1 contribution non-vide + description de scène ≥ 20 caractères
+ */
+function hasEnoughNarrativeMatter(
+  sceneDesc: string | null,
+  contribs: { content: string }[]
+): boolean {
+  const nonEmpty = contribs.filter((c) => c.content.trim().length > 0);
+  if (nonEmpty.length >= 2) return true;
+  if (nonEmpty.length >= 1 && (sceneDesc?.trim().length ?? 0) >= 20) return true;
+  return false;
+}
+
 export const WEAK_CONTEXT_MSG =
   "Le maître du jeu a besoin d'un peu plus de matière pour intervenir.";
+
+// ── Fonction principale ────────────────────────────────────────────────────────
 
 export async function generateGmSuggestion(
   sceneId: string,
@@ -72,46 +107,75 @@ export async function generateGmSuggestion(
       title: true,
       description: true,
       story: { select: { title: true, description: true } },
+      characters: {
+        select: { name: true, nickname: true, role: true, shortDescription: true },
+      },
       contributions: {
         orderBy: { createdAt: "desc" },
-        take: 5,
-        select: { content: true },
+        take: 8,
+        select: {
+          content: true,
+          character: { select: { name: true, nickname: true } },
+          user: { select: { displayName: true } },
+        },
       },
     },
   });
 
   if (!scene) throw new Error("Scène introuvable");
 
-  const score = contextScore(
-    scene.story.title,
-    scene.story.description ?? null,
-    scene.title,
-    scene.description ?? null,
-    scene.contributions
-  );
-
-  if (score < MIN_CONTEXT_SCORE) {
-    console.log(`[ai.service] contexte trop pauvre (score=${score}) — appel Gemini annulé`);
+  if (!hasEnoughNarrativeMatter(scene.description ?? null, scene.contributions)) {
+    console.log(`[ai.service] matière narrative insuffisante — appel Gemini annulé`);
     return WEAK_CONTEXT_MSG;
   }
 
-  const lastContribs = [...scene.contributions]
-    .reverse()
-    .map((c) => `- ${c.content.slice(0, 200)}`)
+  // Contributions en ordre chronologique (les plus récentes en dernier)
+  const orderedContribs = [...scene.contributions].reverse();
+
+  const contribLines = orderedContribs
+    .map((c) => {
+      const speaker = speakerLabel(c);
+      const text = c.content.slice(0, 250).trim();
+      return `${speaker} : "${text}"`;
+    })
     .join("\n");
 
-  const contextBlock = [
-    `Histoire : "${scene.story.title}"`,
-    scene.story.description ? `Contexte : ${scene.story.description}` : "",
-    `Scène : "${scene.title}"`,
-    scene.description ? `Description de la scène : ${scene.description}` : "",
-    lastContribs
-      ? `Dernières contributions :\n${lastContribs}`
-      : "Aucune contribution encore.",
-    `\nInstruction : ${MODE_INSTRUCTION[mode]}`,
+  const characterList = scene.characters
+    .map((ch) => {
+      const name = ch.name ?? ch.nickname ?? "Personnage sans nom";
+      const details = [ch.role, ch.shortDescription].filter(Boolean).join(" — ");
+      return details ? `- ${name} (${details})` : `- ${name}`;
+    })
+    .join("\n");
+
+  const phase = narrativePhase(scene.contributions.length);
+
+  // Assemblage du contexte structuré
+  const storySection = [
+    `=== HISTOIRE ===`,
+    `Titre : "${scene.story.title}"`,
+    scene.story.description ? `Contexte : ${scene.story.description}` : null,
   ]
     .filter(Boolean)
     .join("\n");
+
+  const sceneSection = [
+    `=== SCÈNE ===`,
+    `Titre : "${scene.title}"`,
+    scene.description ? `Description : ${scene.description}` : null,
+    `Phase narrative : ${phase}`,
+    characterList ? `Personnages présents :\n${characterList}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const contribSection = [`=== EXTRAIT DE LA SCÈNE ===`, contribLines].join("\n");
+
+  const instructionSection = [`=== INSTRUCTION ===`, MODE_INSTRUCTION[mode]].join("\n");
+
+  const contextBlock = [storySection, sceneSection, contribSection, instructionSection].join(
+    "\n\n"
+  );
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY manquante dans l'environnement");
