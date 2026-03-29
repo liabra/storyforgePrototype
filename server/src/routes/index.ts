@@ -14,6 +14,7 @@ import battleRoutes from "./battle.routes";
 import reportRoutes from "./report.routes";
 import adminRoutes from "./admin.routes";
 import notificationRoutes from "./notification.routes";
+import aiRoutes from "./ai.routes";
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use(battleRoutes);
 router.use(reportRoutes);
 router.use(adminRoutes);
 router.use(notificationRoutes);
+router.use(aiRoutes);
 
 export default router;

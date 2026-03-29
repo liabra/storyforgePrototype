@@ -203,6 +203,8 @@ export default function App() {
   const [reportTarget, setReportTarget] = useState<{ targetType: "CONTRIBUTION" | "BATTLE_MOVE" | "STORY"; targetId: string } | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestingIdea, setSuggestingIdea] = useState(false);
+  const [gmSuggestion, setGmSuggestion] = useState<string | null>(null);
+  const [loadingGm, setLoadingGm] = useState(false);
 
   // Characters
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -865,6 +867,7 @@ export default function App() {
     setShowSettings(false);
     setShowCharSelect(false);
     setSuggestion(null);
+    setGmSuggestion(null);
     setRoleDowngradeAlert(false);
     setRoleDowngradeDraft(null);
     setContribContent("");
@@ -1018,6 +1021,21 @@ export default function App() {
       setSuggestion(idea);
     } finally {
       setSuggestingIdea(false);
+    }
+  };
+
+  // ── Maître du jeu IA
+  const handleSceneMaster = async () => {
+    if (!selectedScene) return;
+    setLoadingGm(true);
+    setGmSuggestion(null);
+    try {
+      const { suggestion } = await api.ai.sceneMaster(selectedScene.id, "twist");
+      setGmSuggestion(suggestion);
+    } catch (err: unknown) {
+      addErrorToast(err);
+    } finally {
+      setLoadingGm(false);
     }
   };
 
@@ -2638,6 +2656,38 @@ export default function App() {
                 </div>
               )}
 
+              {/* ── Message du Maître du jeu IA */}
+              {gmSuggestion && (
+                <div style={{
+                  margin: "0.75rem 0",
+                  padding: "0.85rem 1rem",
+                  background: "rgba(40,20,5,0.55)",
+                  border: "1px solid rgba(192,160,96,0.45)",
+                  borderLeft: "3px solid #c0a060",
+                  borderRadius: 7,
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.65rem",
+                }}>
+                  <span style={{ fontSize: "1.1rem", flexShrink: 0, lineHeight: 1.4 }}>🎭</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.08em", color: "#c0a060", textTransform: "uppercase" as const, marginBottom: "0.3rem" }}>
+                      Maître du jeu
+                    </div>
+                    <p style={{ margin: 0, fontStyle: "italic", color: "rgba(255,235,170,0.88)", fontSize: "0.92rem", lineHeight: 1.55 }}>
+                      {gmSuggestion}
+                    </p>
+                  </div>
+                  <button
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(192,160,96,0.5)", fontSize: "0.8rem", padding: "0 0.1rem", flexShrink: 0, lineHeight: 1 }}
+                    onClick={() => setGmSuggestion(null)}
+                    title="Fermer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* ── Indicateur "en train d'écrire…" — toujours dans le DOM pour éviter le layout shift */}
               <p style={{ margin: "0 0 8px", minHeight: 18, fontSize: 12, fontStyle: "italic", opacity: typingUsers.length > 0 ? 0.5 : 0, color: "inherit", transition: "opacity 0.15s ease" }}>
                 {typingLabel(typingUsers)}
@@ -2792,6 +2842,9 @@ export default function App() {
                       </button>
                       <button style={s.btnGhost} onClick={handleSuggestIdea} disabled={suggestingIdea}>
                         {suggestingIdea ? "…" : "💡 Idée"}
+                      </button>
+                      <button style={s.btnGhost} onClick={handleSceneMaster} disabled={loadingGm} title="Demander un rebondissement au maître du jeu IA">
+                        {loadingGm ? "…" : "🎭 Rebondissement"}
                       </button>
                       <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
                         {generatingImage ? "…" : "🎨 Illustrer"}

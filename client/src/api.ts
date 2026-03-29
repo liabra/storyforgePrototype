@@ -518,4 +518,11 @@ export const api = {
     unbanUser: (id: string) =>
       request<{ id: string; isBanned: boolean }>(`/admin/users/${id}/unban`, { method: "POST" }),
   },
+  ai: {
+    sceneMaster: (sceneId: string, mode: "twist" | "nudge" | "ending_hint") =>
+      request<{ suggestion: string }>("/ai/scene-master", {
+        method: "POST",
+        body: JSON.stringify({ sceneId, mode }),
+      }),
+  },
 };
