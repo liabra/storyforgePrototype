@@ -6,7 +6,6 @@ import type {
   Story,
   PublicStory,
   Chapter,         // Phase A : conservé — chapter.routes toujours actif
-  ChapterSceneItem, // Phase A : conservé pour compatibilité transitoire
   Scene,
   Contribution,
   Character,
