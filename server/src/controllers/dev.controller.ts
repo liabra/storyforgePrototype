@@ -5,6 +5,8 @@ import { SceneStatus } from "../generated/prisma/client";
 export const seed = async (_req: Request, res: Response) => {
   await prisma.story.deleteMany({});
 
+  // Créer la story avec chapitres et personnages (sans scènes imbriquées,
+  // car Scene.storyId doit être renseigné explicitement depuis la Phase A)
   const story = await prisma.story.create({
     data: {
       title: "Les Chroniques de Valdor",
@@ -42,66 +44,70 @@ export const seed = async (_req: Request, res: Response) => {
       },
       chapters: {
         create: [
-          {
-            title: "Prologue — Les Braises du Passé",
-            order: 1,
-            scenes: {
-              create: [
-                {
-                  title: "La Taverne des Ruines",
-                  description:
-                    "Une auberge délabrée à la lisière du Bois des Âmes. Trois étrangers se retrouvent autour d'un feu mourant.",
-                  order: 1,
-                  status: SceneStatus.DONE,
-                },
-                {
-                  title: "La Route du Nord",
-                  description:
-                    "La troupe quitte la taverne à l'aube sous une pluie froide. La forêt s'épaissit.",
-                  order: 2,
-                  status: SceneStatus.ACTIVE,
-                },
-              ],
-            },
-          },
-          {
-            title: "Acte I — L'Éveil",
-            order: 2,
-            scenes: {
-              create: [
-                {
-                  title: "Le Château de Valdor",
-                  description:
-                    "Les ruines du château se dressent dans la brume du matin. Des inscriptions anciennes couvrent les murs.",
-                  order: 1,
-                  status: SceneStatus.ACTIVE,
-                },
-                {
-                  title: "La Chambre du Conseil",
-                  description:
-                    "Une salle secrète sous les décombres, encore intacte. Une table ronde et sept sièges vides.",
-                  order: 2,
-                  status: SceneStatus.ACTIVE,
-                },
-              ],
-            },
-          },
+          { title: "Prologue — Les Braises du Passé", order: 1 },
+          { title: "Acte I — L'Éveil", order: 2 },
         ],
       },
     },
     include: {
       characters: true,
-      chapters: { include: { scenes: true } },
+      chapters: true,
     },
   });
 
-  const firstScene = story.chapters[0].scenes[0];
+  const [chapter1, chapter2] = story.chapters.sort((a, b) => a.order - b.order);
+
+  // Créer les scènes avec storyId et chapterId explicites
+  const scene1 = await prisma.scene.create({
+    data: {
+      title: "La Taverne des Ruines",
+      description: "Une auberge délabrée à la lisière du Bois des Âmes. Trois étrangers se retrouvent autour d'un feu mourant.",
+      order: 1,
+      status: SceneStatus.DONE,
+      storyId: story.id,
+      chapterId: chapter1.id,
+    },
+  });
+
+  await prisma.scene.create({
+    data: {
+      title: "La Route du Nord",
+      description: "La troupe quitte la taverne à l'aube sous une pluie froide. La forêt s'épaissit.",
+      order: 2,
+      status: SceneStatus.ACTIVE,
+      storyId: story.id,
+      chapterId: chapter1.id,
+    },
+  });
+
+  await prisma.scene.create({
+    data: {
+      title: "Le Château de Valdor",
+      description: "Les ruines du château se dressent dans la brume du matin. Des inscriptions anciennes couvrent les murs.",
+      order: 1,
+      status: SceneStatus.ACTIVE,
+      storyId: story.id,
+      chapterId: chapter2.id,
+    },
+  });
+
+  await prisma.scene.create({
+    data: {
+      title: "La Chambre du Conseil",
+      description: "Une salle secrète sous les décombres, encore intacte. Une table ronde et sept sièges vides.",
+      order: 2,
+      status: SceneStatus.ACTIVE,
+      storyId: story.id,
+      chapterId: chapter2.id,
+    },
+  });
+
   const aelindra = story.characters.find((c) => c.name === "Aelindra")!;
-  const thorok = story.characters.find((c) => c.name === "Thorok")!;
+  const thorok   = story.characters.find((c) => c.name === "Thorok")!;
   const tisseuse = story.characters.find((c) => c.nickname === "La Tisseuse")!;
 
   await prisma.scene.update({
-    where: { id: firstScene.id },
+    where: { id: scene1.id },
     data: {
       characters: {
         set: [aelindra.id, thorok.id, tisseuse.id].map((id) => ({ id })),
@@ -112,30 +118,30 @@ export const seed = async (_req: Request, res: Response) => {
   await prisma.contribution.createMany({
     data: [
       {
-        sceneId: firstScene.id,
+        sceneId: scene1.id,
         characterId: aelindra.id,
         content:
           "Elle poussa la porte vermoulue. L'odeur de cendre et de bière rance l'accueillit comme une vieille connaissance.",
       },
       {
-        sceneId: firstScene.id,
+        sceneId: scene1.id,
         characterId: thorok.id,
         content:
           "Un grognement sourd. Thorok laissa tomber son sac sur la table la plus robuste — la seule encore debout.",
       },
       {
-        sceneId: firstScene.id,
+        sceneId: scene1.id,
         characterId: tisseuse.id,
         content:
           "\"Le fil vous a conduits ici. Tous les trois. Ce n'est pas un hasard.\" Elle s'assit sans qu'on l'y invite.",
       },
       {
-        sceneId: firstScene.id,
+        sceneId: scene1.id,
         characterId: aelindra.id,
         content: "Aelindra posa la main sur son couteau. \"Qui êtes-vous ?\"",
       },
       {
-        sceneId: firstScene.id,
+        sceneId: scene1.id,
         characterId: tisseuse.id,
         content: "Un sourire sous le voile. \"Celle qui vous pose la même question.\"",
       },

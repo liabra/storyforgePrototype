@@ -19,7 +19,7 @@ export const getAllStories = () =>
 export const getStoryById = (id: string) =>
   prisma.story.findUnique({
     where: { id },
-    include: { characters: true, chapters: { orderBy: { order: "asc" } } },
+    include: { characters: true },
   });
 
 export const createStory = async (data: { title: string; description?: string }, ownerId: string) => {
@@ -52,7 +52,7 @@ export const getPublicStories = () =>
       visibility: true,
       createdAt: true,
       updatedAt: true,
-      _count: { select: { chapters: true, participants: true } },
+      _count: { select: { scenes: true, participants: true } },
     },
   });
 

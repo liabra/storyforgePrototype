@@ -15,8 +15,9 @@ export interface ActivityItem {
 
 export async function getRecentActivity(userId: string): Promise<ActivityItem[]> {
   const [contribs, scenes] = await Promise.all([
+    // Phase A : chemin direct via scene.story (storyId)
     prisma.contribution.findMany({
-      where: { scene: { chapter: { story: { participants: { some: { userId } } } } } },
+      where: { scene: { story: { participants: { some: { userId } } } } },
       orderBy: { createdAt: "desc" },
       take: 8,
       select: {
@@ -28,20 +29,20 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
           select: {
             id: true,
             title: true,
-            chapter: { select: { story: { select: { id: true, title: true } } } },
+            story: { select: { id: true, title: true } },
           },
         },
       },
     }),
     prisma.scene.findMany({
-      where: { chapter: { story: { participants: { some: { userId } } } } },
+      where: { story: { participants: { some: { userId } } } },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: {
         id: true,
         title: true,
         createdAt: true,
-        chapter: { select: { story: { select: { id: true, title: true } } } },
+        story: { select: { id: true, title: true } },
       },
     }),
   ]);
@@ -49,8 +50,8 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
   const items: ActivityItem[] = [
     ...contribs.map((c) => ({
       type: "contribution" as const,
-      storyId: c.scene.chapter.story.id,
-      storyTitle: c.scene.chapter.story.title,
+      storyId: c.scene.story.id,
+      storyTitle: c.scene.story.title,
       sceneId: c.scene.id,
       sceneTitle: c.scene.title,
       username: c.character
@@ -60,8 +61,8 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
     })),
     ...scenes.map((s) => ({
       type: "scene" as const,
-      storyId: s.chapter.story.id,
-      storyTitle: s.chapter.story.title,
+      storyId: s.story.id,
+      storyTitle: s.story.title,
       sceneId: s.id,
       sceneTitle: s.title,
       username: "",
@@ -74,13 +75,6 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
 
 /**
  * Diffuse un événement activity:new uniquement aux participants de l'histoire.
- *
- * Chaque utilisateur dispose d'une room personnelle "user:${userId}" rejointe
- * automatiquement lors du presence:identify. Cela garantit qu'il reçoit les
- * événements de toutes ses histoires, qu'il soit sur la homepage ou dans une histoire.
- *
- * Extension future : si une histoire est marquée "publique", émettre en plus
- * à une room "public-activity" sans modifier la logique privée ci-dessous.
  */
 export async function broadcastActivityToStory(
   storyId: string,

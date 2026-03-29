@@ -30,7 +30,7 @@ export interface PublicStory {
   visibility: StoryVisibility;
   createdAt: string;
   updatedAt: string;
-  _count: { chapters: number; participants: number };
+  _count: { scenes: number; participants: number };
 }
 
 export interface CharacterRef {
@@ -90,7 +90,8 @@ export interface Scene {
   currentTurnUserId?: string | null;
   visibilityMode: string;
   visibleCount: number;
-  chapterId: string;
+  storyId: string;          // Phase A : source de vérité
+  chapterId?: string | null; // Phase A : conservé temporairement, nullable
   characters: CharacterRef[];
   contributions?: Contribution[];
   _count?: { contributions: number };
@@ -395,10 +396,11 @@ export const api = {
     delete: (id: string) => request<void>(`/chapters/${id}`, { method: "DELETE" }),
   },
   scenes: {
-    list: (chapterId: string) => request<Scene[]>(`/chapters/${chapterId}/scenes`),
+    // Phase A : source de vérité = storyId
+    list: (storyId: string) => request<Scene[]>(`/stories/${storyId}/scenes`),
     get: (sceneId: string) => request<Scene>(`/scenes/${sceneId}`),
-    create: (chapterId: string, data: { title: string; description?: string; order?: number }) =>
-      request<Scene>(`/chapters/${chapterId}/scenes`, {
+    create: (storyId: string, data: { title: string; description?: string; order?: number }) =>
+      request<Scene>(`/stories/${storyId}/scenes`, {
         method: "POST",
         body: JSON.stringify(data),
       }),

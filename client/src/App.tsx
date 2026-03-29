@@ -5,8 +5,8 @@ import BattleApp from "./BattleApp";
 import type {
   Story,
   PublicStory,
-  Chapter,
-  ChapterSceneItem,
+  Chapter,         // Phase A : conservé — chapter.routes toujours actif
+  ChapterSceneItem, // Phase A : conservé pour compatibilité transitoire
   Scene,
   Contribution,
   Character,
@@ -153,9 +153,10 @@ function typingLabel(users: TypingUser[]): string {
 export default function App() {
   // Navigation
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+  // Phase A : selectedChapter conservé en state mais n'est plus utilisé pour la navigation principale
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
-  const [activeTab, setActiveTab] = useState<"chapters" | "characters" | "participants">("chapters");
+  const [activeTab, setActiveTab] = useState<"scenes" | "characters" | "participants">("scenes");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Navigation principale
@@ -169,11 +170,8 @@ export default function App() {
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDesc, setStoryDesc] = useState("");
 
-  // Chapters
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [showChapterForm, setShowChapterForm] = useState(false);
-  const [newChapter, setNewChapter] = useState({ title: "", description: "" });
-  const [creatingChapter, setCreatingChapter] = useState(false);
+  // Phase A : scenes plate au niveau story (remplace l'ancienne structure chapters[].scenes)
+  const [scenes, setScenes] = useState<Scene[]>([]);
 
   // Scenes
   const [showSceneForm, setShowSceneForm] = useState(false);
@@ -587,25 +585,10 @@ export default function App() {
 
     socket.emit("story:join", { storyId: selectedStory.id });
 
-    const onChapterNew = (chapter: Chapter) => {
-      setChapters((prev) =>
-        prev.some((c) => c.id === chapter.id) ? prev : [...prev, chapter]
-      );
-    };
-
-    const onSceneNew = ({ chapterId, scene }: { chapterId: string; scene: ChapterSceneItem }) => {
-      setChapters((prev) =>
-        prev.map((ch) =>
-          ch.id === chapterId && !ch.scenes.some((s) => s.id === scene.id)
-            ? { ...ch, scenes: [...ch.scenes, scene] }
-            : ch
-        )
-      );
-      setSelectedChapter((ch) =>
-        ch && ch.id === chapterId && !ch.scenes.some((s) => s.id === scene.id)
-          ? { ...ch, scenes: [...ch.scenes, scene] }
-          : ch
-      );
+    // Phase A : chapter:new supprimé, plus de chapitres dans le state
+    const onSceneNew = ({ scene }: { storyId: string; scene: ChapterSceneItem }) => {
+      // Dédup : la réponse HTTP peut être arrivée avant le socket
+      setScenes((prev) => prev.some((s) => s.id === scene.id) ? prev : [...prev, scene]);
     };
 
     const onScenePresenceUpdate = ({ sceneId, users }: { sceneId: string; users: PresenceUser[] }) => {
@@ -630,13 +613,9 @@ export default function App() {
     };
 
     const onSceneCharactersUpdate = ({ sceneId, characters }: { sceneId: string; characters: CharacterRef[] }) => {
-      // Met à jour la scène ouverte si c'est la bonne
       setSelectedScene((s) => s?.id === sceneId ? { ...s, characters } : s);
-      // Met à jour la liste de scènes dans la vue chapitre
-      setChapters((prev) => prev.map((ch) => ({
-        ...ch,
-        scenes: ch.scenes.map((sc) => sc.id === sceneId ? { ...sc, characters } : sc),
-      })));
+      // Phase A : mise à jour dans la liste plate
+      setScenes((prev) => prev.map((sc) => sc.id === sceneId ? { ...sc, characters } : sc));
     };
 
     const onTurnUpdate = ({ sceneId, mode, currentTurnUserId }: { sceneId: string; mode: SceneMode; currentTurnUserId: string | null }) => {
@@ -644,31 +623,18 @@ export default function App() {
       setSettingsEdit((p) => ({ ...p, mode }));
     };
 
-    const onSceneDelete = ({ sceneId, chapterId }: { sceneId: string; chapterId: string }) => {
-      setChapters((p) => p.map((ch) =>
-        ch.id === chapterId ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== sceneId) } : ch
-      ));
-      setSelectedChapter((c) => c?.id === chapterId ? { ...c, scenes: c.scenes.filter((sc) => sc.id !== sceneId) } : c);
+    const onSceneDelete = ({ sceneId }: { sceneId: string; storyId: string }) => {
+      // Phase A : suppression dans la liste plate
+      setScenes((p) => p.filter((sc) => sc.id !== sceneId));
       setSelectedScene((s) => s?.id === sceneId ? null : s);
     };
 
-    const onChapterDelete = ({ chapterId }: { chapterId: string }) => {
-      setChapters((p) => p.filter((ch) => ch.id !== chapterId));
-      setSelectedChapter((c) => c?.id === chapterId ? null : c);
-      setSelectedScene((s) => {
-        // La scène ouverte appartient peut-être au chapitre supprimé ; on ne peut pas savoir directement,
-        // mais selectedChapter sera null, donc la vue reviendra au niveau histoire.
-        return s;
-      });
-    };
+    // Phase A : onChapterDelete supprimé
 
-    const onSceneStatusUpdate = ({ sceneId, chapterId, status, sceneTitle, triggeredBy }: { sceneId: string; chapterId: string; status: SceneStatus; sceneTitle?: string; triggeredBy?: string }) => {
+    const onSceneStatusUpdate = ({ sceneId, status, sceneTitle, triggeredBy }: { sceneId: string; storyId: string; status: SceneStatus; sceneTitle?: string; triggeredBy?: string }) => {
       setSelectedScene((s) => s?.id === sceneId ? { ...s, status } : s);
-      setChapters((p) => p.map((ch) =>
-        ch.id === chapterId
-          ? { ...ch, scenes: ch.scenes.map((sc) => sc.id === sceneId ? { ...sc, status } : sc) }
-          : ch
-      ));
+      // Phase A : mise à jour dans la liste plate
+      setScenes((p) => p.map((sc) => sc.id === sceneId ? { ...sc, status } : sc));
       setSettingsEdit((p) => ({ ...p, status }));
       if (status === "DONE" && triggeredBy !== currentUser?.id) {
         setToasts((prev) => {
@@ -679,19 +645,7 @@ export default function App() {
       }
     };
 
-    const onChapterStatusUpdate = ({ chapterId, status, chapterTitle, storyTitle, triggeredBy }: { chapterId: string; status: ContentStatus; chapterTitle?: string; storyTitle?: string; triggeredBy?: string }) => {
-      setChapters((p) => p.map((ch) => ch.id === chapterId ? { ...ch, status } : ch));
-      setSelectedChapter((c) => c?.id === chapterId ? { ...c, status } : c);
-      if (status === "DONE" && triggeredBy !== currentUser?.id) {
-        setToasts((prev) => {
-          const id = ++toastIdRef.current;
-          const label = chapterTitle && storyTitle
-            ? `'${chapterTitle}' de '${storyTitle}'`
-            : chapterTitle ? `'${chapterTitle}'` : "ce chapitre";
-          return [...prev, { id, type: "scene" as const, message: `📕 Le chapitre ${label} est terminé` }].slice(-5);
-        });
-      }
-    };
+    // Phase A : onChapterStatusUpdate supprimé
 
     const onStoryStatusUpdate = ({ storyId, status, storyTitle, triggeredBy }: { storyId: string; status: ContentStatus; storyTitle?: string; triggeredBy?: string }) => {
       setSelectedStory((s) => s?.id === storyId ? { ...s, status } : s);
@@ -711,7 +665,7 @@ export default function App() {
       if (visibility === "PRIVATE") setPublicStories((p) => p.filter((s) => s.id !== storyId));
     };
 
-    socket.on("chapter:new", onChapterNew);
+    // Phase A : chapter:new, chapter:delete, chapter:statusUpdate supprimés
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
     socket.on("story:presence:snapshot", onStoryPresenceSnapshot);
@@ -721,15 +675,12 @@ export default function App() {
     socket.on("scene:characters:update", onSceneCharactersUpdate);
     socket.on("turn:update", onTurnUpdate);
     socket.on("scene:delete", onSceneDelete);
-    socket.on("chapter:delete", onChapterDelete);
     socket.on("scene:statusUpdate", onSceneStatusUpdate);
-    socket.on("chapter:statusUpdate", onChapterStatusUpdate);
     socket.on("story:statusUpdate", onStoryStatusUpdate);
     socket.on("story:visibilityUpdate", onStoryVisibilityUpdate);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
-      socket.off("chapter:new", onChapterNew);
       socket.off("scene:new", onSceneNew);
       socket.off("scene:presence:update", onScenePresenceUpdate);
       socket.off("story:presence:snapshot", onStoryPresenceSnapshot);
@@ -739,9 +690,7 @@ export default function App() {
       socket.off("scene:characters:update", onSceneCharactersUpdate);
       socket.off("turn:update", onTurnUpdate);
       socket.off("scene:delete", onSceneDelete);
-      socket.off("chapter:delete", onChapterDelete);
       socket.off("scene:statusUpdate", onSceneStatusUpdate);
-      socket.off("chapter:statusUpdate", onChapterStatusUpdate);
       socket.off("story:statusUpdate", onStoryStatusUpdate);
       socket.off("story:visibilityUpdate", onStoryVisibilityUpdate);
       setAllScenePresence({});
@@ -798,12 +747,12 @@ export default function App() {
   useEffect(() => {
     if (!navRestoredRef.current) return;
     if (!selectedStory) { localStorage.removeItem("sf_nav"); return; }
+    // Phase A : chapterId supprimé du payload
     localStorage.setItem("sf_nav", JSON.stringify({
       storyId: selectedStory.id,
-      chapterId: selectedChapter?.id ?? null,
       sceneId: selectedScene?.id ?? null,
     }));
-  }, [selectedStory?.id, selectedChapter?.id, selectedScene?.id]);
+  }, [selectedStory?.id, selectedScene?.id]);
 
   // ── Restauration navigation après refresh
   useEffect(() => {
@@ -812,19 +761,20 @@ export default function App() {
     const raw = localStorage.getItem("sf_nav");
     if (!raw) return;
     try {
-      const { storyId, chapterId, sceneId } = JSON.parse(raw) as {
-        storyId?: string; chapterId?: string; sceneId?: string;
+      // Phase A : chapterId supprimé, scènes chargées directement
+      const { storyId, sceneId } = JSON.parse(raw) as {
+        storyId?: string; sceneId?: string;
       };
       if (!storyId) return;
       const story = stories.find((s) => s.id === storyId);
       if (!story) return;
       Promise.all([
-        api.chapters.list(story.id),
+        api.scenes.list(story.id),
         api.characters.list(story.id),
         api.participants.list(story.id),
-      ]).then(([chapterData, charData, participantData]) => {
+      ]).then(([sceneData, charData, participantData]) => {
         setSelectedStory(story);
-        setChapters(chapterData);
+        setScenes(sceneData);
         setCharacters(charData);
         setParticipants(participantData);
         const mine = participantData.find((p) => p.userId === currentUser.id);
@@ -836,11 +786,7 @@ export default function App() {
         } else if (restoredRole === "VIEWER") {
           api.joinRequests.getMine(story.id).then(setMyJoinRequest).catch(() => {});
         }
-        setActiveTab("chapters");
-        if (!chapterId) return;
-        const chapter = chapterData.find((ch) => ch.id === chapterId);
-        if (!chapter) return;
-        setSelectedChapter(chapter);
+        setActiveTab("scenes");
         if (!sceneId) return;
         api.scenes.get(sceneId).then((scene) => {
           setSelectedScene(scene);
@@ -876,18 +822,19 @@ export default function App() {
     setSelectedStory(story);
     setSelectedChapter(null);
     setSelectedScene(null);
-    setActiveTab("chapters");
+    setActiveTab("scenes");
     setSidebarOpen(false);
     setParticipants([]);
     setMyRole(null);
     setMembershipResolved(false);
     setJoinRequests([]);
     setMyJoinRequest(null);
-    const [chapterData, charData] = await Promise.all([
-      api.chapters.list(story.id),
+    // Phase A : chargement direct des scènes (plus de chapitres)
+    const [sceneData, charData] = await Promise.all([
+      api.scenes.list(story.id),
       api.characters.list(story.id),
     ]);
-    setChapters(chapterData);
+    setScenes(sceneData);
     setCharacters(charData);
     if (currentUser) {
       const participantData = await api.participants.list(story.id);
@@ -907,13 +854,6 @@ export default function App() {
       // Invité : pas de membership à charger
       setMembershipResolved(true);
     }
-  };
-
-  // ── Select chapter → show scene list
-  const handleSelectChapter = (chapter: Chapter) => {
-    setSelectedChapter(chapter);
-    setSelectedScene(null);
-    setShowSceneForm(false);
   };
 
   // ── Select scene → load full scene with contributions
@@ -961,53 +901,21 @@ export default function App() {
     }
   };
 
-  // ── Create chapter
-  const handleCreateChapter = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedStory || !newChapter.title.trim()) return;
-    setCreatingChapter(true);
-    try {
-      const created = await api.chapters.create(selectedStory.id, {
-        title: newChapter.title.trim(),
-        description: newChapter.description.trim() || undefined,
-        order: chapters.length + 1,
-      });
-      // Dédup : le socket event peut être arrivé avant la réponse HTTP
-      setChapters((p) => p.some((c) => c.id === created.id) ? p : [...p, created]);
-      setNewChapter({ title: "", description: "" });
-      setShowChapterForm(false);
-    } catch (err: unknown) {
-      addErrorToast(err);
-    } finally {
-      setCreatingChapter(false);
-    }
-  };
-
   // ── Create scene
   const handleCreateScene = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedChapter || !newScene.title.trim()) return;
+    if (!selectedStory || !newScene.title.trim()) return;
     setCreatingScene(true);
     try {
-      const created = await api.scenes.create(selectedChapter.id, {
+      // Phase A : création directe sous l'histoire (plus de chapitre requis)
+      const created = await api.scenes.create(selectedStory.id, {
         title: newScene.title.trim(),
         description: newScene.description.trim() || undefined,
-        order: (selectedChapter.scenes?.length ?? 0) + 1,
+        order: scenes.length + 1,
       });
       // Dédup : le socket event peut être arrivé avant la réponse HTTP
-      const sceneItem = { id: created.id, title: created.title, order: created.order, status: created.status, _count: { contributions: 0 }, characters: [] };
-      setChapters((p) =>
-        p.map((ch) =>
-          ch.id === selectedChapter.id && !ch.scenes.some((s) => s.id === created.id)
-            ? { ...ch, scenes: [...ch.scenes, sceneItem] }
-            : ch
-        )
-      );
-      setSelectedChapter((ch) =>
-        ch && !ch.scenes.some((s) => s.id === created.id)
-          ? { ...ch, scenes: [...ch.scenes, sceneItem] }
-          : ch
-      );
+      const sceneItem = { id: created.id, title: created.title, order: created.order, status: created.status, storyId: created.storyId, _count: { contributions: 0 }, characters: [] };
+      setScenes((p) => p.some((s) => s.id === created.id) ? p : [...p, sceneItem]);
       setNewScene({ title: "", description: "" });
       setShowSceneForm(false);
     } catch (err: unknown) {
@@ -1150,15 +1058,10 @@ export default function App() {
     try {
       const updated = await api.scenes.update(selectedScene.id, settingsEdit);
       setSelectedScene((s) => s ? { ...s, ...settingsEdit, characters: s.characters, contributions: s.contributions } : s);
-      // Sync status in chapter list
-      setChapters((p) =>
-        p.map((ch) => ({
-          ...ch,
-          scenes: ch.scenes.map((sc) =>
-            sc.id === selectedScene.id ? { ...sc, status: settingsEdit.status } : sc
-          ),
-        }))
-      );
+      // Phase A : sync status dans la liste plate de scènes
+      setScenes((p) => p.map((sc) =>
+        sc.id === selectedScene.id ? { ...sc, status: settingsEdit.status } : sc
+      ));
       setShowSettings(false);
       void updated;
     } catch (err: unknown) {
@@ -1170,50 +1073,17 @@ export default function App() {
 
   // ── Delete scene (OWNER)
   const handleDeleteScene = async () => {
-    if (!selectedScene || !selectedChapter) return;
+    if (!selectedScene) return;
     if (!window.confirm(`Supprimer la scène "${selectedScene.title}" ? Cette action est irréversible.`)) return;
     const deletedTitle = selectedScene.title;
     const deletedId = selectedScene.id;
-    const chapterId = selectedChapter.id;
     await api.scenes.delete(deletedId);
-    // Mise à jour locale (le socket confirmera chez les autres)
-    setChapters((p) => p.map((ch) =>
-      ch.id === chapterId ? { ...ch, scenes: ch.scenes.filter((sc) => sc.id !== deletedId) } : ch
-    ));
-    setSelectedChapter((c) => c ? { ...c, scenes: c.scenes.filter((sc) => sc.id !== deletedId) } : c);
+    // Phase A : mise à jour dans la liste plate (le socket confirmera chez les autres)
+    setScenes((p) => p.filter((sc) => sc.id !== deletedId));
     setSelectedScene(null);
     setToasts((prev) => {
       const id = ++toastIdRef.current;
       return [...prev, { id, type: "scene" as const, message: `Scène "${deletedTitle}" supprimée` }].slice(-5);
-    });
-  };
-
-  // ── Delete chapter (OWNER)
-  const handleDeleteChapter = async (chapterId: string, chapterTitle: string) => {
-    if (!window.confirm(`Supprimer le chapitre "${chapterTitle}" et toutes ses scènes ? Cette action est irréversible.`)) return;
-    await api.chapters.delete(chapterId);
-    setChapters((p) => p.filter((ch) => ch.id !== chapterId));
-    if (selectedChapter?.id === chapterId) setSelectedChapter(null);
-    setSelectedScene(null);
-    setToasts((prev) => {
-      const id = ++toastIdRef.current;
-      return [...prev, { id, type: "scene" as const, message: `Chapitre "${chapterTitle}" supprimé` }].slice(-5);
-    });
-  };
-
-  // ── Toggle chapter status (OWNER)
-  const handleToggleChapterStatus = async () => {
-    if (!selectedChapter) return;
-    const newStatus: ContentStatus = selectedChapter.status === "DONE" ? "ACTIVE" : "DONE";
-    const updated = await api.chapters.updateStatus(selectedChapter.id, newStatus);
-    setSelectedChapter((c) => c ? { ...c, status: updated.status } : c);
-    setChapters((p) => p.map((ch) => ch.id === updated.id ? { ...ch, status: updated.status } : ch));
-    const label = updated.status === "DONE"
-      ? `Chapitre "${selectedChapter.title}" terminé`
-      : `Chapitre "${selectedChapter.title}" réouvert`;
-    setToasts((prev) => {
-      const id = ++toastIdRef.current;
-      return [...prev, { id, type: "scene" as const, message: label }].slice(-5);
     });
   };
 
@@ -1496,20 +1366,15 @@ export default function App() {
     setStoryDesc("");
   };
 
-  const totalContribs = (ch: Chapter) =>
-    (ch.scenes ?? []).reduce((sum, sc) => sum + sc._count.contributions, 0);
-
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   // Breadcrumb context
   const crumbStory = selectedStory?.title ?? null;
-  const crumbChapter = selectedChapter?.title ?? null;
+  // Phase A : niveau chapitre supprimé du breadcrumb
   const crumbScene = selectedScene?.title ?? null;
 
-  // Navigation précédente / suivante dans le chapitre courant
-  const sortedScenes = selectedChapter
-    ? [...selectedChapter.scenes].sort((a, b) => a.order - b.order)
-    : [];
+  // Phase A : navigation précédente / suivante dans la liste plate de scènes
+  const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
   const sceneNavIndex = selectedScene
     ? sortedScenes.findIndex((sc) => sc.id === selectedScene.id)
     : -1;
@@ -1558,28 +1423,21 @@ export default function App() {
               style={s.headerBrand}
               className="app-logo-mark app-header-brand"
               title="Retour à l'accueil"
-              onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}
+              onClick={() => { setSelectedStory(null); setSelectedScene(null); }}
             >
               ✦ StoryForge
             </span>
             <span style={s.headerBrandSep} className="app-header-brand" aria-hidden="true" />
             <div style={s.breadcrumb}>
-              <span style={s.logoMark} className="app-logo-mark" title="Retour à l'accueil" onClick={() => { setSelectedStory(null); setSelectedChapter(null); setSelectedScene(null); }}>
+              <span style={s.logoMark} className="app-logo-mark" title="Retour à l'accueil" onClick={() => { setSelectedStory(null); setSelectedScene(null); }}>
                 ✦ Accueil
               </span>
               {crumbStory && (
                 <span className="app-crumb-mid">
                   <span style={s.crumbSep}>/</span>
-                  <span style={s.crumbItem} className="app-crumb-item" onClick={() => { setSelectedChapter(null); setSelectedScene(null); }}>
-                    {crumbStory}
-                  </span>
-                </span>
-              )}
-              {crumbChapter && (
-                <span className="app-crumb-mid">
-                  <span style={s.crumbSep}>/</span>
+                  {/* Phase A : clic sur l'histoire ramène à la liste des scènes */}
                   <span style={s.crumbItem} className="app-crumb-item" onClick={() => setSelectedScene(null)}>
-                    {crumbChapter}
+                    {crumbStory}
                   </span>
                 </span>
               )}
@@ -1923,7 +1781,7 @@ export default function App() {
                           <div style={s.homepageStoryTitle}>{story.title}</div>
                           {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
                           <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2, display: "flex", gap: "0.75rem" }}>
-                            <span>{story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}</span>
+                            <span>{story._count.scenes} scène{story._count.scenes !== 1 ? "s" : ""}</span>
                             <span>👥 {story._count.participants > 0 ? `${story._count.participants} participant${story._count.participants !== 1 ? "s" : ""}` : "Soyez le premier à participer"}</span>
                           </div>
                         </div>
@@ -2020,7 +1878,7 @@ export default function App() {
                             <div style={s.homepageStoryTitle}>{story.title}</div>
                             {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
                             <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2, display: "flex", gap: "0.75rem" }}>
-                              <span>{story._count.chapters} chapitre{story._count.chapters !== 1 ? "s" : ""}</span>
+                              <span>{story._count.scenes} scène{story._count.scenes !== 1 ? "s" : ""}</span>
                               <span>👥 {story._count.participants > 0 ? `${story._count.participants} participant${story._count.participants !== 1 ? "s" : ""}` : "Soyez le premier à participer"}</span>
                             </div>
                           </div>
@@ -2042,8 +1900,8 @@ export default function App() {
             </div>
           )}
 
-          {/* ── Histoire sélectionnée, pas de chapitre */}
-          {selectedStory && !selectedChapter && !selectedScene && (
+          {/* ── Histoire sélectionnée → liste des scènes (Phase A : plus de niveau chapitre) */}
+          {selectedStory && !selectedScene && (
             <div>
               <div style={s.pageHeader}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
@@ -2109,8 +1967,9 @@ export default function App() {
 
               {/* Tabs */}
               <div style={s.tabs} className="app-tabs">
-                <button className="app-tab" style={{ ...s.tab, ...(activeTab === "chapters" ? s.tabActive : {}) }} onClick={() => setActiveTab("chapters")}>
-                  Chapitres ({chapters.length})
+                {/* Phase A : onglet Scènes remplace Chapitres */}
+                <button className="app-tab" style={{ ...s.tab, ...(activeTab === "scenes" ? s.tabActive : {}) }} onClick={() => setActiveTab("scenes")}>
+                  Scènes ({scenes.length})
                 </button>
                 <button className="app-tab" style={{ ...s.tab, ...(activeTab === "characters" ? s.tabActive : {}) }} onClick={() => setActiveTab("characters")}>
                   Personnages ({characters.length})
@@ -2120,10 +1979,10 @@ export default function App() {
                 </button>
               </div>
 
-              {/* ── Tab Chapitres */}
-              {activeTab === "chapters" && (
+              {/* ── Tab Scènes (Phase A : remplace Chapitres) */}
+              {activeTab === "scenes" && (
                 <div>
-                  {/* Bannière visiteur — toujours stable, isGuest ne flicker pas */}
+                  {/* Bannière visiteur */}
                   {isGuest && (
                     <div style={{ padding: "0.75rem 1rem", background: "rgba(60,60,80,0.07)", border: "1px solid rgba(60,60,80,0.18)", borderRadius: 6, color: C.textMuted, fontSize: "0.88rem", marginBottom: "1.25rem" }}>
                       Vous consultez cette histoire en lecture publique.{" "}
@@ -2159,71 +2018,68 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  {/* Bouton ajout chapitre — visible seulement pour les membres qui peuvent écrire */}
-                  {!membershipPending && canWrite && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showChapterForm ? (
-                    <button style={s.addBtn} onClick={() => setShowChapterForm(true)}>+ Ajouter un chapitre</button>
+                  {/* Bouton ajout scène — visible seulement pour les membres qui peuvent écrire */}
+                  {!membershipPending && canWrite && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showSceneForm ? (
+                    <button style={s.addBtn} onClick={() => setShowSceneForm(true)}>+ Ajouter une scène</button>
                   ) : (
-                    <form onSubmit={handleCreateChapter} style={s.inlineForm}>
-                      <p style={s.formTitle}>Nouveau chapitre</p>
-                      <input style={s.inputDark} placeholder="Titre du chapitre" value={newChapter.title} onChange={(e) => setNewChapter((p) => ({ ...p, title: e.target.value }))} required autoFocus />
-                      <input style={s.inputDark} placeholder="Contexte / description (optionnel)" value={newChapter.description} onChange={(e) => setNewChapter((p) => ({ ...p, description: e.target.value }))} />
+                    <form onSubmit={handleCreateScene} style={s.inlineForm}>
+                      <p style={s.formTitle}>Nouvelle scène</p>
+                      <input style={s.inputDark} placeholder="Titre de la scène" value={newScene.title} onChange={(e) => setNewScene((p) => ({ ...p, title: e.target.value }))} required autoFocus />
+                      <textarea style={s.textareaDark} placeholder="Description / contexte de la scène (optionnel)" value={newScene.description} onChange={(e) => setNewScene((p) => ({ ...p, description: e.target.value }))} rows={3} />
                       <div style={s.row}>
-                        <button style={s.btnAccent} type="submit" disabled={creatingChapter}>{creatingChapter ? "Création…" : "Créer →"}</button>
-                        <button style={s.btnGhost} type="button" onClick={() => setShowChapterForm(false)}>Annuler</button>
+                        <button style={s.btnAccent} type="submit" disabled={creatingScene}>{creatingScene ? "Création…" : "Créer la scène →"}</button>
+                        <button style={s.btnGhost} type="button" onClick={() => setShowSceneForm(false)}>Annuler</button>
                       </div>
                     </form>
                   ))}
 
-                  {chapters.length === 0 && (
+                  {scenes.length === 0 && (
                     <p style={s.mutedCenter}>
-                      {canWrite ? "Aucun chapitre. Commence par en créer un." : "Aucun chapitre pour l'instant."}
+                      {canWrite ? "Aucune scène. Commence par en créer une." : "Aucune scène pour l'instant."}
                     </p>
                   )}
 
-                  <div style={s.chapterList}>
-                    {chapters.map((ch) => {
-                      const chUsers = Array.from(
-                        new Map(
-                          (ch.scenes ?? [])
-                            .flatMap((sc) => allScenePresence[sc.id] ?? [])
-                            .map((u) => [u.userId, u])
-                        ).values()
-                      );
+                  <div style={s.sceneList}>
+                    {sortedScenes.map((sc) => {
+                      const sp = allScenePresence[sc.id] ?? [];
                       return (
-                      <div key={ch.id} style={s.chapterCard} className="chapter-card" onClick={() => handleSelectChapter(ch)}>
-                        <div style={s.chapterCardHeader}>
-                          <div style={s.chapterOrder}>{ch.order}</div>
-                          <div style={s.chapterCardBody}>
-                            <div style={s.chapterTitle}>{ch.title}</div>
-                            {ch.description && <div style={s.chapterDesc}>{ch.description}</div>}
-                            <div style={s.chapterMeta}>
-                              <span>{(ch.scenes ?? []).length} scène{(ch.scenes ?? []).length !== 1 ? "s" : ""}</span>
-                              <span style={s.metaDot}>·</span>
-                              <span>{totalContribs(ch)} contribution{totalContribs(ch) !== 1 ? "s" : ""}</span>
-                              {chUsers.length > 0 && (
-                                <>
-                                  <span style={s.metaDot}>·</span>
-                                  <span style={{ color: "#2e7d32" }}>
-                                    {chUsers.length} présent{chUsers.length !== 1 ? "s" : ""}
-                                  </span>
-                                </>
+                        <div key={sc.id} style={{ ...s.sceneListItem, ...sceneItemStyle(sc.status) }} className="scene-item" onClick={() => handleSelectScene(sc.id)}>
+                          <div style={s.sceneListOrder}>{sc.order}</div>
+                          <div style={s.sceneListBody}>
+                            <div style={s.sceneListTitle}>
+                              {sc.title}
+                              <span style={{ ...s.statusBadge, ...statusBadgeStyle(sc.status) }}>
+                                {statusLabel(sc.status)}
+                              </span>
+                            </div>
+                            <div style={s.sceneListMeta}>
+                              {sc._count.contributions} contribution{sc._count.contributions !== 1 ? "s" : ""}
+                              {sc.characters.length > 0 && (
+                                <span style={s.sceneListChars}>
+                                  {sc.characters.map((c) => displayName(c)).join(" · ")}
+                                </span>
                               )}
                             </div>
                           </div>
+                          {sp.length > 0 && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 6 }}>
+                              <div style={{ display: "flex" }}>
+                                {sp.slice(0, 4).map((u, i) => (
+                                  <div key={u.userId} style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 4 - i }}>
+                                    <PresenceAvatar user={u} size={20} />
+                                  </div>
+                                ))}
+                                {sp.length > 4 && (
+                                  <div style={{ marginLeft: -6, zIndex: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "1px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
+                                    +{sp.length - 4}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           <span style={s.chapterArrow}>→</span>
                         </div>
-                        {(ch.scenes ?? []).length > 0 && (
-                          <div style={s.chapterSceneTags}>
-                            {(ch.scenes ?? []).slice(0, 4).map((sc) => (
-                              <span key={sc.id} style={{ ...s.sceneTag, ...(sc.status === "DONE" ? s.sceneTagClosed : sc.status === "DRAFT" ? s.sceneTagDraft : {}) }}>
-                                {sc.order}. {sc.title}
-                              </span>
-                            ))}
-                            {(ch.scenes ?? []).length > 4 && <span style={s.sceneTagMore}>+{(ch.scenes ?? []).length - 4}</span>}
-                          </div>
-                        )}
-                      </div>
-                    );
+                      );
                     })}
                   </div>
                 </div>
@@ -2540,115 +2396,8 @@ export default function App() {
             </div>
           )}
 
-          {/* ── Chapitre sélectionné → liste des scènes */}
-          {selectedStory && selectedChapter && !selectedScene && (
-            <div>
-              <div style={s.pageHeader}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-                  <button style={s.backBtn} onClick={() => setSelectedChapter(null)}>← Chapitres</button>
-                  {myRole === "OWNER" && (
-                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                      <button
-                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem" }}
-                        onClick={handleToggleChapterStatus}
-                      >
-                        {selectedChapter.status === "DONE" ? "Réouvrir" : "Terminer"}
-                      </button>
-                      <button
-                        style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem", color: C.danger, borderColor: "rgba(139,26,10,0.3)" }}
-                        onClick={() => handleDeleteChapter(selectedChapter.id, selectedChapter.title)}
-                      >
-                        🗑
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem" }}>
-                  <h2 style={{ ...s.pageTitle, margin: 0 }}>{selectedChapter.title}</h2>
-                  {selectedChapter.status === "DONE" && (
-                    <span style={{ ...s.statusBadge, background: "rgba(75,35,5,0.12)", color: C.textMuted, border: `1px solid ${C.border}`, fontSize: "0.7rem" }}>
-                      Terminé
-                    </span>
-                  )}
-                </div>
-                {selectedChapter.description && <p style={s.pageDesc}>{selectedChapter.description}</p>}
-                {(() => {
-                  const n = new Set(
-                    selectedChapter.scenes.flatMap((sc) => (allScenePresence[sc.id] ?? []).map((u) => u.userId))
-                  ).size;
-                  if (n === 0) return null;
-                  return (
-                    <p style={{ margin: "6px 0 0", fontSize: 12, color: "#2e7d32", fontStyle: "italic" }}>
-                      {n} présent{n !== 1 ? "s" : ""} dans ce chapitre
-                    </p>
-                  );
-                })()}
-              </div>
-
-              {canWrite && selectedChapter.status !== "DONE" && (selectedStory as Story & { status?: ContentStatus }).status !== "DONE" && (!showSceneForm ? (
-                <button style={s.addBtn} onClick={() => setShowSceneForm(true)}>+ Ajouter une scène</button>
-              ) : (
-                <form onSubmit={handleCreateScene} style={s.inlineForm}>
-                  <p style={s.formTitle}>Nouvelle scène</p>
-                  <input style={s.inputDark} placeholder="Titre de la scène" value={newScene.title} onChange={(e) => setNewScene((p) => ({ ...p, title: e.target.value }))} required autoFocus />
-                  <textarea style={s.textareaDark} placeholder="Description / contexte de la scène (optionnel)" value={newScene.description} onChange={(e) => setNewScene((p) => ({ ...p, description: e.target.value }))} rows={3} />
-                  <div style={s.row}>
-                    <button style={s.btnAccent} type="submit" disabled={creatingScene}>{creatingScene ? "Création…" : "Créer la scène →"}</button>
-                    <button style={s.btnGhost} type="button" onClick={() => setShowSceneForm(false)}>Annuler</button>
-                  </div>
-                </form>
-              ))}
-
-              {selectedChapter.scenes.length === 0 && <p style={s.mutedCenter}>Aucune scène dans ce chapitre.</p>}
-
-              <div style={s.sceneList}>
-                {selectedChapter.scenes.map((sc) => {
-                  const sp = allScenePresence[sc.id] ?? [];
-                  return (
-                    <div key={sc.id} style={{ ...s.sceneListItem, ...sceneItemStyle(sc.status) }} className="scene-item" onClick={() => handleSelectScene(sc.id)}>
-                      <div style={s.sceneListOrder}>{sc.order}</div>
-                      <div style={s.sceneListBody}>
-                        <div style={s.sceneListTitle}>
-                          {sc.title}
-                          <span style={{ ...s.statusBadge, ...statusBadgeStyle(sc.status) }}>
-                            {statusLabel(sc.status)}
-                          </span>
-                        </div>
-                        <div style={s.sceneListMeta}>
-                          {sc._count.contributions} contribution{sc._count.contributions !== 1 ? "s" : ""}
-                          {sc.characters.length > 0 && (
-                            <span style={s.sceneListChars}>
-                              {sc.characters.map((c) => displayName(c)).join(" · ")}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {sp.length > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 6 }}>
-                          <div style={{ display: "flex" }}>
-                            {sp.slice(0, 4).map((u, i) => (
-                              <div key={u.userId} style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 4 - i }}>
-                                <PresenceAvatar user={u} size={20} />
-                              </div>
-                            ))}
-                            {sp.length > 4 && (
-                              <div style={{ marginLeft: -6, zIndex: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(75,35,5,0.15)", border: "1px solid rgba(255,235,170,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "rgba(75,35,5,0.7)", fontWeight: 600 }}>
-                                +{sp.length - 4}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      <span style={s.chapterArrow}>→</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Scène sélectionnée → vue complète */}
-          {selectedStory && selectedChapter && selectedScene && (
+          {/* ── Scène sélectionnée → vue complète (Phase A : plus besoin de selectedChapter) */}
+          {selectedStory && selectedScene && (
             <div style={s.sceneView}>
 
               {/* Header scène */}

@@ -11,6 +11,19 @@ const charFullSelect = {
   select: { id: true, name: true, nickname: true, avatarUrl: true },
 } as const;
 
+// ── Phase A : source de vérité = storyId ──────────────────────────────────────
+
+export const getScenesByStory = (storyId: string) =>
+  prisma.scene.findMany({
+    where: { storyId },
+    orderBy: { order: "asc" },
+    include: {
+      characters: characterSelect,
+      _count: { select: { contributions: true } },
+    },
+  });
+
+// Conservé en Phase A pour la compatibilité des anciennes routes /chapters/:id/scenes
 export const getScenesByChapter = (chapterId: string) =>
   prisma.scene.findMany({
     where: { chapterId },
@@ -37,12 +50,15 @@ export const getSceneWithContributions = (sceneId: string) =>
     },
   });
 
+// Phase A : createScene prend storyId comme source de vérité
+// chapterId reste optionnel pour la compatibilité avec les scènes existantes
 export const createScene = async (
-  chapterId: string,
-  data: { title: string; description?: string; order?: number }
+  storyId: string,
+  data: { title: string; description?: string; order?: number },
+  chapterId?: string,
 ) => {
   const scene = await prisma.scene.create({
-    data: { ...data, chapterId },
+    data: { ...data, storyId, ...(chapterId ? { chapterId } : {}) },
     include: {
       characters: characterSelect,
       _count: { select: { contributions: true } },
@@ -91,7 +107,7 @@ export const generateSceneImage = async (id: string) => {
   const scene = await prisma.scene.findUniqueOrThrow({
     where: { id },
     include: {
-      chapter: { include: { story: true } },
+      story: true,   // Phase A : via storyId direct
       characters: true,
     },
   });
@@ -102,7 +118,7 @@ export const generateSceneImage = async (id: string) => {
 
   const imageUrl = await generateImage({
     sceneTitle: scene.title,
-    storyTitle: scene.chapter.story.title,
+    storyTitle: scene.story.title,
     content: scene.description,
     characterNames,
   });
@@ -125,10 +141,7 @@ export const suggestSceneIdea = async (
     where: { id: storyId },
     include: {
       characters: true,
-      chapters: {
-        orderBy: { order: "asc" },
-        include: { scenes: { orderBy: { order: "asc" } } },
-      },
+      scenes: { orderBy: { order: "asc" } }, // Phase A : via relation directe
     },
   });
 
@@ -137,8 +150,7 @@ export const suggestSceneIdea = async (
     .filter(Boolean)
     .join(", ");
 
-  const allScenes = story.chapters.flatMap((ch) => ch.scenes);
-  const scenesList = allScenes.map((s) => `"${s.title}"`).join(", ");
+  const scenesList = story.scenes.map((s) => `"${s.title}"`).join(", ");
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const completion = await openai.chat.completions.create({

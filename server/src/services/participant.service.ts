@@ -47,9 +47,10 @@ export const getStoryParticipantUserIds = (storyId: string): Promise<string[]> =
     .then((rows) => rows.map((r) => r.userId));
 
 export const getStoryIdByScene = async (sceneId: string): Promise<string | null> => {
+  // Phase A : lit storyId directement sur Scene
   const scene = await prisma.scene.findUnique({
     where: { id: sceneId },
-    select: { chapter: { select: { storyId: true } } },
+    select: { storyId: true },
   });
-  return scene?.chapter.storyId ?? null;
+  return scene?.storyId ?? null;
 };

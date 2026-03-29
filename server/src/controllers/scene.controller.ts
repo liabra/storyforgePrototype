@@ -34,6 +34,18 @@ async function assertOwner(storyId: string, req: Request, res: Response): Promis
   return true;
 }
 
+// ── Phase A : route principale — GET /stories/:storyId/scenes ─────────────────
+
+export const getByStory = async (req: Request, res: Response) => {
+  const storyId = getSingleParam(req.params.storyId);
+  const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+  if (access === "not_found") return res.status(404).json({ error: "Histoire introuvable" });
+  if (access === "forbidden") return res.status(403).json({ error: "Cette histoire est privée" });
+  const scenes = await sceneService.getScenesByStory(storyId);
+  return res.json(scenes);
+};
+
+// Conservé en Phase A pour les anciens clients — GET /chapters/:chapterId/scenes
 export const getByChapter = async (req: Request, res: Response) => {
   const chapterId = getSingleParam(req.params.chapterId);
   const storyId = await chapterService.getStoryIdByChapter(chapterId);
@@ -54,7 +66,50 @@ export const getOne = async (req: Request, res: Response) => {
   return res.json(scene);
 };
 
+// ── Phase A : route principale — POST /stories/:storyId/scenes ───────────────
+
 export const create = async (req: Request, res: Response) => {
+  const storyId = getSingleParam(req.params.storyId);
+  const { title, description, order } = req.body;
+  if (!title) return res.status(400).json({ error: "title is required" });
+
+  const storyMeta = await storyService.getStoryMeta(storyId);
+  if (!storyMeta) return res.status(404).json({ error: "Histoire introuvable" });
+  if (storyMeta.isArchived) return res.status(409).json({ error: "Cette histoire est archivée." });
+  if (storyMeta.status === ContentStatus.DONE) {
+    return res.status(409).json({ error: "Impossible de créer une scène dans une histoire terminée" });
+  }
+
+  if (!await assertEditorOrOwner(storyId, req, res)) return;
+
+  if (!moderateText(title, "scene.title").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+  if (description && !moderateText(description, "scene.description").isAllowed)
+    return res.status(400).json({ error: MOD_REFUSED });
+
+  const scene = await sceneService.createScene(storyId, { title, description, order });
+  const storyTitle = await storyService.getStoryTitle(storyId) ?? "";
+
+  const io = getIO();
+  // Phase A : payload contient storyId (plus chapterId)
+  io?.to(`story:${storyId}`).emit("scene:new", { storyId, scene });
+  const username = req.user?.email?.split("@")[0] || "Anonyme";
+  void activityService.broadcastActivityToStory(storyId, {
+    type: "scene",
+    storyId,
+    storyTitle,
+    sceneId: scene.id,
+    sceneTitle: scene.title,
+    username,
+    userId: req.user?.id,
+    at: scene.createdAt.toISOString(),
+  });
+
+  return res.status(201).json(scene);
+};
+
+// Conservé en Phase A — POST /chapters/:chapterId/scenes (anciens clients)
+export const createUnderChapter = async (req: Request, res: Response) => {
   const chapterId = getSingleParam(req.params.chapterId);
   const { title, description, order } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
@@ -81,24 +136,24 @@ export const create = async (req: Request, res: Response) => {
   if (description && !moderateText(description, "scene.description").isAllowed)
     return res.status(400).json({ error: MOD_REFUSED });
 
-  const scene = await sceneService.createScene(chapterId, { title, description, order });
-  const storyInfo = await chapterService.getStoryInfoByChapter(chapterId);
-  if (storyInfo) {
-    const io = getIO();
-    io?.to(`story:${storyInfo.id}`).emit("scene:new", { chapterId, scene });
-    // Diffuse le feed d'activité aux participants de l'histoire uniquement
-    const username = req.user?.email?.split("@")[0] || "Anonyme";
-    void activityService.broadcastActivityToStory(storyInfo.id, {
-      type: "scene",
-      storyId: storyInfo.id,
-      storyTitle: storyInfo.title,
-      sceneId: scene.id,
-      sceneTitle: scene.title,
-      username,
-      userId: req.user?.id,
-      at: scene.createdAt.toISOString(),
-    });
-  }
+  // Phase A : storyId est la source de vérité, chapterId conservé pour compatibilité
+  const scene = await sceneService.createScene(storyId, { title, description, order }, chapterId);
+  const storyTitle = await storyService.getStoryTitle(storyId) ?? "";
+
+  const io = getIO();
+  io?.to(`story:${storyId}`).emit("scene:new", { storyId, scene });
+  const username = req.user?.email?.split("@")[0] || "Anonyme";
+  void activityService.broadcastActivityToStory(storyId, {
+    type: "scene",
+    storyId,
+    storyTitle,
+    sceneId: scene.id,
+    sceneTitle: scene.title,
+    username,
+    userId: req.user?.id,
+    at: scene.createdAt.toISOString(),
+  });
+
   return res.status(201).json(scene);
 };
 
@@ -114,10 +169,8 @@ export const update = async (req: Request, res: Response) => {
   if (req.body.description && !moderateText(req.body.description, "scene.description").isAllowed)
     return res.status(400).json({ error: MOD_REFUSED });
 
-  // Gestion du changement de mode (FREE ↔ TURN)
   const updateData = { ...req.body };
   if (updateData.mode === SceneMode.TURN) {
-    // Initialiser le tour sur le premier OWNER+EDITOR (par date d'entrée)
     const eligible = await prisma.storyParticipant.findMany({
       where: { storyId, role: { in: [ParticipantRole.OWNER, ParticipantRole.EDITOR] } },
       orderBy: { createdAt: "asc" },
@@ -131,7 +184,6 @@ export const update = async (req: Request, res: Response) => {
   const scene = await sceneService.updateScene(id, updateData);
   const io = getIO();
 
-  // Émettre turn:update si le mode ou le tour a changé
   if (updateData.mode !== undefined) {
     io?.to(`story:${storyId}`).emit("turn:update", {
       sceneId: id,
@@ -140,11 +192,11 @@ export const update = async (req: Request, res: Response) => {
     });
   }
 
-  // Émettre scene:statusUpdate si le statut a changé
   if (updateData.status !== undefined) {
+    // Phase A : payload contient storyId (plus chapterId)
     io?.to(`story:${storyId}`).emit("scene:statusUpdate", {
       sceneId: id,
-      chapterId: scene.chapterId,
+      storyId,
       status: scene.status,
       sceneTitle: scene.title,
       triggeredBy: req.user?.id,
@@ -157,17 +209,19 @@ export const update = async (req: Request, res: Response) => {
 export const remove = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
 
+  // Phase A : storyId directement sur Scene
   const scene = await prisma.scene.findUnique({
     where: { id },
-    select: { chapterId: true, chapter: { select: { storyId: true } } },
+    select: { storyId: true },
   });
   if (!scene) return res.status(404).json({ error: "Scène introuvable" });
-  const storyId = scene.chapter.storyId;
+  const storyId = scene.storyId;
   if (!await assertOwner(storyId, req, res)) return;
 
   await sceneService.deleteScene(id);
   const io = getIO();
-  io?.to(`story:${storyId}`).emit("scene:delete", { sceneId: id, chapterId: scene.chapterId });
+  // Phase A : payload contient storyId (plus chapterId)
+  io?.to(`story:${storyId}`).emit("scene:delete", { sceneId: id, storyId });
   return res.status(204).send();
 };
 
@@ -195,7 +249,6 @@ export const updateCharacters = async (req: Request, res: Response) => {
 
   const scene = await sceneService.updateSceneCharacters(id, characterIds);
 
-  // Diffuse à tous les participants de l'histoire (vue scène + vue chapitre)
   const io = getIO();
   if (io) {
     io.to(`story:${storyId}`).emit("scene:characters:update", {

@@ -34,7 +34,9 @@ export const create = async (req: Request, res: Response) => {
       status: true,
       mode: true,
       currentTurnUserId: true,
-      chapter: { select: { storyId: true, story: { select: { title: true, status: true, isArchived: true } } } },
+      // Phase A : chemin direct via storyId
+      storyId: true,
+      story: { select: { title: true, status: true, isArchived: true } },
     },
   });
   if (!scene) return res.status(404).json({ error: "Scene not found" });
@@ -45,11 +47,11 @@ export const create = async (req: Request, res: Response) => {
     });
   }
 
-  const storyId = scene.chapter.storyId;
-  if (scene.chapter.story.isArchived) {
+  const storyId = scene.storyId;
+  if (scene.story.isArchived) {
     return res.status(409).json({ error: "Cette histoire est archivée." });
   }
-  if (scene.chapter.story.status === ContentStatus.DONE) {
+  if (scene.story.status === ContentStatus.DONE) {
     return res.status(403).json({ error: "Cette histoire est terminée et n'accepte plus de contributions" });
   }
   if (req.user) {
@@ -75,7 +77,7 @@ export const create = async (req: Request, res: Response) => {
   void activityService.broadcastActivityToStory(storyId, {
     type: "contribution",
     storyId,
-    storyTitle: scene.chapter.story.title,
+    storyTitle: scene.story.title,
     sceneId,
     sceneTitle: scene.title,
     username,
@@ -117,13 +119,14 @@ export const remove = async (req: Request, res: Response) => {
     select: {
       sceneId: true,
       userId: true,
-      scene: { select: { chapter: { select: { storyId: true } } } },
+      // Phase A : storyId directement sur Scene
+      scene: { select: { storyId: true } },
     },
   });
   if (!contrib) return res.status(404).json({ error: "Contribution introuvable" });
 
   // Seul l'auteur ou le OWNER peut supprimer
-  const storyId = contrib.scene.chapter.storyId;
+  const storyId = contrib.scene.storyId;
   const isAuthor = req.user?.id === contrib.userId;
   if (!isAuthor) {
     const role = await participantService.getUserRole(storyId, req.user!.id);
