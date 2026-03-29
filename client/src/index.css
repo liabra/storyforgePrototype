@@ -176,6 +176,11 @@ button:not(:disabled):hover { filter: brightness(0.88); }
   box-shadow: 2px 0 20px rgba(60,30,5,0.22);
 }
 
+/* ── Barre de navigation contextuelle (mobile uniquement) ── */
+.app-ctx-nav {
+  display: none;
+}
+
 /* ── Mobile ── */
 @media (max-width: 720px) {
   .app-sidebar:not(.is-open) {
@@ -286,6 +291,65 @@ button:not(:disabled):hover { filter: brightness(0.88); }
   }
   .app-scene-title {
     font-size: 1.3rem !important;
+  }
+
+  /* Barre de navigation contextuelle */
+  .app-ctx-nav {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    position: sticky;
+    top: 52px;
+    z-index: 90;
+    background: rgba(42, 20, 4, 0.97);
+    border-bottom: 1px solid rgba(185, 148, 55, 0.22);
+    padding: 0.45rem 0.75rem;
+    min-height: 40px;
+  }
+  .app-ctx-back {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid rgba(185, 148, 55, 0.35);
+    border-radius: 5px;
+    color: rgba(220, 185, 100, 0.9);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0.2rem 0.55rem;
+    cursor: pointer;
+  }
+  .app-ctx-back:hover {
+    background: rgba(185, 148, 55, 0.12);
+  }
+  .app-ctx-crumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    overflow: hidden;
+    min-width: 0;
+    font-size: 0.78rem;
+  }
+  .app-ctx-story {
+    color: rgba(185, 148, 55, 0.75);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .app-ctx-story:hover {
+    color: rgba(220, 185, 100, 0.95);
+  }
+  .app-ctx-sep {
+    color: rgba(185, 148, 55, 0.4);
+    flex-shrink: 0;
+  }
+  .app-ctx-current {
+    color: rgba(230, 200, 140, 0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
   }
 
 }

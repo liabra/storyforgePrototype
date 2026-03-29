@@ -1546,6 +1546,38 @@ export default function App() {
         </div>
       </header>
 
+      {/* ── Barre de navigation contextuelle — mobile uniquement */}
+      {selectedStory && (
+        <div className="app-ctx-nav">
+          <button
+            className="app-ctx-back"
+            onClick={() => selectedScene ? setSelectedScene(null) : setSelectedStory(null)}
+            aria-label="Retour"
+          >
+            ←
+          </button>
+          <div className="app-ctx-crumbs">
+            {selectedScene ? (
+              <>
+                <span className="app-ctx-story" onClick={() => setSelectedScene(null)}>
+                  {selectedStory.title}
+                </span>
+                <span className="app-ctx-sep">/</span>
+                <span className="app-ctx-current">{selectedScene.title}</span>
+              </>
+            ) : (
+              <>
+                <span className="app-ctx-story" onClick={() => setSelectedStory(null)}>
+                  Histoires
+                </span>
+                <span className="app-ctx-sep">/</span>
+                <span className="app-ctx-current">{selectedStory.title}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ══ Auth panel */}
       {authView !== null && (
         <>
