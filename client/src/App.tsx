@@ -501,17 +501,12 @@ export default function App() {
           _count: { contributions: (s._count?.contributions ?? 0) + 1 },
         };
       });
-      // Synchronise le compteur dans la liste des scènes du chapitre
-      setChapters((p) =>
-        p.map((ch) => ({
-          ...ch,
-          scenes: ch.scenes.map((sc) =>
-            sc.id === contrib.sceneId
-              ? { ...sc, _count: { contributions: sc._count.contributions + 1 } }
-              : sc
-          ),
-        }))
-      );
+      // Phase A : sync du compteur dans la liste plate de scènes
+      setScenes((p) => p.map((sc) =>
+        sc.id === contrib.sceneId
+          ? { ...sc, _count: { contributions: (sc._count?.contributions ?? 0) + 1 } }
+          : sc
+      ));
     };
 
     const onTypingStart = ({ userId, username }: { userId: string; username: string }) => {
@@ -586,7 +581,7 @@ export default function App() {
     socket.emit("story:join", { storyId: selectedStory.id });
 
     // Phase A : chapter:new supprimé, plus de chapitres dans le state
-    const onSceneNew = ({ scene }: { storyId: string; scene: ChapterSceneItem }) => {
+    const onSceneNew = ({ scene }: { storyId: string; scene: Scene }) => {
       // Dédup : la réponse HTTP peut être arrivée avant le socket
       setScenes((prev) => prev.some((s) => s.id === scene.id) ? prev : [...prev, scene]);
     };
@@ -914,7 +909,7 @@ export default function App() {
         order: scenes.length + 1,
       });
       // Dédup : le socket event peut être arrivé avant la réponse HTTP
-      const sceneItem = { id: created.id, title: created.title, order: created.order, status: created.status, storyId: created.storyId, _count: { contributions: 0 }, characters: [] };
+      const sceneItem: Scene = { ...created, _count: { contributions: 0 }, contributions: [] };
       setScenes((p) => p.some((s) => s.id === created.id) ? p : [...p, sceneItem]);
       setNewScene({ title: "", description: "" });
       setShowSceneForm(false);
@@ -2053,7 +2048,7 @@ export default function App() {
                               </span>
                             </div>
                             <div style={s.sceneListMeta}>
-                              {sc._count.contributions} contribution{sc._count.contributions !== 1 ? "s" : ""}
+                              {sc._count?.contributions ?? 0} contribution{(sc._count?.contributions ?? 0) !== 1 ? "s" : ""}
                               {sc.characters.length > 0 && (
                                 <span style={s.sceneListChars}>
                                   {sc.characters.map((c) => displayName(c)).join(" · ")}
@@ -2425,9 +2420,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div style={s.sceneChapterLabel}>
-                  Chapitre {selectedChapter.order} — {selectedChapter.title}
-                </div>
+                {/* Phase A : label chapitre supprimé */}
                 <div style={s.sceneViewTitleRow}>
                   <h2 style={s.sceneViewTitle} className="app-scene-title">{selectedScene.title}</h2>
                   <span style={{ ...s.statusBadge, ...statusBadgeStyle(selectedScene.status) }}>
