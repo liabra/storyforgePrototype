@@ -21,6 +21,8 @@ Ton rôle est d'enrichir la scène sans jamais écrire à la place des joueurs.
 
 Règles absolues :
 - Tu produis exactement 1 à 2 phrases, jamais plus, jamais moins.
+- Ta réponse doit toujours être une phrase complète et grammaticalement terminée, se terminant obligatoirement par un signe de ponctuation (. ! ?).
+- Chaque intervention doit apporter au moins l'un de ces éléments : un élément nouveau dans la scène, une tension narrative, ou une information inattendue. Les observations vagues ou purement décoratives sont interdites.
 - Tu ne fais jamais parler ou agir un personnage de façon contradictoire avec ce qui a déjà été établi.
 - Tu respectes le ton dominant de la scène : si elle est légère ou absurde, tu restes dans ce registre ; si elle est tendue ou dramatique, tu amplifies sans brutaliser.
 - Tu ne résous jamais l'histoire : tu ouvres, tu suggères, tu relances.
@@ -42,6 +44,43 @@ const MODE_INSTRUCTION: Record<GmMode, string> = {
   ending_hint:
     "Suggère discrètement qu'une fin de scène semble proche, en respectant l'atmosphère et en laissant la porte ouverte.",
 };
+
+// ── Anti-spam cooldown ────────────────────────────────────────────────────────
+
+const GM_COOLDOWN_MS = 10_000; // 10 secondes minimum entre deux appels
+
+interface CooldownEntry {
+  lastCallAt: number;
+  contribCountAtLastCall: number;
+}
+
+const cooldownMap = new Map<string, CooldownEntry>();
+
+/**
+ * Vérifie si un appel GM est autorisé pour cette scène.
+ * Retourne null si OK, ou un message d'erreur si le cooldown est actif
+ * ou si aucune nouvelle contribution n'a été ajoutée depuis le dernier appel.
+ */
+function checkCooldown(sceneId: string, currentContribCount: number): string | null {
+  const entry = cooldownMap.get(sceneId);
+  if (!entry) return null;
+
+  const elapsed = Date.now() - entry.lastCallAt;
+  if (elapsed < GM_COOLDOWN_MS) {
+    const remaining = Math.ceil((GM_COOLDOWN_MS - elapsed) / 1000);
+    return `Le maître du jeu se repose encore… (${remaining}s)`;
+  }
+
+  if (currentContribCount <= entry.contribCountAtLastCall) {
+    return "Le maître du jeu attend que la scène progresse avant d'intervenir à nouveau.";
+  }
+
+  return null;
+}
+
+function recordCooldown(sceneId: string, contribCount: number): void {
+  cooldownMap.set(sceneId, { lastCallAt: Date.now(), contribCountAtLastCall: contribCount });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -95,6 +134,16 @@ function hasEnoughNarrativeMatter(
 export const WEAK_CONTEXT_MSG =
   "Le maître du jeu a besoin d'un peu plus de matière pour intervenir.";
 
+const GM_FALLBACK = "Un silence étrange s'installe…";
+
+/**
+ * Valide que la réponse est une phrase grammaticalement complète.
+ * Règle : doit se terminer par . ! ou ? (en ignorant espaces/guillemets finaux).
+ */
+function isResponseComplete(text: string): boolean {
+  return /[.!?]["""'»]?\s*$/.test(text.trim());
+}
+
 // ── Fonction principale ────────────────────────────────────────────────────────
 
 export async function generateGmSuggestion(
@@ -127,6 +176,12 @@ export async function generateGmSuggestion(
   if (!hasEnoughNarrativeMatter(scene.description ?? null, scene.contributions)) {
     console.log(`[ai.service] matière narrative insuffisante — appel Gemini annulé`);
     return WEAK_CONTEXT_MSG;
+  }
+
+  const cooldownError = checkCooldown(sceneId, scene.contributions.length);
+  if (cooldownError) {
+    console.log(`[ai.service] cooldown actif — ${cooldownError}`);
+    return cooldownError;
   }
 
   // Contributions en ordre chronologique (les plus récentes en dernier)
@@ -185,7 +240,7 @@ export async function generateGmSuggestion(
     model: "gemini-2.5-flash",
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
-      maxOutputTokens: 120,
+      maxOutputTokens: 180,
       temperature: 0.85,
     },
   });
@@ -194,7 +249,14 @@ export async function generateGmSuggestion(
   const raw = result.response.text().trim();
   const text = truncateToTwoSentences(raw);
 
+  recordCooldown(sceneId, scene.contributions.length);
+
+  if (!isResponseComplete(text)) {
+    console.warn(`[ai.service] réponse tronquée rejetée : "${text.slice(0, 60)}…"`);
+    return GM_FALLBACK;
+  }
+
   console.log(`[ai.service] GM (${mode}) scène ${sceneId} : ${text.slice(0, 80)}…`);
 
-  return text || "Le destin hésite encore…";
+  return text || GM_FALLBACK;
 }
