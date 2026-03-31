@@ -122,3 +122,40 @@ export async function getWorldSeed(genre?: string): Promise<string | null> {
     return null;
   }
 }
+
+// ── Données pour la carte du monde ────────────────────────────────────────────
+
+export async function getWorldMapData() {
+  const fragments = await prisma.worldFragment.findMany({
+    orderBy: { weight: "desc" },
+    select: {
+      id: true,
+      type: true,
+      genre: true,
+      label: true,
+      weight: true,
+      createdAt: true,
+    },
+  });
+
+  const stats = {
+    total: fragments.length,
+    byType: {
+      OBJECT:    fragments.filter(f => f.type === "OBJECT").length,
+      PLACE:     fragments.filter(f => f.type === "PLACE").length,
+      PHRASE:    fragments.filter(f => f.type === "PHRASE").length,
+      CHARACTER: fragments.filter(f => f.type === "CHARACTER").length,
+    },
+    byGenre: {
+      FANTASY:      fragments.filter(f => f.genre === "FANTASY").length,
+      HORROR:       fragments.filter(f => f.genre === "HORROR").length,
+      CONTEMPORARY: fragments.filter(f => f.genre === "CONTEMPORARY").length,
+      SF:           fragments.filter(f => f.genre === "SF").length,
+      ROMANCE:      fragments.filter(f => f.genre === "ROMANCE").length,
+      MYSTERY:      fragments.filter(f => f.genre === "MYSTERY").length,
+      MIXED:        fragments.filter(f => f.genre === "MIXED").length,
+    },
+  };
+
+  return { fragments, stats };
+}

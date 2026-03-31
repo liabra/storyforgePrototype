@@ -33,7 +33,10 @@ TypeScript, React, Node.js, Prisma/PostgreSQL, Socket.IO, Gemini Flash 2.5, Rail
 - ✅ Types Express — express.d.ts sans import Prisma (id, email, isAdmin?, isBanned?)
 - ✅ Config client — VITE_API_URL + BASE URL corrigée dans api.ts
 - 🔜 Carte du monde — visualisation World Memory
-- 🔜 Système de compte — email optionnel + code de récupération
+- ✅ Système de compte — email optionnel + pseudonyme + code de récupération 12 mots
+
+## Modèles Prisma modifiés
+- User : email nullable, pseudonym?, recoveryCodeHash?
 
 ## Modèles Prisma ajoutés
 - WorldFragment (id, type, genre, label, weight, sourceStoryId, createdAt, updatedAt)

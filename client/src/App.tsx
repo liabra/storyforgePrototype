@@ -30,6 +30,7 @@ import { ToastContainer } from "./Toast";
 import type { ToastItem } from "./Toast";
 import type { AppNotification } from "./api";
 import SceneReader from "./SceneReader";
+import WorldMap from "./WorldMap";
 import { ReportModal } from "./ReportModal";
 import AdminPage from "./AdminPage";
 
@@ -240,6 +241,8 @@ export default function App() {
   const [generatingImage, setGeneratingImage] = useState(false);
   const [spectatorView, setSpectatorView] = useState(false);
   const [isReading, setIsReading] = useState(false);
+
+  const [showWorldMap, setShowWorldMap] = useState(false);
 
   // Scene settings
   const [showSettings, setShowSettings] = useState(false);
@@ -1514,6 +1517,25 @@ export default function App() {
             </div>
           </div>
           <div style={s.headerRight} className="app-header-right">
+            {currentUser && (
+              <button
+                onClick={() => setShowWorldMap(true)}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(75,35,5,0.25)",
+                  borderRadius: 4,
+                  padding: "0.3rem 0.7rem",
+                  color: C.textMuted,
+                  fontSize: "0.72rem",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  letterSpacing: "0.08em",
+                }}
+                title="Carte du monde"
+              >
+                🌍
+              </button>
+            )}
             {currentUser?.isAdmin && (
               <button
                 style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem", color: "#92400e", borderColor: "rgba(146,64,14,0.35)" }}
@@ -3074,6 +3096,8 @@ export default function App() {
           onClose={() => setIsReading(false)}
         />
       )}
+
+      {showWorldMap && <WorldMap onClose={() => setShowWorldMap(false)} />}
     </div>
   );
 }

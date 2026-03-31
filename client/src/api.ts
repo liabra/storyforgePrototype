@@ -525,4 +525,7 @@ export const api = {
         body: JSON.stringify({ sceneId, mode }),
       }),
   },
+  world: {
+    getMap: () => request<{ fragments: unknown[]; stats: unknown }>("/world/map"),
+  },
 };
