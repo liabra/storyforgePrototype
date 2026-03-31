@@ -23,7 +23,7 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
       select: {
         id: true,
         createdAt: true,
-        user: { select: { displayName: true, email: true } },
+        user: { select: { displayName: true, email: true, pseudonym: true } },
         character: { select: { name: true, nickname: true } },
         scene: {
           select: {
@@ -56,7 +56,7 @@ export async function getRecentActivity(userId: string): Promise<ActivityItem[]>
       sceneTitle: c.scene.title,
       username: c.character
         ? (c.character.name || c.character.nickname || "Personnage")
-        : (c.user?.displayName || c.user?.email?.split("@")[0] || "Anonyme"),
+        : (c.user?.displayName || c.user?.email?.split("@")[0] || (c.user as any)?.pseudonym || "Joueur"),
       at: c.createdAt.toISOString(),
     })),
     ...scenes.map((s) => ({

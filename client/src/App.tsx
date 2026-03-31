@@ -1955,29 +1955,165 @@ export default function App() {
 
           {/* ── Aucune histoire sélectionnée — visiteur non connecté */}
           {!selectedStory && !currentUser && (
-            <div style={s.homepage}>
-              <div style={s.homepageHead}>
-                <div style={s.emptyOrn} className="empty-orn">✦</div>
-                <p style={s.emptyTitle}>StoryForge</p>
-                <p style={{ ...s.emptyText, marginTop: "0.5rem" }}>
-                  Écriture collaborative en temps réel.<br />
-                  <button style={{ background: "none", border: "none", color: C.accent, textDecoration: "underline", cursor: "pointer", fontSize: "inherit", padding: 0 }} onClick={() => setAuthView("login")}>Se connecter</button>
-                  {" "}pour créer ou rejoindre une histoire.
-                </p>
+            <div style={{
+              maxWidth: 680,
+              margin: "0 auto",
+              padding: "4rem 2rem 6rem",
+              display: "flex",
+              flexDirection: "column" as const,
+              alignItems: "center",
+              gap: "0",
+            }}>
+              {/* Logo */}
+              <div style={{
+                fontSize: "2rem",
+                marginBottom: "1rem",
+                opacity: 0.7,
+              }}>✦</div>
+              <h1 style={{
+                fontFamily: C.display,
+                fontSize: "clamp(2rem, 5vw, 3rem)",
+                fontWeight: 600,
+                letterSpacing: "0.08em",
+                color: C.text,
+                margin: "0 0 0.5rem",
+                textAlign: "center" as const,
+              }}>
+                STORYFORGE
+              </h1>
+              <p style={{
+                fontFamily: C.serif,
+                fontStyle: "italic",
+                fontSize: "1.1rem",
+                color: C.textSub,
+                margin: "0 0 3rem",
+                textAlign: "center" as const,
+              }}>
+                Un monde narratif. Un ami discret.
+              </p>
+
+              {/* Manifeste */}
+              <div style={{
+                width: "100%",
+                display: "flex",
+                flexDirection: "column" as const,
+                gap: "1.5rem",
+                marginBottom: "3rem",
+              }}>
+                {[
+                  {
+                    icon: "🎭",
+                    title: "Vous écrivez. L'IA observe.",
+                    desc: "StoryForge n'écrit pas à votre place. Un Maître du Jeu invisible lit votre histoire et intervient au bon moment — un bruit, une tension, un retournement. Jamais intrusif. Toujours au service de votre récit.",
+                  },
+                  {
+                    icon: "🌍",
+                    title: "Chaque histoire construit un monde.",
+                    desc: "Ce que vous inventez ce soir — un lieu, un objet, une phrase — entre silencieusement dans la mémoire du monde. D'autres joueurs, ailleurs, le retrouveront un jour sans savoir d'où ça vient.",
+                  },
+                  {
+                    icon: "🔑",
+                    title: "StoryForge ne sait pas qui vous êtes.",
+                    desc: "Pas d'email obligatoire. Pas de tracking. Pas de pub. Un pseudonyme suffit pour commencer. Vos histoires vous appartiennent — et rien d'autre ne nous intéresse.",
+                  },
+                ].map((item) => (
+                  <div key={item.title} style={{
+                    display: "flex",
+                    gap: "1rem",
+                    alignItems: "flex-start",
+                    padding: "1.1rem 1.3rem",
+                    background: "rgba(75,35,5,0.04)",
+                    border: "1px solid rgba(75,35,5,0.1)",
+                    borderRadius: 8,
+                  }}>
+                    <span style={{ fontSize: "1.4rem", flexShrink: 0, lineHeight: 1.4 }}>{item.icon}</span>
+                    <div>
+                      <p style={{
+                        fontFamily: C.ui,
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase" as const,
+                        color: C.text,
+                        margin: "0 0 0.35rem",
+                      }}>
+                        {item.title}
+                      </p>
+                      <p style={{
+                        fontFamily: C.serif,
+                        fontStyle: "italic",
+                        fontSize: "0.92rem",
+                        color: C.textSub,
+                        margin: 0,
+                        lineHeight: 1.65,
+                      }}>
+                        {item.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              {/* CTA */}
+              <div style={{
+                display: "flex",
+                gap: "0.75rem",
+                flexWrap: "wrap" as const,
+                justifyContent: "center" as const,
+                marginBottom: "2rem",
+              }}>
+                <button
+                  style={{
+                    ...s.btnAccent,
+                    fontSize: "0.85rem",
+                    padding: "0.65rem 1.6rem",
+                    letterSpacing: "0.1em",
+                  }}
+                  onClick={() => setAuthView("register")}
+                >
+                  Commencer une histoire →
+                </button>
+                <button
+                  style={{
+                    ...s.btnGhost,
+                    fontSize: "0.85rem",
+                    padding: "0.65rem 1.4rem",
+                  }}
+                  onClick={() => setAuthView("login")}
+                >
+                  Se connecter
+                </button>
+              </div>
+
+              {/* Histoires publiques */}
               {publicStories.length > 0 && (
-                <div style={s.homepageSection}>
-                  <p style={s.homepageSectionLabel}>Histoires publiques</p>
-                  <div>
-                    {publicStories.map((story) => (
-                      <div key={story.id} style={s.homepageStoryRow} className="story-item" onClick={() => handleSelectStory(story as unknown as Story)}>
+                <div style={{ width: "100%" }}>
+                  <p style={{
+                    fontFamily: C.ui,
+                    fontSize: "0.68rem",
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase" as const,
+                    color: C.textMuted,
+                    margin: "0 0 0.75rem",
+                    textAlign: "center" as const,
+                  }}>
+                    Histoires en cours
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column" as const, gap: "0.5rem" }}>
+                    {publicStories.slice(0, 3).map((story) => (
+                      <div
+                        key={story.id}
+                        style={{
+                          ...s.homepageStoryRow,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => handleSelectStory(story as unknown as Story)}
+                      >
                         <div style={{ flex: 1 }}>
                           <div style={s.homepageStoryTitle}>{story.title}</div>
-                          {story.description && <div style={s.homepageStoryDesc}>{story.description}</div>}
-                          <div style={{ fontSize: "0.75rem", color: C.textMuted, marginTop: 2, display: "flex", gap: "0.75rem" }}>
-                            <span>{story._count.scenes} scène{story._count.scenes !== 1 ? "s" : ""}</span>
-                            <span>👥 {story._count.participants > 0 ? `${story._count.participants} participant${story._count.participants !== 1 ? "s" : ""}` : "Soyez le premier à participer"}</span>
-                          </div>
+                          {story.description && (
+                            <div style={s.homepageStoryDesc}>{story.description}</div>
+                          )}
                         </div>
                         <span style={{ ...s.chapterArrow, marginTop: 0 }}>→</span>
                       </div>

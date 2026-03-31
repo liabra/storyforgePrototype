@@ -33,7 +33,9 @@ TypeScript, React, Node.js, Prisma/PostgreSQL, Socket.IO, Gemini Flash 2.5, Rail
 - ✅ Types Express — express.d.ts sans import Prisma (id, email, isAdmin?, isBanned?)
 - ✅ Config client — VITE_API_URL + BASE URL corrigée dans api.ts
 - ✅ Carte du monde — SVG interactif, filtres genre/type, accessible connectés uniquement
+- ✅ World Seed — injection fragment monde au démarrage de chaque scène (gm_intervention)
 - ✅ Système de compte — email optionnel + pseudonyme + code de récupération 12 mots
+- ✅ Landing page visiteur — manifeste en 3 blocs (MJ / monde / vie privée) + CTA register/login + histoires publiques (max 3)
 
 ## Modèles Prisma modifiés
 - User : email nullable, pseudonym?, recoveryCodeHash?

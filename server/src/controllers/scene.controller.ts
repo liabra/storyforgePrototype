@@ -94,7 +94,7 @@ export const create = async (req: Request, res: Response) => {
   const io = getIO();
   // Phase A : payload contient storyId (plus chapterId)
   io?.to(`story:${storyId}`).emit("scene:new", { storyId, scene });
-  const username = req.user?.email?.split("@")[0] || "Anonyme";
+  const username = req.user?.email?.split("@")[0] ?? req.user?.pseudonym ?? "Joueur";
   void activityService.broadcastActivityToStory(storyId, {
     type: "scene",
     storyId,
@@ -153,7 +153,7 @@ export const createUnderChapter = async (req: Request, res: Response) => {
 
   const io = getIO();
   io?.to(`story:${storyId}`).emit("scene:new", { storyId, scene });
-  const username = req.user?.email?.split("@")[0] || "Anonyme";
+  const username = req.user?.email?.split("@")[0] ?? req.user?.pseudonym ?? "Joueur";
   void activityService.broadcastActivityToStory(storyId, {
     type: "scene",
     storyId,

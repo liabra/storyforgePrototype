@@ -3,7 +3,8 @@ declare global {
     interface Request {
       user?: {
         id: string;
-        email: string;
+        email?: string | null;
+        pseudonym?: string | null;
         isAdmin?: boolean;
         isBanned?: boolean;
       };
