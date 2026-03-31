@@ -171,6 +171,15 @@ function hasEnoughNarrativeMatter(
   return false;
 }
 
+export function selectGmMode(contribCount: number): GmMode {
+  const phase = narrativePhase(contribCount);
+  if (phase === "Climax / Dénouement") return "ending_hint";
+  if (phase === "Développement") {
+    return Math.random() < 0.7 ? "twist" : "nudge";
+  }
+  return Math.random() < 0.5 ? "twist" : "nudge";
+}
+
 export const WEAK_CONTEXT_MSG =
   "Le maître du jeu a besoin d'un peu plus de matière pour intervenir.";
 

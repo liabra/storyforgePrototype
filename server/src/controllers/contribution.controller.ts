@@ -4,6 +4,7 @@ import * as participantService from "../services/participant.service";
 import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 import prisma from "../prisma/client";
+import { onNewContribution } from "../services/gm.scheduler";
 import { ContentStatus, SceneMode, SceneStatus, ParticipantRole } from "../generated/prisma/client";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
@@ -73,6 +74,13 @@ export const create = async (req: Request, res: Response) => {
 
   const io = getIO();
   io?.to(`scene:${sceneId}`).emit("contribution:new", contribution);
+
+  // ── Maître du jeu automatique
+  const contribCount = await prisma.contribution.count({ where: { sceneId } });
+  void onNewContribution(sceneId, contribCount, (sid, text) => {
+    io?.to(`scene:${sid}`).emit("gm_intervention", { text });
+  });
+
   const username = req.user?.email?.split("@")[0] || "Anonyme";
   void activityService.broadcastActivityToStory(storyId, {
     type: "contribution",

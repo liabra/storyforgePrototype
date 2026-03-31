@@ -92,6 +92,65 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function ensureAppStyles() {
+  if (typeof document === "undefined" || document.getElementById("app-anim")) return;
+  const el = document.createElement("style");
+  el.id = "app-anim";
+  el.textContent = `
+    @keyframes sf-flicker {
+      0%, 100% { transform: scaleX(1) scaleY(1); opacity: 1; }
+      50% { transform: scaleX(0.85) scaleY(0.93); opacity: 0.8; }
+    }
+  `;
+  document.head.appendChild(el);
+}
+
+function FlameIndicator({ contribCount }: { contribCount: number }) {
+  const MAX_CONTRIBS = 35;
+  const progress = Math.min(contribCount / MAX_CONTRIBS, 1);
+  const intensity = 1 - progress;
+
+  const h1 = Math.round(30 * intensity);
+  const h2 = Math.round(45 * intensity);
+  const baseOpacity = 0.3 + intensity * 0.65;
+
+  const flames = [
+    { height: Math.round(10 + intensity * 22), delay: "0s" },
+    { height: Math.round(14 + intensity * 30), delay: "0.35s" },
+    { height: Math.round(11 + intensity * 24), delay: "0.7s" },
+  ];
+
+  return (
+    <div
+      title={`Histoire : ${Math.round(progress * 100)}% accomplie`}
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 4,
+        height: 48,
+        paddingBottom: 2,
+        flexShrink: 0,
+        opacity: baseOpacity,
+        transition: "opacity 1.5s ease",
+      }}
+    >
+      {flames.map((f, i) => (
+        <div
+          key={i}
+          style={{
+            width: 9,
+            height: f.height,
+            borderRadius: "50% 50% 30% 30%",
+            background: `linear-gradient(to top, hsl(${h1},90%,45%), hsl(${h2},95%,68%))`,
+            animation: `sf-flicker 1.8s ease-in-out ${f.delay} infinite`,
+            transition: "height 2s ease, opacity 2s ease",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function applyVisibility(contributions: Contribution[], mode: string, count: number): Contribution[] {
   if (mode === "all") return contributions;
   if (mode === "none") return [];
@@ -150,6 +209,8 @@ function typingLabel(users: TypingUser[]): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  ensureAppStyles();
+
   // Navigation
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   // Phase A : selectedChapter conservé en state mais n'est plus utilisé pour la navigation principale
@@ -204,7 +265,6 @@ export default function App() {
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestingIdea, setSuggestingIdea] = useState(false);
   const [gmSuggestion, setGmSuggestion] = useState<string | null>(null);
-  const [loadingGm, setLoadingGm] = useState(false);
 
   // Characters
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -545,11 +605,16 @@ export default function App() {
       });
     };
 
+    const onGmIntervention = ({ text }: { text: string }) => {
+      setGmSuggestion(text);
+    };
+
     socket.on("contribution:new", onContribNew);
     socket.on("contribution:delete", onContribDelete);
     socket.on("contribution:update", onContribUpdate);
     socket.on("typing:start", onTypingStart);
     socket.on("typing:stop", onTypingStop);
+    socket.on("gm_intervention", onGmIntervention);
 
     return () => {
       socket.emit("presence:scene:leave", { sceneId: selectedScene.id });
@@ -559,6 +624,7 @@ export default function App() {
       socket.off("contribution:update", onContribUpdate);
       socket.off("typing:start", onTypingStart);
       socket.off("typing:stop", onTypingStop);
+      socket.off("gm_intervention", onGmIntervention);
       // Nettoyer les timers d'auto-expiration
       Object.values(typingTimersRef.current).forEach(clearTimeout);
       typingTimersRef.current = {};
@@ -1024,20 +1090,6 @@ export default function App() {
     }
   };
 
-  // ── Maître du jeu IA
-  const handleSceneMaster = async () => {
-    if (!selectedScene) return;
-    setLoadingGm(true);
-    setGmSuggestion(null);
-    try {
-      const { suggestion } = await api.ai.sceneMaster(selectedScene.id, "twist");
-      setGmSuggestion(suggestion);
-    } catch (err: unknown) {
-      addErrorToast(err);
-    } finally {
-      setLoadingGm(false);
-    }
-  };
 
   // ── Generate image
   const handleGenerateImage = async () => {
@@ -2472,9 +2524,14 @@ export default function App() {
                 {/* Phase A : label chapitre supprimé */}
                 <div style={s.sceneViewTitleRow}>
                   <h2 style={s.sceneViewTitle} className="app-scene-title">{selectedScene.title}</h2>
-                  <span style={{ ...s.statusBadge, ...statusBadgeStyle(selectedScene.status) }}>
-                    {statusLabel(selectedScene.status)}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+                    {selectedScene.status === "ACTIVE" && (
+                      <FlameIndicator contribCount={(selectedScene.contributions ?? []).length} />
+                    )}
+                    <span style={{ ...s.statusBadge, ...statusBadgeStyle(selectedScene.status) }}>
+                      {statusLabel(selectedScene.status)}
+                    </span>
+                  </div>
                 </div>
                 {selectedScene.description && <p style={s.sceneViewDesc}>{selectedScene.description}</p>}
 
@@ -2874,9 +2931,6 @@ export default function App() {
                       </button>
                       <button style={s.btnGhost} onClick={handleSuggestIdea} disabled={suggestingIdea}>
                         {suggestingIdea ? "…" : "💡 Idée"}
-                      </button>
-                      <button style={s.btnGhost} onClick={handleSceneMaster} disabled={loadingGm} title="Demander un rebondissement au maître du jeu IA">
-                        {loadingGm ? "…" : "🎭 Rebondissement"}
                       </button>
                       <button style={s.btnGhost} onClick={handleGenerateImage} disabled={generatingImage}>
                         {generatingImage ? "…" : "🎨 Illustrer"}
