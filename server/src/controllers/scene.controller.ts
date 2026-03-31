@@ -6,7 +6,7 @@ import * as activityService from "../services/activity.service";
 import * as storyService from "../services/story.service";
 import { getIO } from "../socket";
 import { ContentStatus, ParticipantRole, SceneMode } from "../generated/prisma/client";
-import { extractFragmentsFromStory } from "../services/world.service";
+import { extractFragmentsFromStory, getWorldSeed } from "../services/world.service";
 import prisma from "../prisma/client";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
@@ -106,6 +106,16 @@ export const create = async (req: Request, res: Response) => {
     at: scene.createdAt.toISOString(),
   });
 
+  // Injection World Seed — fire and forget
+  getWorldSeed().then((seed) => {
+    if (seed) {
+      const io = getIO();
+      io?.to(`story:${storyId}`).emit("gm_intervention", {
+        text: seed,
+      });
+    }
+  }).catch(console.error);
+
   return res.status(201).json(scene);
 };
 
@@ -154,6 +164,16 @@ export const createUnderChapter = async (req: Request, res: Response) => {
     userId: req.user?.id,
     at: scene.createdAt.toISOString(),
   });
+
+  // Injection World Seed — fire and forget
+  getWorldSeed().then((seed) => {
+    if (seed) {
+      const io = getIO();
+      io?.to(`story:${storyId}`).emit("gm_intervention", {
+        text: seed,
+      });
+    }
+  }).catch(console.error);
 
   return res.status(201).json(scene);
 };
