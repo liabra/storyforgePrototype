@@ -101,7 +101,7 @@ export interface Character {
   id: string;
   storyId: string;
   userId?: string | null;
-  user?: { id: string; displayName?: string | null; email: string } | null;
+  user?: { id: string; displayName?: string | null; email?: string | null; pseudonym?: string | null } | null;
   name?: string;
   nickname?: string;
   role?: string;
