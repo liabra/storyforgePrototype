@@ -291,11 +291,15 @@ export default function App() {
   // Auth
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authView, setAuthView] = useState<"login" | "register" | null>(null);
+  const [authView, setAuthView] = useState<"login" | "register" | "recover" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authPseudonym, setAuthPseudonym] = useState("");
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [recoverIdentifier, setRecoverIdentifier] = useState("");
+  const [recoverCode, setRecoverCode] = useState("");
+  const [recoverPassword, setRecoverPassword] = useState("");
+  const [recoverSuccess, setRecoverSuccess] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
@@ -1319,6 +1323,33 @@ export default function App() {
     }
   };
 
+  const handleRecover = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSubmitting(true);
+    try {
+      const result = await api.auth.recover(
+        recoverIdentifier.trim(),
+        recoverCode.trim(),
+        recoverPassword
+      );
+      tokenStore.set(result.token);
+      setCurrentUser(result.user);
+      setRecoverSuccess(true);
+      setRecoverIdentifier("");
+      setRecoverCode("");
+      setRecoverPassword("");
+      setTimeout(() => {
+        setAuthView(null);
+        setRecoverSuccess(false);
+      }, 2000);
+    } catch (err: unknown) {
+      setAuthError((err as Error).message);
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
   const handleLogout = () => {
     tokenStore.clear();
     setCurrentUser(null);
@@ -1670,66 +1701,129 @@ export default function App() {
           <div style={s.authOverlay} onClick={() => setAuthView(null)} />
           <div style={s.authPanel} className="app-auth-panel">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <p style={s.authTitle}>{authView === "login" ? "Connexion" : "Créer un compte"}</p>
+              <p style={s.authTitle}>
+                {authView === "login" ? "Connexion" : authView === "register" ? "Créer un compte" : "🔑 Récupérer mon compte"}
+              </p>
               <button style={s.authClose} onClick={() => setAuthView(null)}>✕</button>
             </div>
-            <form onSubmit={authView === "login" ? handleLogin : handleRegister} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-              {authView === "register" && (
-                <>
+            {authView === "recover" ? (
+              recoverSuccess ? (
+                <div style={{ textAlign: "center", padding: "1rem 0" }}>
+                  <p style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>✓</p>
+                  <p style={{ fontFamily: C.serif, fontStyle: "italic", color: C.textSub }}>
+                    Compte récupéré — bienvenue !
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleRecover} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
                   <input
                     style={s.inputDark}
                     type="text"
-                    placeholder="Pseudonyme (obligatoire sans email)"
-                    value={authPseudonym}
-                    onChange={(e) => setAuthPseudonym(e.target.value)}
+                    placeholder="Email ou pseudonyme"
+                    value={recoverIdentifier}
+                    onChange={(e) => setRecoverIdentifier(e.target.value)}
+                    required
                     autoFocus
-                    maxLength={40}
                   />
                   <input
                     style={s.inputDark}
-                    type="email"
-                    placeholder="Email (optionnel)"
-                    value={authEmail}
-                    onChange={(e) => setAuthEmail(e.target.value)}
+                    type="text"
+                    placeholder="Ton code de récupération (12 mots)"
+                    value={recoverCode}
+                    onChange={(e) => setRecoverCode(e.target.value)}
+                    required
                   />
-                </>
-              )}
-              {authView === "login" && (
-                <input
-                  style={s.inputDark}
-                  type="text"
-                  placeholder="Email ou pseudonyme"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
-              )}
-              <input
-                style={s.inputDark}
-                type="password"
-                placeholder="Mot de passe (8 caractères min.)"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-              {authError && <p style={s.authErrorMsg}>{authError}</p>}
-              <button style={s.btnAccent} type="submit" disabled={authSubmitting}>
-                {authSubmitting ? "…" : authView === "login" ? "Se connecter" : "Créer le compte"}
-              </button>
-            </form>
-            <p style={s.authSwitch}>
-              {authView === "login" ? (
-                <>Pas encore de compte ?{" "}
-                  <span style={s.authSwitchLink} onClick={() => { setAuthView("register"); setAuthError(null); }}>S'inscrire</span>
-                </>
-              ) : (
-                <>Déjà un compte ?{" "}
-                  <span style={s.authSwitchLink} onClick={() => { setAuthView("login"); setAuthError(null); }}>Se connecter</span>
-                </>
-              )}
-            </p>
+                  <input
+                    style={s.inputDark}
+                    type="password"
+                    placeholder="Nouveau mot de passe (8 caractères min.)"
+                    value={recoverPassword}
+                    onChange={(e) => setRecoverPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  {authError && <p style={s.authErrorMsg}>{authError}</p>}
+                  <button style={s.btnAccent} type="submit" disabled={authSubmitting}>
+                    {authSubmitting ? "…" : "Récupérer mon compte →"}
+                  </button>
+                  <p style={s.authSwitch}>
+                    <span style={s.authSwitchLink} onClick={() => { setAuthView("login"); setAuthError(null); }}>
+                      ← Retour à la connexion
+                    </span>
+                  </p>
+                </form>
+              )
+            ) : (
+              <>
+                <form onSubmit={authView === "login" ? handleLogin : handleRegister} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+                  {authView === "register" && (
+                    <>
+                      <input
+                        style={s.inputDark}
+                        type="text"
+                        placeholder="Pseudonyme (obligatoire sans email)"
+                        value={authPseudonym}
+                        onChange={(e) => setAuthPseudonym(e.target.value)}
+                        autoFocus
+                        maxLength={40}
+                      />
+                      <input
+                        style={s.inputDark}
+                        type="email"
+                        placeholder="Email (optionnel)"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                      />
+                    </>
+                  )}
+                  {authView === "login" && (
+                    <input
+                      style={s.inputDark}
+                      type="text"
+                      placeholder="Email ou pseudonyme"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  )}
+                  <input
+                    style={s.inputDark}
+                    type="password"
+                    placeholder="Mot de passe (8 caractères min.)"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                  {authError && <p style={s.authErrorMsg}>{authError}</p>}
+                  <button style={s.btnAccent} type="submit" disabled={authSubmitting}>
+                    {authSubmitting ? "…" : authView === "login" ? "Se connecter" : "Créer le compte"}
+                  </button>
+                </form>
+                {authView === "login" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                    <p style={s.authSwitch}>
+                      Pas encore de compte ?{" "}
+                      <span style={s.authSwitchLink} onClick={() => { setAuthView("register"); setAuthError(null); }}>
+                        S'inscrire
+                      </span>
+                    </p>
+                    <p style={s.authSwitch}>
+                      Mot de passe oublié ?{" "}
+                      <span style={s.authSwitchLink} onClick={() => { setAuthView("recover"); setAuthError(null); }}>
+                        Récupérer mon compte
+                      </span>
+                    </p>
+                  </div>
+                ) : (
+                  <p style={s.authSwitch}>
+                    Déjà un compte ?{" "}
+                    <span style={s.authSwitchLink} onClick={() => { setAuthView("login"); setAuthError(null); }}>Se connecter</span>
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </>
       )}

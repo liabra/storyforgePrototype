@@ -365,6 +365,11 @@ export const api = {
       }),
     login: (identifier: string, password: string) =>
       request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) }),
+    recover: (identifier: string, recoveryCode: string, newPassword: string) =>
+      request<AuthResponse>("/auth/recover", {
+        method: "POST",
+        body: JSON.stringify({ identifier, recoveryCode, newPassword }),
+      }),
     me: () => request<AuthUser>("/auth/me"),
   },
   users: {
