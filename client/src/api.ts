@@ -1,4 +1,4 @@
-const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:4000") + "/api";
+const BASE = (import.meta.env.VITE_API_URL ?? "https://storyforgeprototype-production.up.railway.app") + "/api";
 
 // ─── Token storage ─────────────────────────────────────────────────────────────
 const TOKEN_KEY = "sf_token";

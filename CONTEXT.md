@@ -32,7 +32,7 @@ TypeScript, React, Node.js, Prisma/PostgreSQL, Socket.IO, Gemini Flash 2.5, Rail
 - ✅ Composant FlameIndicator — progression flamme dans l'en-tête de scène active
 - ✅ Types Express — express.d.ts sans import Prisma (id, email, isAdmin?, isBanned?)
 - ✅ Config client — VITE_API_URL + BASE URL corrigée dans api.ts
-- 🔜 Carte du monde — visualisation World Memory
+- ✅ Carte du monde — SVG interactif, filtres genre/type, accessible connectés uniquement
 - ✅ Système de compte — email optionnel + pseudonyme + code de récupération 12 mots
 
 ## Modèles Prisma modifiés
