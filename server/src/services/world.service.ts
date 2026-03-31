@@ -24,6 +24,18 @@ export async function extractFragmentsFromStory(storyId: string): Promise<void> 
   const story = await prisma.story.findUnique({
     where: { id: storyId },
     include: {
+      characters: {
+        select: {
+          name: true,
+          nickname: true,
+          role: true,
+          shortDescription: true,
+          appearance: true,
+          personality: true,
+          traits: true,
+          accessories: true,
+        },
+      },
       scenes: {
         include: {
           contributions: {
@@ -42,12 +54,24 @@ export async function extractFragmentsFromStory(storyId: string): Promise<void> 
   const allText = story.scenes
     .flatMap((s) => s.contributions.map((c) => c.content))
     .join("\n")
-    .slice(0, 3000);
+    .slice(0, 2500);
 
   if (allText.trim().length < 100) return;
 
-  const prompt = `Tu lis un extrait d'une histoire de fiction collaborative.
-Extrait : """
+  // Résumé des personnages
+  const characterContext = story.characters.length > 0
+    ? story.characters.map((c) => {
+        const name = c.name ?? c.nickname ?? "Personnage sans nom";
+        const details = [c.role, c.shortDescription, c.appearance, c.personality, c.traits, c.accessories]
+          .filter(Boolean).join(", ");
+        return details ? `${name} (${details})` : name;
+      }).join("\n")
+    : null;
+
+  const prompt = `Tu lis une histoire de fiction collaborative terminée.
+${characterContext ? `\nPersonnages de l'histoire :\n${characterContext}\n` : ""}
+Extrait de l'histoire :
+"""
 ${allText}
 """
 
@@ -56,6 +80,7 @@ Chaque élément doit être :
 - Suffisamment original pour enrichir une autre histoire
 - Suffisamment vague pour ne pas trahir l'histoire source
 - Anonymisé : aucun nom de joueur, aucun contexte identifiable
+- Peut être inspiré des personnages, des lieux, des objets ou des phrases marquantes
 
 Réponds UNIQUEMENT avec un tableau JSON valide, sans explication, sans balise markdown :
 [

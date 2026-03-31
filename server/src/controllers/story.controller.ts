@@ -4,6 +4,7 @@ import * as participantService from "../services/participant.service";
 import { ContentStatus, ParticipantRole, StoryVisibility } from "../generated/prisma/client";
 import { getIO } from "../socket";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
+import { extractFragmentsFromStory } from "../services/world.service";
 
 const getSingleParam = (value: string | string[] | undefined): string => {
   if (!value) throw new Error("Missing route parameter");
@@ -76,6 +77,13 @@ export const update = async (req: Request, res: Response) => {
       storyTitle: story.title,
       triggeredBy: req.user?.id,
     });
+
+    // Quand une histoire se termine → extraction World Memory en arrière-plan
+    if (req.body.status === "DONE") {
+      extractFragmentsFromStory(storyId).catch((err) =>
+        console.error("[world] Erreur extraction post-histoire :", err)
+      );
+    }
   }
 
   if (req.body.visibility !== undefined) {

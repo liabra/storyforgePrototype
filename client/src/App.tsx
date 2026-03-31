@@ -294,6 +294,8 @@ export default function App() {
   const [authView, setAuthView] = useState<"login" | "register" | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authPseudonym, setAuthPseudonym] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
@@ -1295,11 +1297,21 @@ export default function App() {
     setAuthError(null);
     setAuthSubmitting(true);
     try {
-      const { token, user } = await api.auth.register(authEmail, authPassword);
-      tokenStore.set(token);
-      setCurrentUser(user);
-      setAuthView(null);
-      setAuthEmail(""); setAuthPassword("");
+      const result = await api.auth.register(
+        authPassword,
+        authEmail.trim() || undefined,
+        authPseudonym.trim() || undefined
+      );
+      tokenStore.set(result.token);
+      setCurrentUser(result.user);
+      if (result.recoveryCode) {
+        setRecoveryCode(result.recoveryCode);
+      } else {
+        setAuthView(null);
+      }
+      setAuthEmail("");
+      setAuthPassword("");
+      setAuthPseudonym("");
     } catch (err: unknown) {
       setAuthError((err as Error).message);
     } finally {
@@ -1662,15 +1674,37 @@ export default function App() {
               <button style={s.authClose} onClick={() => setAuthView(null)}>✕</button>
             </div>
             <form onSubmit={authView === "login" ? handleLogin : handleRegister} style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
-              <input
-                style={s.inputDark}
-                type="email"
-                placeholder="Email"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                required
-                autoFocus
-              />
+              {authView === "register" && (
+                <>
+                  <input
+                    style={s.inputDark}
+                    type="text"
+                    placeholder="Pseudonyme (obligatoire sans email)"
+                    value={authPseudonym}
+                    onChange={(e) => setAuthPseudonym(e.target.value)}
+                    autoFocus
+                    maxLength={40}
+                  />
+                  <input
+                    style={s.inputDark}
+                    type="email"
+                    placeholder="Email (optionnel)"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                  />
+                </>
+              )}
+              {authView === "login" && (
+                <input
+                  style={s.inputDark}
+                  type="text"
+                  placeholder="Email ou pseudonyme"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  required
+                  autoFocus
+                />
+              )}
               <input
                 style={s.inputDark}
                 type="password"
@@ -1696,6 +1730,48 @@ export default function App() {
                 </>
               )}
             </p>
+          </div>
+        </>
+      )}
+
+      {recoveryCode && (
+        <>
+          <div style={s.authOverlay} onClick={() => { setRecoveryCode(null); setAuthView(null); }} />
+          <div style={{ ...s.authPanel, maxWidth: 400 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.8rem" }}>
+              <p style={s.authTitle}>🔑 Ton code de récupération</p>
+            </div>
+            <p style={{ fontSize: "0.82rem", color: C.textSub, fontStyle: "italic", marginBottom: "1rem", lineHeight: 1.6 }}>
+              Note ce code maintenant — il ne sera plus jamais affiché.
+              Si tu oublies ton mot de passe, c'est le seul moyen de récupérer ton compte.
+            </p>
+            <div style={{
+              background: "rgba(75,35,5,0.08)",
+              border: "1px solid rgba(75,35,5,0.25)",
+              borderRadius: 6,
+              padding: "1rem",
+              fontFamily: C.serif,
+              fontSize: "0.95rem",
+              lineHeight: 2,
+              color: C.text,
+              letterSpacing: "0.02em",
+              marginBottom: "1rem",
+              wordBreak: "break-word",
+            }}>
+              {recoveryCode}
+            </div>
+            <button
+              style={{ ...s.btnAccent, width: "100%", marginBottom: "0.5rem" }}
+              onClick={() => navigator.clipboard.writeText(recoveryCode)}
+            >
+              📋 Copier le code
+            </button>
+            <button
+              style={{ ...s.btnGhost, width: "100%" }}
+              onClick={() => { setRecoveryCode(null); setAuthView(null); }}
+            >
+              J'ai noté mon code — continuer →
+            </button>
           </div>
         </>
       )}
