@@ -32,7 +32,7 @@ export const add = async (req: Request, res: Response): Promise<void> => {
     res.status(403).json({ error: "Seul le propriétaire peut gérer les participants" }); return;
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  const targetUser = await prisma.user.findFirst({ where: { email }, select: { id: true } });
   if (!targetUser) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
 
   try {

@@ -31,7 +31,7 @@ export const listReports = async (req: Request, res: Response): Promise<void> =>
     const enriched = await Promise.all(
       reports.map(async (r) => {
         let contentPreview: string | null = null;
-        let contentAuthor: { id: string; email: string; displayName: string | null; isBanned: boolean } | null = null;
+        let contentAuthor: { id: string; email: string | null; displayName: string | null; isBanned: boolean } | null = null;
 
         if (r.targetType === "CONTRIBUTION") {
           const item = await prisma.contribution.findUnique({

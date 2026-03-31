@@ -322,7 +322,7 @@ export const sendInvite = async (req: Request, res: Response): Promise<void> => 
   }
 
   const prismaClient = (await import("../prisma/client")).default;
-  const targetUser = await prismaClient.user.findUnique({
+  const targetUser = await prismaClient.user.findFirst({
     where: { email: email.trim().toLowerCase() },
     select: { id: true, email: true },
   });
