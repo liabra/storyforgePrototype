@@ -127,12 +127,13 @@ export interface Participant {
   userId: string;
   role: ParticipantRole;
   createdAt: string;
-  user: { id: string; email: string; displayName?: string | null; color?: string | null };
+  user: { id: string; email?: string | null; pseudonym?: string | null; displayName?: string | null; color?: string | null };
 }
 
 export interface AuthUser {
   id: string;
-  email: string;
+  email?: string | null;
+  pseudonym?: string | null;
   displayName?: string | null;
   color?: string | null;
   bio?: string | null;
@@ -207,7 +208,7 @@ export interface JoinRequest {
   userId: string;
   status: JoinRequestStatus;
   createdAt: string;
-  user: { id: string; email: string; displayName?: string | null; color?: string | null };
+  user: { id: string; email?: string | null; pseudonym?: string | null; displayName?: string | null; color?: string | null };
   story: { id: string; title: string };
 }
 

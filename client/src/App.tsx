@@ -57,7 +57,7 @@ type ContribOwner = { character?: CharacterFull | null; user?: { id: string; ema
 function contribAuthor(contrib: ContribOwner): string {
   if (contrib.character) return displayName(contrib.character);
   if (contrib.user?.displayName) return contrib.user.displayName;
-  if (contrib.user?.email) return contrib.user.email.split("@")[0];
+  if (contrib.user?.email) return contrib.user.email?.split("@")[0] ?? "Anonyme";
   return "Anonyme";
 }
 
@@ -382,7 +382,7 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const username = currentUser.displayName ?? currentUser.email.split("@")[0];
+    const username = currentUser.displayName ?? currentUser.email?.split("@")[0] ?? currentUser.pseudonym ?? "Joueur";
 
     // Ré-identifie et ré-rejoint story/scène après chaque (re)connexion
     const onConnect = () => {
@@ -996,7 +996,7 @@ export default function App() {
   // ── Typing indicator : émettre typing:start / typing:stop avec debounce
   const handleTyping = () => {
     if (!selectedScene || !currentUser) return;
-    const username = currentUser.displayName ?? currentUser.email.split("@")[0];
+    const username = currentUser.displayName ?? currentUser.email?.split("@")[0] ?? currentUser.pseudonym ?? "Joueur";
 
     if (!isTypingRef.current) {
       socket.emit("typing:start", { sceneId: selectedScene.id, userId: currentUser.id, username });
@@ -1388,7 +1388,7 @@ export default function App() {
     const updated = await api.participants.updateRole(selectedStory.id, userId, role);
     setParticipants((p) => p.map((x) => (x.userId === userId ? updated : x)));
     const participant = participants.find((p) => p.userId === userId);
-    const name = participant?.user.displayName || participant?.user.email.split("@")[0] || "Participant";
+    const name = participant?.user.displayName || participant?.user.email?.split("@")[0] || participant?.user.pseudonym || "Participant";
     const roleLabel = role === "EDITOR" ? "éditeur" : "lecteur";
     setToasts((prev) => {
       const id = ++toastIdRef.current;
@@ -1599,7 +1599,7 @@ export default function App() {
                   {currentUser.color && (
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: currentUser.color, flexShrink: 0 }} />
                   )}
-                  <span style={s.userEmail} className="app-user-name">{currentUser.displayName || currentUser.email}</span>
+                  <span style={s.userEmail} className="app-user-name">{currentUser.displayName || currentUser.email || currentUser.pseudonym || "Joueur"}</span>
                   {onlineCount > 1 && (
                     <span className="app-online-indicator" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.5, whiteSpace: "nowrap" }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4caf50", display: "inline-block", flexShrink: 0 }} />
@@ -1790,7 +1790,7 @@ export default function App() {
                 <label style={s.profileLabel}>Nom d'affichage</label>
                 <input
                   style={s.inputDark}
-                  placeholder={currentUser.email.split("@")[0]}
+                  placeholder={currentUser.email?.split("@")[0] ?? currentUser.pseudonym ?? "Joueur"}
                   value={profileEdits.displayName ?? ""}
                   onChange={(e) => setProfileEdits((p) => ({ ...p, displayName: e.target.value }))}
                   maxLength={40}
@@ -1860,7 +1860,7 @@ export default function App() {
               </button>
             </form>
             <p style={{ ...s.authSwitch, textAlign: "left" as const, color: C.textMuted }}>
-              {currentUser.email}
+              {currentUser.email ?? currentUser.pseudonym ?? "Sans email"}
             </p>
           </div>
         </>
@@ -2341,7 +2341,7 @@ export default function App() {
                               {char.shortDescription && <p style={s.charDesc}>{char.shortDescription}</p>}
                               {char.user && (
                                 <p style={{ fontSize: "0.7rem", color: C.textMuted, margin: "0.25rem 0 0", fontStyle: "italic" }}>
-                                  Créé par {char.user.displayName || char.user.email.split("@")[0]}
+                                  Créé par {char.user.displayName || char.user.email?.split("@")[0] || char.user.pseudonym || "Joueur"}
                                 </p>
                               )}
                             </div>
@@ -2492,7 +2492,7 @@ export default function App() {
                       </p>
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                         {joinRequests.map((req) => {
-                          const name = req.user.displayName || req.user.email.split("@")[0];
+                          const name = req.user.displayName || req.user.email?.split("@")[0] || req.user.pseudonym || "Joueur";
                           return (
                             <div key={req.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0.85rem", background: "rgba(192,160,96,0.08)", border: "1px solid rgba(192,160,96,0.3)", borderRadius: 6 }}>
                               <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#c0a060", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "0.8rem", fontWeight: 700, flexShrink: 0 }}>
@@ -2500,7 +2500,7 @@ export default function App() {
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontFamily: C.serif, fontSize: "0.92rem", color: C.text, fontWeight: 600 }}>{name}</div>
-                                <div style={{ fontSize: "0.76rem", color: C.textMuted }}>{req.user.email} · demande à devenir éditeur</div>
+                                <div style={{ fontSize: "0.76rem", color: C.textMuted }}>{req.user.email ?? req.user.pseudonym ?? "Joueur"} · demande à devenir éditeur</div>
                               </div>
                               <button style={{ ...s.btnAccent, padding: "0.25rem 0.6rem", fontSize: "0.8rem" }} onClick={() => handleRespondToRequest(req.id, "accept")}>
                                 Accepter
@@ -2548,8 +2548,8 @@ export default function App() {
                     {participants.map((pt) => {
                       const ink = pt.user.color
                         ? { color: pt.user.color, bg: hexToRgba(pt.user.color, 0.07), border: hexToRgba(pt.user.color, 0.35) }
-                        : characterInk(avatarHue(pt.user.displayName || pt.user.email));
-                      const name = pt.user.displayName || pt.user.email.split("@")[0];
+                        : characterInk(avatarHue(pt.user.displayName || pt.user.email || pt.user.pseudonym || "Joueur"));
+                      const name = pt.user.displayName || pt.user.email?.split("@")[0] || pt.user.pseudonym || "Joueur";
                       const isMe = currentUser?.id === pt.userId;
                       return (
                         <div key={pt.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0.85rem", background: ink.bg, border: `1px solid ${ink.border}`, borderRadius: 6 }}>
@@ -2558,7 +2558,7 @@ export default function App() {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontFamily: C.serif, fontSize: "0.92rem", color: C.text, fontWeight: 600 }}>{name}</div>
-                            <div style={{ fontSize: "0.76rem", color: C.textMuted }}>{pt.user.email}</div>
+                            <div style={{ fontSize: "0.76rem", color: C.textMuted }}>{pt.user.email ?? pt.user.pseudonym ?? "Sans email"}</div>
                           </div>
                           {myRole === "OWNER" && pt.role !== "OWNER" ? (
                             <select
@@ -2970,7 +2970,7 @@ export default function App() {
                 const turnParticipant = isTurnMode && !isMyTurn
                   ? participants.find((p) => p.userId === selectedScene.currentTurnUserId)
                   : null;
-                const turnName = turnParticipant?.user.displayName || turnParticipant?.user.email.split("@")[0] || "…";
+                const turnName = turnParticipant?.user.displayName || turnParticipant?.user.email?.split("@")[0] || turnParticipant?.user.pseudonym || "…";
                 return (
                   <div style={s.writeArea} className="write-area app-write-area">
                     {/* Indicateur de tour */}
