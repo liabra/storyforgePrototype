@@ -328,3 +328,46 @@ model Notification {
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
 }
+
+// ── World Memory ──────────────────────────────────────────────────────────────
+
+enum FragmentType {
+  OBJECT
+  PLACE
+  PHRASE
+  CHARACTER
+}
+
+enum FragmentGenre {
+  FANTASY
+  HORROR
+  CONTEMPORARY
+  SF
+  ROMANCE
+  MYSTERY
+  MIXED
+}
+
+model WorldFragment {
+  id            String               @id @default(cuid())
+  type          FragmentType
+  genre         FragmentGenre        @default(MIXED)
+  label         String
+  weight        Int                  @default(1)
+  sourceStoryId String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  usages        WorldFragmentUsage[]
+
+  @@index([type])
+  @@index([genre])
+  @@index([weight])
+}
+
+model WorldFragmentUsage {
+  id            String        @id @default(cuid())
+  fragmentId    String
+  fragment      WorldFragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+  usedInStoryId String?
+  createdAt     DateTime      @default(now())
+}

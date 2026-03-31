@@ -6,6 +6,7 @@ import * as activityService from "../services/activity.service";
 import * as storyService from "../services/story.service";
 import { getIO } from "../socket";
 import { ContentStatus, ParticipantRole, SceneMode } from "../generated/prisma/client";
+import { extractFragmentsFromStory } from "../services/world.service";
 import prisma from "../prisma/client";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
@@ -201,6 +202,10 @@ export const update = async (req: Request, res: Response) => {
       sceneTitle: scene.title,
       triggeredBy: req.user?.id,
     });
+
+    if (updateData.status === "DONE" && storyId) {
+      extractFragmentsFromStory(storyId).catch(console.error);
+    }
   }
 
   return res.json(scene);
