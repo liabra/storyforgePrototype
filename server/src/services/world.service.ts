@@ -75,76 +75,71 @@ Extrait de l'histoire :
 ${allText}
 """
 
-Identifie 2 à 3 éléments mémorables et réutilisables de cette histoire.
-Chaque élément doit être :
-- Suffisamment original pour enrichir une autre histoire
+Identifie UN SEUL élément mémorable et réutilisable de cette histoire.
+Cet élément doit être :
+- Original et spécifique à cette histoire
 - Suffisamment vague pour ne pas trahir l'histoire source
 - Anonymisé : aucun nom de joueur, aucun contexte identifiable
-- Peut être inspiré des personnages, des lieux, des objets ou des phrases marquantes
 
-Réponds UNIQUEMENT avec un tableau JSON valide, sans explication, sans balise markdown :
-[
-  { "type": "OBJECT|PLACE|PHRASE|CHARACTER", "genre": "FANTASY|HORROR|CONTEMPORARY|SF|ROMANCE|MYSTERY|MIXED", "label": "description courte en français" }
-]`;
+Réponds UNIQUEMENT avec un objet JSON valide sur UNE SEULE LIGNE, sans explication, sans balise markdown :
+{ "type": "OBJECT|PLACE|PHRASE|CHARACTER", "genre": "FANTASY|HORROR|CONTEMPORARY|SF|ROMANCE|MYSTERY|MIXED", "label": "description courte en français" }`;
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
-    generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
   });
 
   try {
-    const result = await model.generateContent(prompt);
-    const raw = result.response.text().trim();
+    // On appelle Gemini 3 fois pour obtenir 3 fragments différents
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await model.generateContent(prompt);
+        const raw = result.response.text().trim();
+        console.log(`[world.service] Réponse brute Gemini attempt ${attempt + 1} :`, raw.slice(0, 200));
 
-    console.log("[world.service] Réponse brute Gemini :", raw.slice(0, 500));
+        // Nettoyer et extraire l'objet JSON
+        let clean = raw.replace(/```json|```/g, "").trim();
 
-    // Nettoyage robuste du JSON
-    let clean = raw.replace(/```json|```/g, "").trim();
+        // Chercher un objet JSON { ... }
+        const start = clean.indexOf("{");
+        const end = clean.lastIndexOf("}");
 
-    // Trouver le tableau JSON même si la réponse est tronquée
-    const start = clean.indexOf("[");
-    const end = clean.lastIndexOf("]");
+        if (start === -1 || end === -1 || end < start) {
+          console.warn(`[world.service] Pas d'objet JSON trouvé (attempt ${attempt + 1})`);
+          continue;
+        }
 
-    if (start === -1) {
-      console.warn("[world.service] Pas de tableau JSON dans la réponse");
-      return;
+        clean = clean.slice(start, end + 1);
+
+        let fragment: RawFragment;
+        try {
+          fragment = JSON.parse(clean);
+        } catch {
+          console.warn(`[world.service] JSON invalide (attempt ${attempt + 1}) :`, clean.slice(0, 100));
+          continue;
+        }
+
+        if (!fragment.type || !fragment.label || fragment.label.length < 3) {
+          console.warn(`[world.service] Fragment invalide (attempt ${attempt + 1})`);
+          continue;
+        }
+
+        await prisma.worldFragment.create({
+          data: {
+            type: fragment.type,
+            genre: fragment.genre ?? "MIXED",
+            label: fragment.label.slice(0, 200),
+            sourceStoryId: storyId,
+          },
+        });
+
+        console.log(`[world.service] Fragment ${attempt + 1} extrait : "${fragment.label.slice(0, 60)}"`);
+
+      } catch (attemptErr) {
+        console.error(`[world.service] Erreur attempt ${attempt + 1} :`, attemptErr);
+      }
     }
 
-    // Si le JSON est tronqué, essayer de le réparer
-    if (end === -1 || end < start) {
-      // Tenter de fermer le JSON tronqué
-      clean = clean.slice(start);
-      // Fermer les objets et tableaux ouverts
-      const openBraces = (clean.match(/{/g) ?? []).length;
-      const closeBraces = (clean.match(/}/g) ?? []).length;
-      const missing = openBraces - closeBraces;
-      if (missing > 0) clean += "}".repeat(missing);
-      clean += "]";
-    } else {
-      clean = clean.slice(start, end + 1);
-    }
-
-    let fragments: RawFragment[] = [];
-    try {
-      fragments = JSON.parse(clean);
-    } catch {
-      console.warn("[world.service] JSON invalide même après réparation, abandon");
-      return;
-    }
-
-    for (const f of fragments) {
-      if (!f.type || !f.label || f.label.length < 3) continue;
-      await prisma.worldFragment.create({
-        data: {
-          type: f.type,
-          genre: f.genre ?? "MIXED",
-          label: f.label.slice(0, 200),
-          sourceStoryId: storyId,
-        },
-      });
-    }
-
-    console.log(`[world.service] ${fragments.length} fragments extraits de l'histoire ${storyId}`);
   } catch (err) {
     console.error("[world.service] Erreur extraction fragments :", err);
   }
