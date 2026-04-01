@@ -1,0 +1,1 @@
+ALTER TABLE "Scene" ADD COLUMN IF NOT EXISTS "openingLine" TEXT;

@@ -6,6 +6,7 @@ import { Server } from "socket.io";
 import apiRoutes from "./routes/index";
 import { initIO } from "./socket";
 import * as presence from "./presence";
+import prisma from "./prisma/client";
 
 // ── Origines autorisées
 // En production : variable ALLOWED_ORIGINS="https://foo.railway.app,https://autre.domaine.com"
@@ -60,9 +61,20 @@ io.on("connection", (socket) => {
   });
 
   // ── Rooms scènes
-  socket.on("scene:join", ({ sceneId }: { sceneId: string }) => {
+  socket.on("scene:join", async ({ sceneId }: { sceneId: string }) => {
     socket.join(`scene:${sceneId}`);
     console.log(`[socket] ${socket.id} joined scene:${sceneId}`);
+
+    // Envoyer la graine d'ouverture si la scène est vide et en a une
+    const sceneData = await prisma.scene.findUnique({
+      where: { id: sceneId },
+      select: { openingLine: true, contributions: { take: 1, select: { id: true } } },
+    });
+
+    if (sceneData?.openingLine && sceneData.contributions.length === 0) {
+      socket.emit("gm_intervention", { text: sceneData.openingLine });
+      console.log(`[socket] Graine d'ouverture envoyée à ${socket.id}`);
+    }
   });
 
   socket.on("scene:leave", ({ sceneId }: { sceneId: string }) => {

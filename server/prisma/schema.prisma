@@ -129,6 +129,7 @@ model Scene {
   title             String
   description       String?
   imageUrl          String?
+  openingLine       String?
   order             Int            @default(0)
   status            SceneStatus    @default(ACTIVE)
   mode              SceneMode      @default(FREE)
