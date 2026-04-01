@@ -96,6 +96,8 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans explication, sans balise m
     const result = await model.generateContent(prompt);
     const raw = result.response.text().trim();
 
+    console.log("[world.service] Réponse brute Gemini :", raw.slice(0, 500));
+
     // Nettoyage robuste du JSON
     let clean = raw.replace(/```json|```/g, "").trim();
 
