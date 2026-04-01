@@ -89,7 +89,7 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans explication, sans balise m
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
-    generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
+    generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
   });
 
   try {
