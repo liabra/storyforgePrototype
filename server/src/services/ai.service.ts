@@ -183,14 +183,18 @@ export function selectGmMode(contribCount: number): GmMode {
 export const WEAK_CONTEXT_MSG =
   "Le maître du jeu a besoin d'un peu plus de matière pour intervenir.";
 
-const GM_FALLBACK = "Un silence étrange s'installe…";
+const GM_FALLBACK = "Un silence inhabituel s'étire entre vous…";
 
 /**
  * Valide que la réponse est une phrase grammaticalement complète.
  * Règle : doit se terminer par . ! ou ? (en ignorant espaces/guillemets finaux).
  */
 function isResponseComplete(text: string): boolean {
-  return /[.!?]["""'»]?\s*$/.test(text.trim());
+  const trimmed = text.trim();
+  if (trimmed.length < 8) return false;
+  if (/[.!?…]["""'»)]*\s*$/.test(trimmed)) return true;
+  if (trimmed.length >= 15) return true;
+  return false;
 }
 
 // ── Fonction principale ────────────────────────────────────────────────────────

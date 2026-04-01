@@ -95,12 +95,43 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans explication, sans balise m
   try {
     const result = await model.generateContent(prompt);
     const raw = result.response.text().trim();
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const fragments: RawFragment[] = JSON.parse(clean);
+
+    // Nettoyage robuste du JSON
+    let clean = raw.replace(/```json|```/g, "").trim();
+
+    // Trouver le tableau JSON même si la réponse est tronquée
+    const start = clean.indexOf("[");
+    const end = clean.lastIndexOf("]");
+
+    if (start === -1) {
+      console.warn("[world.service] Pas de tableau JSON dans la réponse");
+      return;
+    }
+
+    // Si le JSON est tronqué, essayer de le réparer
+    if (end === -1 || end < start) {
+      // Tenter de fermer le JSON tronqué
+      clean = clean.slice(start);
+      // Fermer les objets et tableaux ouverts
+      const openBraces = (clean.match(/{/g) ?? []).length;
+      const closeBraces = (clean.match(/}/g) ?? []).length;
+      const missing = openBraces - closeBraces;
+      if (missing > 0) clean += "}".repeat(missing);
+      clean += "]";
+    } else {
+      clean = clean.slice(start, end + 1);
+    }
+
+    let fragments: RawFragment[] = [];
+    try {
+      fragments = JSON.parse(clean);
+    } catch {
+      console.warn("[world.service] JSON invalide même après réparation, abandon");
+      return;
+    }
 
     for (const f of fragments) {
       if (!f.type || !f.label || f.label.length < 3) continue;
-
       await prisma.worldFragment.create({
         data: {
           type: f.type,
