@@ -38,14 +38,14 @@ export const getById = async (req: Request, res: Response) => {
 };
 
 export const create = async (req: Request, res: Response) => {
-  const { title, description } = req.body;
+  const { title, description, genre } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
   if (!req.user) return res.status(401).json({ error: "Authentification requise" });
   if (!moderateText(title, "story.title").isAllowed)
     return res.status(400).json({ error: MOD_REFUSED });
   if (description && !moderateText(description, "story.description").isAllowed)
     return res.status(400).json({ error: MOD_REFUSED });
-  const story = await storyService.createStory({ title, description }, req.user.id);
+  const story = await storyService.createStory({ title, description, genre }, req.user.id);
   return res.status(201).json(story);
 };
 

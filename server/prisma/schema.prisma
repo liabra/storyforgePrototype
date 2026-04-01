@@ -52,6 +52,7 @@ model Story {
   id           String               @id @default(cuid())
   title        String
   description  String?
+  genre        String?              @default("MIXED")
   status       ContentStatus        @default(ACTIVE)
   visibility   StoryVisibility      @default(PRIVATE)
   isArchived   Boolean              @default(false)

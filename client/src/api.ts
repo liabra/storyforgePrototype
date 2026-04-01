@@ -381,7 +381,7 @@ export const api = {
     list: () => request<Story[]>("/stories"),
     listPublic: () => request<PublicStory[]>("/stories/public"),
     listArchived: () => request<Story[]>("/stories/archived"),
-    create: (data: { title: string; description?: string }) =>
+    create: (data: { title: string; description?: string; genre?: string }) =>
       request<Story>("/stories", { method: "POST", body: JSON.stringify(data) }),
     updateStatus: (id: string, status: ContentStatus) =>
       request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ status }) }),

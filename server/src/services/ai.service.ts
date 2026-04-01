@@ -191,9 +191,14 @@ const GM_FALLBACK = "Un silence inhabituel s'étire entre vous…";
  */
 function isResponseComplete(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.length < 8) return false;
+  if (trimmed.length < 12) return false;
+  // Rejeter les phrases qui commencent par une conjonction sans contexte
+  const badStarts = /^(mais|car|donc|or|ni|et|pourtant|cependant|alors|ainsi|puis)\b/i;
+  if (badStarts.test(trimmed)) return false;
+  // Accepter si se termine par ponctuation forte ou ellipse
   if (/[.!?…]["""'»)]*\s*$/.test(trimmed)) return true;
-  if (trimmed.length >= 15) return true;
+  // Accepter si phrase longue et complète (sujet + verbe implicite)
+  if (trimmed.length >= 25) return true;
   return false;
 }
 
@@ -312,4 +317,41 @@ export async function generateGmSuggestion(
   console.log(`[ai.service] GM (${mode}) scène ${sceneId} : ${text.slice(0, 80)}…`);
 
   return text || GM_FALLBACK;
+}
+
+export async function generateOpeningLine(
+  storyTitle: string,
+  storyDescription: string | null,
+  genre?: string
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return "";
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: { maxOutputTokens: 120, temperature: 0.95 },
+  });
+
+  const prompt = `Tu es le narrateur d'un jeu de fiction collaborative.
+Histoire : "${storyTitle}"${storyDescription ? `\nContexte : ${storyDescription}` : ""}${genre ? `\nGenre : ${genre}` : ""}
+
+Écris UNE SEULE phrase d'accroche mystérieuse et évocatrice pour lancer cette histoire.
+Cette phrase doit :
+- Plonger immédiatement les joueurs dans une atmosphère
+- Suggérer quelque chose sans tout dévoiler
+- Donner envie d'écrire la suite
+- Faire entre 10 et 25 mots
+- Se terminer par un signe de ponctuation (. ! ? …)
+
+Réponds UNIQUEMENT avec cette phrase, sans guillemets, sans explication.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    if (text.length > 5) return text;
+    return "";
+  } catch {
+    return "";
+  }
 }

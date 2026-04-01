@@ -7,6 +7,7 @@ import * as storyService from "../services/story.service";
 import { getIO } from "../socket";
 import { ContentStatus, ParticipantRole, SceneMode } from "../generated/prisma/client";
 import { extractFragmentsFromStory, getWorldSeed } from "../services/world.service";
+import { generateOpeningLine } from "../services/ai.service";
 import prisma from "../prisma/client";
 import { moderateText, MOD_REFUSED } from "../services/moderation.service";
 
@@ -106,14 +107,25 @@ export const create = async (req: Request, res: Response) => {
     at: scene.createdAt.toISOString(),
   });
 
-  // Injection World Seed — fire and forget
-  getWorldSeed().then((seed) => {
-    if (seed) {
-      const io = getIO();
-      io?.to(`story:${storyId}`).emit("gm_intervention", {
-        text: seed,
-      });
-    }
+  // Graine d'ouverture — phrase d'accroche générée par l'IA
+  prisma.story.findUnique({ where: { id: storyId }, select: { title: true, description: true, genre: true } }).then((storyInfo) => {
+    if (!storyInfo) return;
+    return generateOpeningLine(storyInfo.title, storyInfo.description ?? null, storyInfo.genre ?? undefined).then((line) => {
+      if (line) {
+        const io = getIO();
+        io?.to(`story:${storyId}`).emit("gm_intervention", { text: line });
+      }
+    });
+  }).catch(console.error);
+
+  // World Seed — fragment du monde en fire and forget
+  prisma.story.findUnique({ where: { id: storyId }, select: { genre: true } }).then((storyInfo) => {
+    return getWorldSeed(storyInfo?.genre ?? undefined).then((seed) => {
+      if (seed) {
+        const io = getIO();
+        io?.to(`story:${storyId}`).emit("gm_intervention", { text: seed });
+      }
+    });
   }).catch(console.error);
 
   return res.status(201).json(scene);
@@ -165,14 +177,25 @@ export const createUnderChapter = async (req: Request, res: Response) => {
     at: scene.createdAt.toISOString(),
   });
 
-  // Injection World Seed — fire and forget
-  getWorldSeed().then((seed) => {
-    if (seed) {
-      const io = getIO();
-      io?.to(`story:${storyId}`).emit("gm_intervention", {
-        text: seed,
-      });
-    }
+  // Graine d'ouverture — phrase d'accroche générée par l'IA
+  prisma.story.findUnique({ where: { id: storyId }, select: { title: true, description: true, genre: true } }).then((storyInfo) => {
+    if (!storyInfo) return;
+    return generateOpeningLine(storyInfo.title, storyInfo.description ?? null, storyInfo.genre ?? undefined).then((line) => {
+      if (line) {
+        const io = getIO();
+        io?.to(`story:${storyId}`).emit("gm_intervention", { text: line });
+      }
+    });
+  }).catch(console.error);
+
+  // World Seed — fragment du monde en fire and forget
+  prisma.story.findUnique({ where: { id: storyId }, select: { genre: true } }).then((storyInfo) => {
+    return getWorldSeed(storyInfo?.genre ?? undefined).then((seed) => {
+      if (seed) {
+        const io = getIO();
+        io?.to(`story:${storyId}`).emit("gm_intervention", { text: seed });
+      }
+    });
   }).catch(console.error);
 
   return res.status(201).json(scene);

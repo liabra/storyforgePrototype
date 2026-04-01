@@ -230,12 +230,14 @@ export default function App() {
   const [showStoryForm, setShowStoryForm] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDesc, setStoryDesc] = useState("");
+  const [newStoryGenre, setNewStoryGenre] = useState("MIXED");
 
   // Phase A : scenes plate au niveau story (remplace l'ancienne structure chapters[].scenes)
   const [scenes, setScenes] = useState<Scene[]>([]);
 
   // Scenes
   const [showSceneForm, setShowSceneForm] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [newScene, setNewScene] = useState({ title: "", description: "" });
   const [creatingScene, setCreatingScene] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -963,6 +965,7 @@ export default function App() {
       const story = await api.stories.create({
         title: storyTitle.trim(),
         description: storyDesc.trim() || undefined,
+        genre: newStoryGenre,
       });
       setStories((p) => [story, ...p]);
       setStoryTitle(""); setStoryDesc("");
@@ -990,6 +993,12 @@ export default function App() {
       setScenes((p) => p.some((s) => s.id === created.id) ? p : [...p, sceneItem]);
       setNewScene({ title: "", description: "" });
       setShowSceneForm(false);
+      // Afficher l'onboarding à la première scène créée
+      const hasSeenOnboarding = localStorage.getItem("sf_onboarding_seen");
+      if (!hasSeenOnboarding) {
+        setShowOnboarding(true);
+        localStorage.setItem("sf_onboarding_seen", "1");
+      }
     } catch (err: unknown) {
       addErrorToast(err);
     } finally {
@@ -1985,6 +1994,19 @@ export default function App() {
             <form onSubmit={handleCreateStory} style={s.storyForm}>
               <input style={s.inputDark} placeholder="Titre" value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} required autoFocus />
               <input style={s.inputDark} placeholder="Description (optionnelle)" value={storyDesc} onChange={(e) => setStoryDesc(e.target.value)} />
+              <select
+                style={s.selectDark}
+                value={newStoryGenre}
+                onChange={(e) => setNewStoryGenre(e.target.value)}
+              >
+                <option value="MIXED">🎲 Surprise — tirage aléatoire</option>
+                <option value="FANTASY">⚔️ Fantasy</option>
+                <option value="HORROR">👻 Horreur</option>
+                <option value="CONTEMPORARY">🌆 Contemporain</option>
+                <option value="SF">🚀 Science-fiction</option>
+                <option value="ROMANCE">💌 Romance</option>
+                <option value="MYSTERY">🔍 Mystère</option>
+              </select>
               <div style={{ display: "flex", gap: "0.4rem" }}>
                 <button style={s.btnAccent} type="submit">Créer →</button>
                 <button style={s.btnGhost} type="button" onClick={closeStoryForm}>Annuler</button>
@@ -3404,6 +3426,81 @@ export default function App() {
       )}
 
       {showWorldMap && <WorldMap onClose={() => setShowWorldMap(false)} />}
+
+      {showOnboarding && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)" }}
+            onClick={() => setShowOnboarding(false)}
+          />
+          <div style={{
+            position: "fixed",
+            top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 1101,
+            background: "rgba(252,244,215,0.99)",
+            border: "1px solid rgba(75,35,5,0.25)",
+            borderRadius: 12,
+            padding: "2rem 2rem 1.5rem",
+            maxWidth: 420,
+            width: "90%",
+            boxShadow: "0 8px 40px rgba(75,35,5,0.25)",
+            fontFamily: C.serif,
+          }}>
+            <div style={{ textAlign: "center", marginBottom: "1.4rem" }}>
+              <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🎭</div>
+              <h2 style={{
+                fontFamily: C.display,
+                fontSize: "1.1rem",
+                fontWeight: 600,
+                letterSpacing: "0.06em",
+                color: C.text,
+                margin: "0 0 0.4rem",
+              }}>
+                Bienvenue dans StoryForge
+              </h2>
+              <p style={{ fontStyle: "italic", fontSize: "0.9rem", color: C.textSub, margin: 0 }}>
+                Voici comment ça fonctionne
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem", marginBottom: "1.5rem" }}>
+              {[
+                { icon: "✍️", text: "Écrivez librement — dialogues, actions, narration. Chacun joue son personnage." },
+                { icon: "🎭", text: "Un Maître du Jeu invisible observe et intervient parfois. Laissez-le vous surprendre." },
+                { icon: "🕯️", text: "La flamme en haut de la scène baisse au fil du temps. Quand elle vacille, l'histoire touche à sa fin." },
+                { icon: "🌍", text: "Ce que vous inventez entre dans la mémoire du monde. D'autres joueurs le retrouveront un jour." },
+              ].map((item) => (
+                <div key={item.icon} style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: "1.1rem", flexShrink: 0, lineHeight: 1.4 }}>{item.icon}</span>
+                  <p style={{
+                    margin: 0,
+                    fontSize: "0.88rem",
+                    color: C.textSub,
+                    lineHeight: 1.6,
+                    fontStyle: "italic",
+                  }}>
+                    {item.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <button
+              style={{
+                ...s.btnAccent,
+                width: "100%",
+                textAlign: "center",
+                fontSize: "0.82rem",
+                padding: "0.6rem",
+              }}
+              onClick={() => setShowOnboarding(false)}
+            >
+              C'est parti →
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

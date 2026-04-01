@@ -22,7 +22,7 @@ export const getStoryById = (id: string) =>
     include: { characters: true },
   });
 
-export const createStory = async (data: { title: string; description?: string }, ownerId: string) => {
+export const createStory = async (data: { title: string; description?: string; genre?: string }, ownerId: string) => {
   const story = await prisma.story.create({ data });
   await prisma.storyParticipant.create({
     data: { storyId: story.id, userId: ownerId, role: ParticipantRole.OWNER },
@@ -59,9 +59,9 @@ export const getPublicStories = () =>
 export const deleteStory = (id: string) =>
   prisma.story.delete({ where: { id } });
 
-// Retourne status + isArchived en un seul appel (utilisé par les gardes d'écriture)
-export const getStoryMeta = async (storyId: string): Promise<{ status: ContentStatus; isArchived: boolean } | null> => {
-  const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true, isArchived: true } });
+// Retourne status + isArchived + genre en un seul appel (utilisé par les gardes d'écriture)
+export const getStoryMeta = async (storyId: string): Promise<{ status: ContentStatus; isArchived: boolean; title: string; description: string | null; genre: string | null } | null> => {
+  const story = await prisma.story.findUnique({ where: { id: storyId }, select: { status: true, isArchived: true, title: true, description: true, genre: true } });
   return story ?? null;
 };
 
