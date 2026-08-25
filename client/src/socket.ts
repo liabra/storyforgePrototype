@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { tokenStore } from "./api"; // pas de cycle : api.ts n'importe pas socket.ts
 
 // Priorité :
 // 1. VITE_SOCKET_URL  (explicite)
@@ -18,6 +19,8 @@ export const socket = io(SOCKET_URL, {
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
+  // Fonction : le token est relu à CHAQUE (re)connexion, donc toujours à jour
+  auth: (cb) => cb({ token: tokenStore.get() ?? undefined }),
 });
 
 socket.on("connect", () =>

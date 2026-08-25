@@ -3,10 +3,14 @@ import http from "http";
 import express from "express";
 import cors from "cors";
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
 import apiRoutes from "./routes/index";
 import { initIO } from "./socket";
 import * as presence from "./presence";
 import prisma from "./prisma/client";
+import { getUserRole, getStoryIdByScene } from "./services/participant.service";
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // ── Origines autorisées
 // En production : variable ALLOWED_ORIGINS="https://foo.railway.app,https://autre.domaine.com"
@@ -21,6 +25,10 @@ const corsOptions = {
 };
 
 const app = express();
+
+// Derrière le proxy Railway : nécessaire pour que le rate limiter
+// clé sur l'IP réelle du client et non celle du proxy
+app.set("trust proxy", 1);
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -45,11 +53,47 @@ const io = new Server(httpServer, {
 
 initIO(io);
 
+// ── Auth socket : décode le JWT s'il est fourni, mais ne bloque JAMAIS
+// (token absent/invalide = utilisateur anonyme)
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (token && JWT_SECRET) {
+    try {
+      const p = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+      socket.data.userId = p.userId;
+      socket.data.email = p.email;
+    } catch { /* token invalide → anonyme */ }
+  }
+  next();
+});
+
+// ── Autorisation : une histoire PUBLIC est ouverte à tous (même anonymes),
+// une histoire PRIVATE est réservée à ses participants authentifiés
+async function canAccessStory(storyId: string, userId?: string): Promise<boolean> {
+  const story = await prisma.story.findUnique({
+    where: { id: storyId },
+    select: { visibility: true },
+  });
+  if (!story) return false;
+  if (story.visibility === "PUBLIC") return true;
+  if (!userId) return false;
+  return (await getUserRole(storyId, userId)) !== null;
+}
+
 io.on("connection", (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
 
   // ── Room story (structure narrative en live + présence snapshot)
-  socket.on("story:join", ({ storyId }: { storyId: string }) => {
+  socket.on("story:join", async ({ storyId }: { storyId: string }) => {
+    try {
+      if (!(await canAccessStory(storyId, socket.data.userId))) {
+        socket.emit("access:denied", { scope: "story", storyId });
+        return;
+      }
+    } catch (err) {
+      console.error("[socket] story:join — échec de vérification d'accès:", err);
+      return;
+    }
     socket.join(`story:${storyId}`);
     // Envoyer le snapshot de présence au socket qui rejoint
     const snapshot = presence.getStoryPresenceSnapshot(storyId);
@@ -62,18 +106,29 @@ io.on("connection", (socket) => {
 
   // ── Rooms scènes
   socket.on("scene:join", async ({ sceneId }: { sceneId: string }) => {
-    socket.join(`scene:${sceneId}`);
-    console.log(`[socket] ${socket.id} joined scene:${sceneId}`);
+    try {
+      // Autorisation AVANT de rejoindre et AVANT tout envoi de contenu
+      const storyId = await getStoryIdByScene(sceneId);
+      if (!storyId || !(await canAccessStory(storyId, socket.data.userId))) {
+        socket.emit("access:denied", { scope: "scene", sceneId });
+        return;
+      }
 
-    // Envoyer la graine d'ouverture si la scène est vide et en a une
-    const sceneData = await prisma.scene.findUnique({
-      where: { id: sceneId },
-      select: { openingLine: true, contributions: { take: 1, select: { id: true } } },
-    });
+      socket.join(`scene:${sceneId}`);
+      console.log(`[socket] ${socket.id} joined scene:${sceneId}`);
 
-    if (sceneData?.openingLine && sceneData.contributions.length === 0) {
-      socket.emit("gm_intervention", { text: sceneData.openingLine });
-      console.log(`[socket] Graine d'ouverture envoyée à ${socket.id}`);
+      // Envoyer la graine d'ouverture si la scène est vide et en a une
+      const sceneData = await prisma.scene.findUnique({
+        where: { id: sceneId },
+        select: { openingLine: true, contributions: { take: 1, select: { id: true } } },
+      });
+
+      if (sceneData?.openingLine && sceneData.contributions.length === 0) {
+        socket.emit("gm_intervention", { text: sceneData.openingLine });
+        console.log(`[socket] Graine d'ouverture envoyée à ${socket.id}`);
+      }
+    } catch (err) {
+      console.error("[socket] scene:join — échec:", err);
     }
   });
 
@@ -104,9 +159,11 @@ io.on("connection", (socket) => {
   socket.on(
     "presence:identify",
     ({ userId, username, color }: { userId: string; username: string; color?: string | null }) => {
-      presence.identify(socket.id, userId, username, color);
+      // Socket authentifié : on ne fait pas confiance au userId déclaré par le client
+      const trustedUserId = socket.data.userId ?? userId;
+      presence.identify(socket.id, trustedUserId, username, color);
       // Room personnelle : permet de cibler ce user depuis n'importe quel contexte
-      socket.join(`user:${userId}`);
+      socket.join(`user:${trustedUserId}`);
       io.emit("presence:update", { count: presence.getOnlineCount() });
     },
   );
