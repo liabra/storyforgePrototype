@@ -34,6 +34,8 @@ import WorldMap from "./WorldMap";
 import { ReportModal } from "./ReportModal";
 import AdminPage from "./AdminPage";
 
+const BATTLE_ENABLED = false; // [BATTLE] masqué temporairement — repasser BATTLE_ENABLED à true pour réactiver
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function displayName(c: { name?: string; nickname?: string } | null | undefined) {
@@ -1626,13 +1628,15 @@ export default function App() {
                 )}
               </div>
             )}
-            <button
-              style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem" }}
-              onClick={() => setAppView("battle")}
-              title="Mode Battle"
-            >
-              ⚔ Battle
-            </button>
+            {BATTLE_ENABLED && ( // [BATTLE] masqué temporairement — repasser BATTLE_ENABLED à true pour réactiver
+              <button
+                style={{ ...s.btnGhost, fontSize: "0.82rem", padding: "0.25rem 0.65rem" }}
+                onClick={() => setAppView("battle")}
+                title="Mode Battle"
+              >
+                ⚔ Battle
+              </button>
+            )}
             {!authLoading && (
               currentUser ? (
                 <div style={s.userChip}>
@@ -1939,7 +1943,10 @@ export default function App() {
                     { key: "notifInvitesEnabled" as const, label: "Invitations" },
                     { key: "notifGeneralEnabled" as const, label: "Infos générales" },
                   ] as const
-                ).map(({ key, label }) => (
+                )
+                  // [BATTLE] masqué temporairement — repasser BATTLE_ENABLED à true pour réactiver
+                  .filter(({ key }) => BATTLE_ENABLED || key !== "notifBattleEnabled")
+                  .map(({ key, label }) => (
                   <label
                     key={key}
                     style={{ display: "flex", alignItems: "center", gap: "0.55rem", marginBottom: "0.4rem", cursor: "pointer" }}

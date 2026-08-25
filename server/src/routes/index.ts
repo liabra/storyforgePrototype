@@ -17,6 +17,8 @@ import notificationRoutes from "./notification.routes";
 import aiRoutes from "./ai.routes";
 import worldRoutes from "./world.routes";
 
+const BATTLE_ENABLED = false; // [BATTLE] masqué temporairement — repasser BATTLE_ENABLED à true pour réactiver
+
 const router = Router();
 
 router.use(authRoutes);
@@ -30,7 +32,8 @@ router.use(participantRoutes);
 router.use(joinRequestRoutes);
 router.use(activityRoutes);
 router.use(devRoutes);
-router.use(battleRoutes);
+// [BATTLE] masqué temporairement — repasser BATTLE_ENABLED à true pour réactiver
+if (BATTLE_ENABLED) router.use(battleRoutes);
 router.use(reportRoutes);
 router.use(adminRoutes);
 router.use(notificationRoutes);
