@@ -77,9 +77,9 @@ export const create = async (req: Request, res: Response) => {
 
   // ── Maître du jeu automatique
   const contribCount = await prisma.contribution.count({ where: { sceneId } });
-  void onNewContribution(sceneId, contribCount, (sid, text) => {
+  onNewContribution(sceneId, contribCount, (sid, text) => {
     io?.to(`scene:${sid}`).emit("gm_intervention", { text });
-  });
+  }).catch((err) => console.error("[GM] échec suggestion:", err));
 
   const username = req.user?.email?.split("@")[0] || "Anonyme";
   void activityService.broadcastActivityToStory(storyId, {

@@ -45,9 +45,13 @@ export async function onNewContribution(
 
   // Déclencheur 2 — timer de silence (repart à zéro à chaque contribution)
   state.silenceTimerId = setTimeout(async () => {
-    const text = await generateGmSuggestion(sceneId, "nudge");
-    emitGmMessage(sceneId, text);
-    state.lastGmAt = Date.now();
+    try {
+      const text = await generateGmSuggestion(sceneId, "nudge");
+      emitGmMessage(sceneId, text);
+      state.lastGmAt = Date.now();
+    } catch (err) {
+      console.error("[GM] échec du déclencheur de silence:", err);
+    }
   }, SILENCE_THRESHOLD_MS);
 
   sceneStates.set(sceneId, state);

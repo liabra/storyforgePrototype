@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import prisma from "../prisma/client";
 import { SceneMode, SceneStatus } from "../generated/prisma/client";
 import { generateImage } from "./image.service";
@@ -152,30 +152,30 @@ export const suggestSceneIdea = async (
 
   const scenesList = story.scenes.map((s) => `"${s.title}"`).join(", ");
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "Tu es un assistant créatif pour les auteurs. Tu proposes des idées courtes et inspirantes, sans jamais écrire à leur place. Réponds en une seule phrase courte (max 2 lignes).",
-      },
-      {
-        role: "user",
-        content: [
-          `Histoire : "${story.title}"`,
-          story.description ? `Description : ${story.description}` : "",
-          charactersList ? `Personnages : ${charactersList}` : "",
-          scenesList ? `Scènes existantes : ${scenesList}` : "",
-          sceneTitle ? `Scène en cours : "${sceneTitle}"` : "",
-          "\nSuggère une idée courte pour inspirer l'auteur.",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      },
-    ],
-  });
+  const prompt = [
+    `Histoire : "${story.title}"`,
+    story.description ? `Description : ${story.description}` : "",
+    charactersList ? `Personnages : ${charactersList}` : "",
+    scenesList ? `Scènes existantes : ${scenesList}` : "",
+    sceneTitle ? `Scène en cours : "${sceneTitle}"` : "",
+    "\nSuggère une idée courte pour inspirer l'auteur.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  return completion.choices[0].message.content ?? "Aucune idée générée.";
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction:
+        "Tu es un assistant créatif pour les auteurs. Tu proposes des idées courtes et inspirantes, sans jamais écrire à leur place. Réponds en une seule phrase courte (max 2 lignes).",
+      generationConfig: { maxOutputTokens: 120, temperature: 0.9 },
+    });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    return text || "Aucune idée générée.";
+  } catch (err) {
+    console.error("[suggestSceneIdea] échec Gemini:", err);
+    return "Aucune idée pour l'instant — réessaie dans un instant.";
+  }
 };
