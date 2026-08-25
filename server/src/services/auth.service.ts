@@ -65,6 +65,11 @@ export async function register(
     if (existing) throw httpError("Email déjà utilisé", 409);
   }
 
+  if (pseudonym?.trim()) {
+    const existing = await prisma.user.findFirst({ where: { pseudonym: pseudonym.trim() } });
+    if (existing) throw httpError("Pseudonyme déjà utilisé", 409);
+  }
+
   if (!email && !pseudonym?.trim()) {
     throw httpError("Un pseudonyme est requis sans email", 400);
   }

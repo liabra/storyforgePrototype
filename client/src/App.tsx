@@ -2721,8 +2721,8 @@ export default function App() {
                       <div style={s.row}>
                         <input
                           style={{ ...s.inputDark, flex: 1 }}
-                          type="email"
-                          placeholder="Email de l'utilisateur"
+                          type="text"
+                          placeholder="Email ou pseudo"
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
                           required

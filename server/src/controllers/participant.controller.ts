@@ -21,8 +21,10 @@ export const list = async (req: Request, res: Response): Promise<void> => {
 export const add = async (req: Request, res: Response): Promise<void> => {
   const storyId = p(req.params.storyId);
   const { email, role = "VIEWER" } = req.body;
+  // `identifier` (email OU pseudonyme) avec repli sur `email` pour la compatibilité
+  const identifier = (req.body.identifier ?? email)?.trim();
 
-  if (!email) { res.status(400).json({ error: "email est requis" }); return; }
+  if (!identifier) { res.status(400).json({ error: "identifier (email ou pseudo) est requis" }); return; }
   if (!ASSIGNABLE_ROLES.includes(role as ParticipantRole)) {
     res.status(400).json({ error: "Rôle invalide. Utilisez EDITOR ou VIEWER." }); return;
   }
@@ -32,7 +34,10 @@ export const add = async (req: Request, res: Response): Promise<void> => {
     res.status(403).json({ error: "Seul le propriétaire peut gérer les participants" }); return;
   }
 
-  const targetUser = await prisma.user.findFirst({ where: { email }, select: { id: true } });
+  const targetUser = await prisma.user.findFirst({
+    where: { OR: [{ email: identifier }, { pseudonym: identifier }] },
+    select: { id: true },
+  });
   if (!targetUser) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
 
   try {

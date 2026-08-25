@@ -444,10 +444,11 @@ export const api = {
   },
   participants: {
     list: (storyId: string) => request<Participant[]>(`/stories/${storyId}/participants`),
-    add: (storyId: string, email: string, role: "EDITOR" | "VIEWER") =>
+    add: (storyId: string, identifier: string, role: "EDITOR" | "VIEWER") =>
       request<Participant>(`/stories/${storyId}/participants`, {
         method: "POST",
-        body: JSON.stringify({ email, role }),
+        // identifier = email OU pseudonyme (résolu côté serveur)
+        body: JSON.stringify({ identifier, role }),
       }),
     updateRole: (storyId: string, userId: string, role: "EDITOR" | "VIEWER") =>
       request<Participant>(`/stories/${storyId}/participants/${userId}`, {
