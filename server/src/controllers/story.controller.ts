@@ -83,6 +83,13 @@ export const update = async (req: Request, res: Response) => {
       extractFragmentsFromStory(storyId).catch((err) =>
         console.error("[world] Erreur extraction post-histoire :", err)
       );
+
+      // Illustration finale en arrière-plan (le service catch déjà ses erreurs)
+      storyService.generateStoryIllustration(storyId)
+        .then((url) => {
+          if (url) io?.to(`story:${storyId}`).emit("story:finalIllustration", { storyId, url });
+        })
+        .catch((err) => console.error("[story] Erreur illustration finale :", err));
     }
   }
 

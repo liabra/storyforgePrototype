@@ -56,6 +56,7 @@ model Story {
   status       ContentStatus        @default(ACTIVE)
   visibility   StoryVisibility      @default(PRIVATE)
   isArchived   Boolean              @default(false)
+  finalIllustration String?
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   chapters     Chapter[]

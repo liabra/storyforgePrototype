@@ -21,6 +21,7 @@ export interface Story {
   status: ContentStatus;
   visibility: StoryVisibility;
   isArchived?: boolean;
+  finalIllustration?: string | null;
 }
 
 export interface PublicStory {

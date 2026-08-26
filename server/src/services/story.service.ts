@@ -1,5 +1,6 @@
 import prisma from "../prisma/client";
 import { ContentStatus, ParticipantRole, StoryVisibility } from "../generated/prisma/client";
+import { generateImage } from "./image.service";
 
 export const getUserStories = (userId: string) =>
   prisma.story.findMany({
@@ -73,6 +74,67 @@ export const getStoryStatus = async (storyId: string): Promise<ContentStatus | n
 export const getStoryTitle = async (storyId: string): Promise<string | null> => {
   const story = await prisma.story.findUnique({ where: { id: storyId }, select: { title: true } });
   return story?.title ?? null;
+};
+
+/**
+ * Génère l'illustration finale d'une histoire terminée et la stocke dans
+ * Story.finalIllustration. Fire-and-forget : logue et retourne null en cas
+ * d'erreur, ne propage jamais.
+ */
+export const generateStoryIllustration = async (storyId: string): Promise<string | null> => {
+  try {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      select: {
+        title: true,
+        genre: true,
+        characters: { select: { name: true, nickname: true } },
+        scenes: {
+          orderBy: { order: "asc" },
+          select: { title: true },
+        },
+      },
+    });
+    if (!story) return null;
+
+    const characterNames = story.characters
+      .map((c) => c.name || c.nickname)
+      .filter((n): n is string => !!n);
+
+    // Échantillon de contenu : titres de scènes + dernières contributions
+    const recentContributions = await prisma.contribution.findMany({
+      where: { scene: { storyId }, modStatus: { not: "BLOCKED" } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { content: true },
+    });
+
+    const content = [
+      story.genre ? `Genre : ${story.genre}` : "",
+      story.scenes.length ? `Scènes : ${story.scenes.map((s) => s.title).join(", ")}` : "",
+      ...recentContributions.map((c) => c.content).reverse(),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 2000);
+
+    const url = await generateImage({
+      sceneTitle: story.title,
+      storyTitle: story.title,
+      content: content || null,
+      characterNames,
+    });
+
+    await prisma.story.update({
+      where: { id: storyId },
+      data: { finalIllustration: url },
+    });
+
+    return url;
+  } catch (err) {
+    console.error("[story] Échec de génération de l'illustration finale :", err);
+    return null;
+  }
 };
 
 /**

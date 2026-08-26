@@ -740,6 +740,11 @@ export default function App() {
       if (visibility === "PRIVATE") setPublicStories((p) => p.filter((s) => s.id !== storyId));
     };
 
+    const onStoryFinalIllustration = ({ storyId, url }: { storyId: string; url: string }) => {
+      setSelectedStory((s) => s?.id === storyId ? { ...s, finalIllustration: url } : s);
+      setStories((p) => p.map((s) => s.id === storyId ? { ...s, finalIllustration: url } : s));
+    };
+
     // Phase A : chapter:new, chapter:delete, chapter:statusUpdate supprimés
     socket.on("scene:new", onSceneNew);
     socket.on("scene:presence:update", onScenePresenceUpdate);
@@ -753,6 +758,7 @@ export default function App() {
     socket.on("scene:statusUpdate", onSceneStatusUpdate);
     socket.on("story:statusUpdate", onStoryStatusUpdate);
     socket.on("story:visibilityUpdate", onStoryVisibilityUpdate);
+    socket.on("story:finalIllustration", onStoryFinalIllustration);
 
     return () => {
       socket.emit("story:leave", { storyId: selectedStory.id });
@@ -768,6 +774,7 @@ export default function App() {
       socket.off("scene:statusUpdate", onSceneStatusUpdate);
       socket.off("story:statusUpdate", onStoryStatusUpdate);
       socket.off("story:visibilityUpdate", onStoryVisibilityUpdate);
+      socket.off("story:finalIllustration", onStoryFinalIllustration);
       setAllScenePresence({});
     };
   }, [selectedStory?.id]);
@@ -2417,6 +2424,21 @@ export default function App() {
                 </div>
                 {selectedStory.description && <p style={s.pageDesc}>{selectedStory.description}</p>}
               </div>
+
+              {/* ── Illustration finale (histoire terminée) */}
+              {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" && (
+                selectedStory.finalIllustration ? (
+                  <img
+                    src={selectedStory.finalIllustration}
+                    alt={`Illustration finale de « ${selectedStory.title} »`}
+                    style={{ width: "100%", borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: "1.25rem", display: "block" }}
+                  />
+                ) : (
+                  <p style={{ fontSize: "0.78rem", color: C.textMuted, fontStyle: "italic", margin: "0 0 1.25rem" }}>
+                    Illustration en cours de génération…
+                  </p>
+                )
+              )}
 
               {/* Tabs */}
               <div style={s.tabs} className="app-tabs">
