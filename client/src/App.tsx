@@ -2014,7 +2014,7 @@ export default function App() {
                 <option value="ROMANCE">💌 Romance</option>
                 <option value="MYSTERY">🔍 Mystère</option>
               </select>
-              <div style={{ display: "flex", gap: "0.4rem" }}>
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                 <button style={s.btnAccent} type="submit">Créer →</button>
                 <button style={s.btnGhost} type="button" onClick={closeStoryForm}>Annuler</button>
               </div>
