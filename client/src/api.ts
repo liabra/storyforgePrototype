@@ -388,6 +388,8 @@ export const api = {
       request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ status }) }),
     updateVisibility: (id: string, visibility: StoryVisibility) =>
       request<Story>(`/stories/${id}`, { method: "PUT", body: JSON.stringify({ visibility }) }),
+    generateIllustration: (id: string) =>
+      request<{ finalIllustration: string }>(`/stories/${id}/generate-illustration`, { method: "POST" }),
     archive: (id: string) => request<Story>(`/stories/${id}/archive`, { method: "PATCH" }),
     unarchive: (id: string) => request<Story>(`/stories/${id}/unarchive`, { method: "PATCH" }),
     delete: (id: string) => request<void>(`/stories/${id}`, { method: "DELETE" }),

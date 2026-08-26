@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAll, getById, getPublic, getArchived, create, update, archive, unarchive, remove } from "../controllers/story.controller";
+import { getAll, getById, getPublic, getArchived, create, update, archive, unarchive, remove, generateIllustration } from "../controllers/story.controller";
 import { requireAuth, optionalAuth, requireNotBanned } from "../middleware/auth";
 
 const router = Router();
@@ -12,6 +12,7 @@ router.post("/stories", requireAuth, requireNotBanned, create);
 router.put("/stories/:id", requireAuth, update);
 router.patch("/stories/:id/archive", requireAuth, archive);
 router.patch("/stories/:id/unarchive", requireAuth, unarchive);
+router.post("/stories/:id/generate-illustration", requireAuth, generateIllustration);
 router.delete("/stories/:id", requireAuth, remove);
 
 export default router;

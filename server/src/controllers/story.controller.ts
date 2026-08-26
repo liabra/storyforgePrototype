@@ -115,6 +115,24 @@ export const remove = async (req: Request, res: Response) => {
   return res.status(204).send();
 };
 
+// POST /api/stories/:id/generate-illustration — (re)génère l'illustration finale
+export const generateIllustration = async (req: Request, res: Response) => {
+  const storyId = getSingleParam(req.params.id);
+
+  const role = await participantService.getUserRole(storyId, req.user!.id);
+  if (role !== ParticipantRole.OWNER) {
+    return res.status(403).json({ error: "Seul le propriétaire peut générer l'illustration" });
+  }
+
+  const url = await storyService.generateStoryIllustration(storyId);
+  if (!url) {
+    return res.status(502).json({ error: "La génération de l'illustration a échoué, réessaie." });
+  }
+
+  getIO()?.to(`story:${storyId}`).emit("story:finalIllustration", { storyId, url });
+  return res.json({ finalIllustration: url });
+};
+
 // GET /api/stories/archived — histoires archivées du propriétaire connecté
 export const getArchived = async (req: Request, res: Response) => {
   const stories = await storyService.getArchivedStories(req.user!.id);

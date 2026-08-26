@@ -243,6 +243,7 @@ export default function App() {
   const [newScene, setNewScene] = useState({ title: "", description: "" });
   const [creatingScene, setCreatingScene] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatingIllustration, setGeneratingIllustration] = useState(false);
   const [spectatorView, setSpectatorView] = useState(false);
   const [isReading, setIsReading] = useState(false);
 
@@ -1127,6 +1128,24 @@ export default function App() {
       setSelectedScene((s) => s ? { ...s, imageUrl: updated.imageUrl } : s);
     } finally {
       setGeneratingImage(false);
+    }
+  };
+
+  // ── Illustration finale de l'histoire (OWNER)
+  const handleGenerateIllustration = async () => {
+    if (!selectedStory) return;
+    setGeneratingIllustration(true);
+    try {
+      const { finalIllustration } = await api.stories.generateIllustration(selectedStory.id);
+      setSelectedStory((s) => s ? { ...s, finalIllustration } : s);
+      setStories((p) => p.map((s) => s.id === selectedStory.id ? { ...s, finalIllustration } : s));
+    } catch (err: unknown) {
+      setToasts((prev) => {
+        const id = ++toastIdRef.current;
+        return [...prev, { id, type: "scene" as const, message: (err as Error).message || "La génération de l'illustration a échoué" }].slice(-5);
+      });
+    } finally {
+      setGeneratingIllustration(false);
     }
   };
 
@@ -2426,18 +2445,28 @@ export default function App() {
               </div>
 
               {/* ── Illustration finale (histoire terminée) */}
-              {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" && (
-                selectedStory.finalIllustration ? (
-                  <img
-                    src={selectedStory.finalIllustration}
-                    alt={`Illustration finale de « ${selectedStory.title} »`}
-                    style={{ width: "100%", borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: "1.25rem", display: "block" }}
-                  />
-                ) : (
-                  <p style={{ fontSize: "0.78rem", color: C.textMuted, fontStyle: "italic", margin: "0 0 1.25rem" }}>
-                    Illustration en cours de génération…
-                  </p>
-                )
+              {(selectedStory as Story & { status?: ContentStatus }).status === "DONE" && (selectedStory.finalIllustration || myRole === "OWNER") && (
+                <div style={{ marginBottom: "1.25rem" }}>
+                  {selectedStory.finalIllustration && (
+                    <img
+                      src={selectedStory.finalIllustration}
+                      alt={`Illustration finale de « ${selectedStory.title} »`}
+                      style={{ width: "100%", borderRadius: 8, border: `1px solid ${C.border}`, display: "block" }}
+                    />
+                  )}
+                  {generatingIllustration ? (
+                    <p style={{ fontSize: "0.78rem", color: C.textMuted, fontStyle: "italic", margin: "0.4rem 0 0" }}>
+                      Génération en cours…
+                    </p>
+                  ) : myRole === "OWNER" && (
+                    <button
+                      style={{ ...s.btnGhost, fontSize: "0.78rem", padding: "0.2rem 0.6rem", marginTop: selectedStory.finalIllustration ? "0.4rem" : 0 }}
+                      onClick={handleGenerateIllustration}
+                    >
+                      {selectedStory.finalIllustration ? "Régénérer l'illustration" : "🎨 Générer l'illustration"}
+                    </button>
+                  )}
+                </div>
               )}
 
               {/* Tabs */}
