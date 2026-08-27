@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 
 interface Fragment {
@@ -19,22 +19,54 @@ interface WorldData {
   };
 }
 
-const GENRE_COLOR: Record<string, string> = {
-  FANTASY:      "#8b5cf6",
-  HORROR:       "#ef4444",
-  CONTEMPORARY: "#3b82f6",
-  SF:           "#06b6d4",
-  ROMANCE:      "#ec4899",
-  MYSTERY:      "#f59e0b",
-  MIXED:        "#6b7280",
+// ── Palette parchemin (scène illustrée : valeurs fixes, pas de thème clair/sombre)
+const PARCHMENT = "#e9dcc2";
+const GOLD = "#b3923f";
+const GOLD_LIGHT = "#c8a95a";
+const INK = "#2a3350";
+const PARCHMENT_LIGHT = "#f3ead6";
+const DESK = "#2f2a21";
+
+interface GenreStyle { fill: string; stroke: string; marker: string }
+
+const GENRE_STYLE: Record<string, GenreStyle> = {
+  FANTASY:      { fill: "#c3b2df", stroke: "#7d68a8", marker: "#6b559b" },
+  HORROR:       { fill: "#d3a99b", stroke: "#a86450", marker: "#98503c" },
+  SF:           { fill: "#a9cbc4", stroke: "#4f8b81", marker: "#3d786e" },
+  CONTEMPORARY: { fill: "#aec2da", stroke: "#5f7fa8", marker: "#4a6c96" },
+  ROMANCE:      { fill: "#e0c2d0", stroke: "#b06a86", marker: "#9c4e6e" },
+  MYSTERY:      { fill: "#e2cfa0", stroke: "#b58a2e", marker: "#916d1e" },
+  MIXED:        { fill: "#d8cdb4", stroke: "#a89768", marker: "#7c6f4e" },
 };
 
-const TYPE_ICON: Record<string, string> = {
-  OBJECT:    "⚔️",
-  PLACE:     "🗺️",
-  PHRASE:    "✨",
-  CHARACTER: "👤",
+const GENRE_TERRITORY: Record<string, string> = {
+  FANTASY:      "Terres de Fantasy",
+  HORROR:       "Marches de l'Horreur",
+  SF:           "Confins du SF",
+  CONTEMPORARY: "Cité Contemporaine",
+  ROMANCE:      "Jardins du Romance",
+  MYSTERY:      "Brumes du Mystère",
+  MIXED:        "Terres Mêlées",
 };
+
+interface Region { cx: number; cy: number; rx: number; ry: number }
+
+// Territoires dans le viewBox "0 0 100 100" — légèrement ajustés pour qu'ils
+// se côtoient sans se chevaucher.
+const GENRE_REGION: Record<string, Region> = {
+  MIXED:        { cx: 50, cy: 14, rx: 14, ry: 8.5 },
+  FANTASY:      { cx: 27, cy: 31, rx: 19, ry: 15 },
+  HORROR:       { cx: 73, cy: 29, rx: 18, ry: 14 },
+  ROMANCE:      { cx: 50, cy: 50, rx: 15, ry: 11 },
+  SF:           { cx: 24, cy: 70, rx: 18, ry: 14 },
+  CONTEMPORARY: { cx: 71, cy: 68, rx: 19, ry: 14 },
+  MYSTERY:      { cx: 50, cy: 84, rx: 16, ry: 11 },
+};
+
+// Ordre de dessin (du haut vers le bas) pour des recouvrements prévisibles
+const GENRE_ORDER = ["MIXED", "FANTASY", "HORROR", "ROMANCE", "SF", "CONTEMPORARY", "MYSTERY"];
+
+const TYPE_ORDER = ["OBJECT", "PLACE", "PHRASE", "CHARACTER"];
 
 const TYPE_LABEL: Record<string, string> = {
   OBJECT:    "Objets",
@@ -43,15 +75,56 @@ const TYPE_LABEL: Record<string, string> = {
   CHARACTER: "Personnages",
 };
 
-// Génère une position stable basée sur l'id du fragment
-function stablePosition(id: string, _index: number): { x: number; y: number } {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+// Le label de territoire occupe le bas de l'ellipse : on exclut ce secteur
+// angulaire du placement des fragments pour qu'aucun marqueur ne le recouvre.
+const ARC_START = 140;
+const ARC_SPAN = 260;
+
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (id.charCodeAt(i) + ((h << 5) - h)) | 0;
+  return Math.abs(h);
+}
+
+/** Position déterministe DANS l'ellipse du genre du fragment. */
+function positionInRegion(id: string, region: Region): { x: number; y: number } {
+  const h = hashId(id);
+  const angle = ((ARC_START + (h % ARC_SPAN)) * Math.PI) / 180;
+  const radius = 0.35 + (((h >> 9) % 1000) / 1000) * 0.5; // 0.35 → 0.85
+  return {
+    x: region.cx + Math.cos(angle) * region.rx * radius,
+    y: region.cy + Math.sin(angle) * region.ry * radius,
+  };
+}
+
+/** Forme du marqueur selon le type (losange, épingle, étoile ; cercle à part). */
+function markerPath(type: string, x: number, y: number, s: number): string {
+  if (type === "PLACE") {
+    return `M ${x} ${y + s * 1.15}`
+      + ` C ${x - s * 0.95} ${y + s * 0.1} ${x - s * 0.92} ${y - s * 0.95} ${x} ${y - s * 0.95}`
+      + ` C ${x + s * 0.92} ${y - s * 0.95} ${x + s * 0.95} ${y + s * 0.1} ${x} ${y + s * 1.15} Z`;
   }
-  const x = 8 + (Math.abs(hash % 1000) / 1000) * 84;
-  const y = 8 + (Math.abs((hash >> 8) % 1000) / 1000) * 84;
-  return { x, y };
+  if (type === "PHRASE") {
+    return `M ${x} ${y - s} L ${x + s * 0.3} ${y - s * 0.3} L ${x + s} ${y}`
+      + ` L ${x + s * 0.3} ${y + s * 0.3} L ${x} ${y + s} L ${x - s * 0.3} ${y + s * 0.3}`
+      + ` L ${x - s} ${y} L ${x - s * 0.3} ${y - s * 0.3} Z`;
+  }
+  // OBJECT → losange
+  return `M ${x} ${y - s} L ${x + s * 0.78} ${y} L ${x} ${y + s} L ${x - s * 0.78} ${y} Z`;
+}
+
+function Marker({ type, x, y, size, fill, opacity }: {
+  type: string; x: number; y: number; size: number; fill: string; opacity?: number;
+}) {
+  const common = {
+    fill,
+    opacity,
+    stroke: PARCHMENT,
+    strokeWidth: size * 0.16,
+    strokeLinejoin: "round" as const,
+  };
+  if (type === "CHARACTER") return <circle cx={x} cy={y} r={size * 0.85} {...common} />;
+  return <path d={markerPath(type, x, y, size)} {...common} />;
 }
 
 interface Props {
@@ -76,16 +149,30 @@ export default function WorldMap({ onClose }: Props) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const fragments = data?.fragments ?? [];
-  const filtered = filter
-    ? fragments.filter(f => f.genre === filter || f.type === filter)
-    : fragments;
+  const fragments = useMemo(() => data?.fragments ?? [], [data]);
+
+  const countByGenre = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of fragments) {
+      const genre = GENRE_REGION[f.genre] ? f.genre : "MIXED";
+      counts[genre] = (counts[genre] ?? 0) + 1;
+    }
+    return counts;
+  }, [fragments]);
+
+  const countByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of fragments) counts[f.type] = (counts[f.type] ?? 0) + 1;
+    return counts;
+  }, [fragments]);
+
+  const isEmpty = fragments.length === 0;
 
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      background: "#0a0812",
-      color: "#e8e0d0",
+      background: `radial-gradient(ellipse at 50% 40%, #3b342a 0%, ${DESK} 70%, #201c16 100%)`,
+      color: PARCHMENT,
       fontFamily: "'Georgia', serif",
       display: "flex",
       flexDirection: "column",
@@ -94,24 +181,26 @@ export default function WorldMap({ onClose }: Props) {
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "1rem 1.5rem",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(255,255,255,0.03)",
+        borderBottom: `1px solid ${GOLD}55`,
+        background: "rgba(0,0,0,0.18)",
         flexShrink: 0,
       }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.05em" }}>
-            🌍 Carte du Monde
+          <h1 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.06em", color: PARCHMENT }}>
+            Carte du Monde
           </h1>
-          <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", fontStyle: "italic" }}>
-            {data ? `${data.stats.total} fragment${data.stats.total > 1 ? "s" : ""} dans la mémoire du monde` : "Chargement…"}
+          <p style={{ margin: "0.2rem 0 0", fontSize: "0.78rem", color: GOLD_LIGHT, fontStyle: "italic" }}>
+            {data
+              ? `${data.stats.total} fragment${data.stats.total > 1 ? "s" : ""} dans la mémoire du monde`
+              : "Chargement…"}
           </p>
         </div>
         <button
           onClick={onClose}
           style={{
-            background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)",
+            background: "rgba(233,220,194,0.08)", border: `1px solid ${GOLD}`,
             borderRadius: 6, padding: "0.4rem 0.85rem",
-            color: "rgba(255,255,255,0.6)", fontSize: "0.82rem", cursor: "pointer",
+            color: PARCHMENT, fontSize: "0.82rem", cursor: "pointer",
             fontFamily: "inherit",
           }}
         >
@@ -120,27 +209,15 @@ export default function WorldMap({ onClose }: Props) {
       </div>
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Carte SVG */}
+        {/* ── La carte */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
           {loading ? (
             <div style={{
               position: "absolute", inset: 0, display: "flex",
               alignItems: "center", justifyContent: "center",
-              color: "rgba(255,255,255,0.3)", fontStyle: "italic",
+              color: GOLD_LIGHT, fontStyle: "italic", fontSize: "0.95rem",
             }}>
               La carte se dévoile…
-            </div>
-          ) : fragments.length === 0 ? (
-            <div style={{
-              position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: "1rem",
-              color: "rgba(255,255,255,0.25)",
-            }}>
-              <div style={{ fontSize: "3rem", opacity: 0.4 }}>🌫️</div>
-              <p style={{ fontStyle: "italic", fontSize: "0.95rem", textAlign: "center", maxWidth: 300 }}>
-                Le monde attend ses premières histoires.<br />
-                Jouez — et la carte se construira.
-              </p>
             </div>
           ) : (
             <svg
@@ -149,84 +226,182 @@ export default function WorldMap({ onClose }: Props) {
               preserveAspectRatio="xMidYMid meet"
               style={{ position: "absolute", inset: 0 }}
             >
-              {/* Grille de fond */}
               <defs>
-                <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-                  <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.2"/>
-                </pattern>
-                <radialGradient id="vignette" cx="50%" cy="50%" r="50%">
-                  <stop offset="60%" stopColor="transparent"/>
-                  <stop offset="100%" stopColor="#0a0812"/>
+                <clipPath id="wm-sheet">
+                  <rect x="1.5" y="1.5" width="97" height="97" rx="3" ry="3" />
+                </clipPath>
+                <filter id="wm-grain" x="0" y="0" width="100%" height="100%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
+                  <feColorMatrix type="saturate" values="0" />
+                </filter>
+                <radialGradient id="wm-aged" cx="50%" cy="45%" r="62%">
+                  <stop offset="55%" stopColor="rgba(150,120,70,0)" />
+                  <stop offset="100%" stopColor="rgba(126,98,52,0.30)" />
                 </radialGradient>
               </defs>
-              <rect width="100" height="100" fill="url(#grid)"/>
-              <rect width="100" height="100" fill="url(#vignette)"/>
 
-              {/* Points des fragments */}
-              {filtered.map((f, i) => {
-                const pos = stablePosition(f.id, i);
-                const color = GENRE_COLOR[f.genre] ?? "#6b7280";
-                const size = 0.8 + Math.min(f.weight * 0.3, 2);
-                const isHovered = hoveredFragment?.id === f.id;
+              {/* Feuille de parchemin + double liseré doré */}
+              <rect x="1.5" y="1.5" width="97" height="97" rx="3" ry="3" fill={PARCHMENT} />
+              <g clipPath="url(#wm-sheet)">
+                <rect
+                  x="1.5" y="1.5" width="97" height="97"
+                  filter="url(#wm-grain)" opacity="0.07"
+                  style={{ mixBlendMode: "multiply" }}
+                />
+                <rect x="1.5" y="1.5" width="97" height="97" fill="url(#wm-aged)" />
+              </g>
+              <rect x="1.5" y="1.5" width="97" height="97" rx="3" ry="3"
+                fill="none" stroke={GOLD} strokeWidth="1.1" />
+              <rect x="4.2" y="4.2" width="91.6" height="91.6" rx="2" ry="2"
+                fill="none" stroke={GOLD_LIGHT} strokeWidth="0.35" />
+
+              {/* Boussole décorative */}
+              <g opacity="0.75">
+                <text
+                  x="88" y="6.6" textAnchor="middle" fontSize="2.2"
+                  fontFamily="'Georgia', serif" fontWeight="600" fill={GOLD}
+                >
+                  N
+                </text>
+                <path
+                  d="M 88 8 L 88.9 11.1 L 92 12 L 88.9 12.9 L 88 16 L 87.1 12.9 L 84 12 L 87.1 11.1 Z"
+                  fill={GOLD} opacity="0.85"
+                />
+                <circle cx="88" cy="12" r="4.6" fill="none" stroke={GOLD_LIGHT} strokeWidth="0.28" />
+              </g>
+
+              {/* Territoires */}
+              {GENRE_ORDER.map((genre) => {
+                const region = GENRE_REGION[genre];
+                const style = GENRE_STYLE[genre];
+                const explored = (countByGenre[genre] ?? 0) > 0;
+                const dimmed = filter !== null && filter !== genre;
+                const base = explored ? 1 : 0.45;
+                const opacity = dimmed ? base * 0.35 : base;
 
                 return (
-                  <g key={f.id}
+                  <g key={genre} opacity={opacity}>
+                    <ellipse
+                      cx={region.cx} cy={region.cy} rx={region.rx} ry={region.ry}
+                      fill={style.fill}
+                      fillOpacity={explored ? 0.5 : 0.22}
+                      stroke={style.stroke}
+                      strokeWidth={explored ? 0.45 : 0.35}
+                      strokeDasharray={explored ? undefined : "1.6 1.4"}
+                    />
+                    <text
+                      x={region.cx}
+                      y={region.cy + region.ry * 0.8}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontFamily="'Georgia', serif"
+                      fontSize="2.3"
+                      fontStyle={explored ? "normal" : "italic"}
+                      fontWeight={explored ? 600 : 400}
+                      letterSpacing="0.12"
+                      fill={style.marker}
+                      stroke={PARCHMENT}
+                      strokeWidth="0.9"
+                      paintOrder="stroke"
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {GENRE_TERRITORY[genre]}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Fragments */}
+              {fragments.map((f) => {
+                const genre = GENRE_REGION[f.genre] ? f.genre : "MIXED";
+                const region = GENRE_REGION[genre];
+                const style = GENRE_STYLE[genre];
+                const pos = positionInRegion(f.id, region);
+                const hovered = hoveredFragment?.id === f.id;
+                const dimmed = filter !== null && filter !== genre;
+                const size = (1.4 + Math.min(f.weight * 0.18, 0.7)) * (hovered ? 1.35 : 1);
+
+                return (
+                  <g
+                    key={f.id}
                     style={{ cursor: "pointer" }}
+                    opacity={dimmed ? 0.25 : 1}
                     onMouseEnter={() => setHoveredFragment(f)}
                     onMouseLeave={() => setHoveredFragment(null)}
                   >
-                    {/* Halo */}
-                    {isHovered && (
-                      <circle
-                        cx={pos.x} cy={pos.y}
-                        r={size + 1.5}
-                        fill={color}
-                        opacity={0.15}
-                      />
+                    {hovered && (
+                      <circle cx={pos.x} cy={pos.y} r={size + 1.6} fill={style.marker} opacity={0.18} />
                     )}
-                    {/* Point principal */}
-                    <circle
-                      cx={pos.x} cy={pos.y}
-                      r={size}
-                      fill={color}
-                      opacity={isHovered ? 1 : 0.7}
+                    {/* Zone de survol confortable */}
+                    <circle cx={pos.x} cy={pos.y} r={2.6} fill="transparent" />
+                    <Marker
+                      type={f.type}
+                      x={pos.x} y={pos.y}
+                      size={size}
+                      fill={style.marker}
+                      opacity={hovered ? 1 : 0.9}
                     />
-                    {/* Pulse si poids élevé */}
-                    {f.weight >= 3 && (
-                      <circle
-                        cx={pos.x} cy={pos.y}
-                        r={size + 0.8}
-                        fill="none"
-                        stroke={color}
-                        strokeWidth="0.2"
-                        opacity={0.4}
-                      />
-                    )}
                   </g>
                 );
               })}
             </svg>
           )}
 
-          {/* Tooltip fragment survolé */}
+          {/* Aucun fragment : inscription sur parchemin */}
+          {!loading && isEmpty && (
+            <div style={{
+              position: "absolute", bottom: "6%", left: "50%",
+              transform: "translateX(-50%)",
+              background: PARCHMENT_LIGHT,
+              border: `1px solid ${GOLD}`,
+              boxShadow: "0 4px 18px rgba(0,0,0,0.35)",
+              borderRadius: 8, padding: "0.9rem 1.4rem",
+              maxWidth: 380, textAlign: "center",
+              pointerEvents: "none",
+            }}>
+              <p style={{
+                margin: 0, color: INK, fontSize: "0.95rem",
+                fontStyle: "italic", lineHeight: 1.55,
+              }}>
+                Le monde est encore inexploré.<br />
+                Terminez une histoire pour y déposer ses premiers fragments.
+              </p>
+            </div>
+          )}
+
+          {/* Fragment survolé */}
           {hoveredFragment && (
             <div style={{
               position: "absolute", bottom: "1.5rem", left: "50%",
               transform: "translateX(-50%)",
-              background: "rgba(10,8,18,0.95)",
-              border: `1px solid ${GENRE_COLOR[hoveredFragment.genre] ?? "#555"}`,
+              background: PARCHMENT_LIGHT,
+              border: `1px solid ${GENRE_STYLE[hoveredFragment.genre]?.stroke ?? GOLD}`,
+              boxShadow: "0 4px 18px rgba(0,0,0,0.35)",
               borderRadius: 8, padding: "0.7rem 1.1rem",
-              maxWidth: 320, textAlign: "center",
+              maxWidth: 340, textAlign: "center",
               pointerEvents: "none",
             }}>
-              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", marginBottom: "0.3rem", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {TYPE_ICON[hoveredFragment.type]} {TYPE_LABEL[hoveredFragment.type]} · {hoveredFragment.genre}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+                fontSize: "0.72rem", color: `${INK}99`, marginBottom: "0.35rem",
+                letterSpacing: "0.08em", textTransform: "uppercase",
+              }}>
+                <svg width="13" height="13" viewBox="0 0 10 10" aria-hidden="true">
+                  <Marker
+                    type={hoveredFragment.type}
+                    x={5} y={5} size={3.4}
+                    fill={GENRE_STYLE[hoveredFragment.genre]?.marker ?? INK}
+                  />
+                </svg>
+                <span>
+                  {TYPE_LABEL[hoveredFragment.type]} · {GENRE_TERRITORY[hoveredFragment.genre] ?? hoveredFragment.genre}
+                </span>
               </div>
-              <div style={{ fontSize: "0.95rem", fontStyle: "italic", color: "rgba(255,235,170,0.9)", lineHeight: 1.5 }}>
-                "{hoveredFragment.label}"
+              <div style={{ fontSize: "0.95rem", fontStyle: "italic", color: INK, lineHeight: 1.5 }}>
+                « {hoveredFragment.label} »
               </div>
               {hoveredFragment.weight > 1 && (
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)", marginTop: "0.4rem" }}>
+                <div style={{ fontSize: "0.72rem", color: `${INK}88`, marginTop: "0.4rem" }}>
                   Résonance : {hoveredFragment.weight}
                 </div>
               )}
@@ -234,75 +409,99 @@ export default function WorldMap({ onClose }: Props) {
           )}
         </div>
 
-        {/* Panneau latéral — stats et filtres */}
+        {/* ── Panneau latéral — filtre par genre et légende des formes */}
         <div style={{
-          width: 220, flexShrink: 0,
-          borderLeft: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(255,255,255,0.02)",
+          width: 232, flexShrink: 0,
+          borderLeft: `1px solid ${GOLD}`,
+          background: PARCHMENT_LIGHT,
+          color: INK,
           padding: "1.2rem 1rem",
           overflowY: "auto",
           display: "flex", flexDirection: "column", gap: "1.5rem",
         }}>
-          {/* Filtres genre */}
+          {/* Filtre par genre */}
           <div>
-            <p style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", margin: "0 0 0.7rem" }}>
-              Genre
+            <p style={{
+              fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase",
+              color: `${INK}88`, margin: "0 0 0.7rem",
+            }}>
+              Territoires
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               <button
                 onClick={() => setFilter(null)}
                 style={{
-                  background: filter === null ? "rgba(255,255,255,0.1)" : "transparent",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 4, padding: "0.3rem 0.6rem",
-                  color: "rgba(255,255,255,0.6)", fontSize: "0.78rem",
+                  background: filter === null ? `${GOLD}33` : "transparent",
+                  border: `1px solid ${filter === null ? GOLD : `${INK}25`}`,
+                  borderRadius: 4, padding: "0.32rem 0.6rem",
+                  color: INK, fontSize: "0.8rem",
                   cursor: "pointer", textAlign: "left", fontFamily: "inherit",
                 }}
               >
-                Tous ({data?.stats.total ?? 0})
+                Tout le monde ({fragments.length})
               </button>
-              {Object.entries(GENRE_COLOR).map(([genre, color]) => {
-                const count = data?.stats.byGenre[genre] ?? 0;
-                if (count === 0) return null;
+              {GENRE_ORDER.map((genre) => {
+                const count = countByGenre[genre] ?? 0;
+                const style = GENRE_STYLE[genre];
+                const active = filter === genre;
+                const explored = count > 0;
                 return (
                   <button
                     key={genre}
-                    onClick={() => setFilter(genre === filter ? null : genre)}
+                    onClick={() => explored && setFilter(active ? null : genre)}
+                    disabled={!explored}
+                    title={explored ? undefined : "Territoire inexploré"}
                     style={{
-                      background: filter === genre ? `${color}22` : "transparent",
-                      border: `1px solid ${filter === genre ? color : "rgba(255,255,255,0.1)"}`,
-                      borderRadius: 4, padding: "0.3rem 0.6rem",
-                      color: filter === genre ? color : "rgba(255,255,255,0.5)",
-                      fontSize: "0.78rem", cursor: "pointer",
+                      background: active ? `${style.fill}88` : "transparent",
+                      border: `1px solid ${active ? style.stroke : `${INK}20`}`,
+                      borderRadius: 4, padding: "0.32rem 0.6rem",
+                      color: explored ? style.marker : `${INK}55`,
+                      fontSize: "0.8rem",
+                      fontStyle: explored ? "normal" : "italic",
+                      cursor: explored ? "pointer" : "default",
                       textAlign: "left", fontFamily: "inherit",
-                      display: "flex", justifyContent: "space-between",
+                      display: "flex", justifyContent: "space-between", gap: "0.5rem",
                     }}
                   >
-                    <span>{genre}</span>
-                    <span style={{ opacity: 0.6 }}>{count}</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {GENRE_TERRITORY[genre]}
+                    </span>
+                    <span style={{ opacity: 0.7 }}>{explored ? count : "—"}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Stats par type */}
+          {/* Légende des formes */}
           <div>
-            <p style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", margin: "0 0 0.7rem" }}>
-              Types
+            <p style={{
+              fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase",
+              color: `${INK}88`, margin: "0 0 0.7rem",
+            }}>
+              Légende
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {Object.entries(TYPE_ICON).map(([type, icon]) => {
-                const count = data?.stats.byType[type] ?? 0;
-                return (
-                  <div key={type} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "rgba(255,255,255,0.5)" }}>
-                    <span>{icon}</span>
-                    <span style={{ flex: 1 }}>{TYPE_LABEL[type]}</span>
-                    <span style={{ color: "rgba(255,255,255,0.3)" }}>{count}</span>
-                  </div>
-                );
-              })}
+              {TYPE_ORDER.map((type) => (
+                <div key={type} style={{
+                  display: "flex", alignItems: "center", gap: "0.55rem",
+                  fontSize: "0.82rem", color: INK,
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 10 10" aria-hidden="true">
+                    <Marker type={type} x={5} y={5} size={3.6} fill={INK} />
+                  </svg>
+                  <span style={{ flex: 1 }}>{TYPE_LABEL[type]}</span>
+                  <span style={{ color: `${INK}88` }}>{countByType[type] ?? 0}</span>
+                </div>
+              ))}
             </div>
+            <p style={{
+              margin: "0.9rem 0 0", fontSize: "0.74rem", lineHeight: 1.5,
+              color: `${INK}88`, fontStyle: "italic",
+            }}>
+              Chaque fragment repose dans le territoire de son genre. Les zones en pointillés
+              n'ont pas encore été explorées.
+            </p>
           </div>
         </div>
       </div>
