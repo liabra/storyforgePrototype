@@ -127,6 +127,18 @@ function Marker({ type, x, y, size, fill, opacity }: {
   return <path d={markerPath(type, x, y, size)} {...common} />;
 }
 
+/** Date d'entrée dans le monde, en français. Null si la date est inexploitable. */
+function formatEntryDate(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/** Genre normalisé : un genre inconnu retombe sur le territoire MIXED. */
+function regionGenre(genre: string): string {
+  return GENRE_REGION[genre] ? genre : "MIXED";
+}
+
 interface Props {
   onClose: () => void;
 }
@@ -135,7 +147,9 @@ export default function WorldMap({ onClose }: Props) {
   const [data, setData] = useState<WorldData | null>(null);
   const [loading, setLoading] = useState(true);
   const [hoveredFragment, setHoveredFragment] = useState<Fragment | null>(null);
+  const [selectedFragment, setSelectedFragment] = useState<Fragment | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     api.world.getMap()
@@ -144,10 +158,15 @@ export default function WorldMap({ onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Échap ferme d'abord le détail ouvert, puis la carte
+      if (selectedFragment) { setSelectedFragment(null); return; }
+      onClose();
+    };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [onClose, selectedFragment]);
 
   const fragments = useMemo(() => data?.fragments ?? [], [data]);
 
@@ -167,6 +186,21 @@ export default function WorldMap({ onClose }: Props) {
   }, [fragments]);
 
   const isEmpty = fragments.length === 0;
+
+  const query = search.trim().toLowerCase();
+
+  // Un fragment est « actif » s'il passe le filtre de genre ET la recherche.
+  const isActive = (f: Fragment): boolean =>
+    (filter === null || regionGenre(f.genre) === filter)
+    && (query === "" || f.label.toLowerCase().includes(query));
+
+  const matchCount = useMemo(
+    () => fragments.filter((f) =>
+      (filter === null || regionGenre(f.genre) === filter)
+      && (query === "" || f.label.toLowerCase().includes(query))
+    ).length,
+    [fragments, filter, query],
+  );
 
   return (
     <div style={{
@@ -210,7 +244,10 @@ export default function WorldMap({ onClose }: Props) {
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* ── La carte */}
-        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <div
+          style={{ flex: 1, position: "relative", overflow: "hidden" }}
+          onClick={() => setSelectedFragment(null)}
+        >
           {loading ? (
             <div style={{
               position: "absolute", inset: 0, display: "flex",
@@ -313,13 +350,14 @@ export default function WorldMap({ onClose }: Props) {
 
               {/* Fragments */}
               {fragments.map((f) => {
-                const genre = GENRE_REGION[f.genre] ? f.genre : "MIXED";
+                const genre = regionGenre(f.genre);
                 const region = GENRE_REGION[genre];
                 const style = GENRE_STYLE[genre];
                 const pos = positionInRegion(f.id, region);
                 const hovered = hoveredFragment?.id === f.id;
-                const dimmed = filter !== null && filter !== genre;
-                const size = (1.4 + Math.min(f.weight * 0.18, 0.7)) * (hovered ? 1.35 : 1);
+                const selected = selectedFragment?.id === f.id;
+                const dimmed = !isActive(f);
+                const size = (1.4 + Math.min(f.weight * 0.18, 0.7)) * (hovered || selected ? 1.35 : 1);
 
                 return (
                   <g
@@ -328,8 +366,15 @@ export default function WorldMap({ onClose }: Props) {
                     opacity={dimmed ? 0.25 : 1}
                     onMouseEnter={() => setHoveredFragment(f)}
                     onMouseLeave={() => setHoveredFragment(null)}
+                    onClick={(e) => { e.stopPropagation(); setSelectedFragment(f); }}
                   >
-                    {hovered && (
+                    {selected && (
+                      <circle
+                        cx={pos.x} cy={pos.y} r={size + 2.4}
+                        fill="none" stroke={style.marker} strokeWidth="0.35" opacity={0.7}
+                      />
+                    )}
+                    {(hovered || selected) && (
                       <circle cx={pos.x} cy={pos.y} r={size + 1.6} fill={style.marker} opacity={0.18} />
                     )}
                     {/* Zone de survol confortable */}
@@ -339,7 +384,7 @@ export default function WorldMap({ onClose }: Props) {
                       x={pos.x} y={pos.y}
                       size={size}
                       fill={style.marker}
-                      opacity={hovered ? 1 : 0.9}
+                      opacity={hovered || selected ? 1 : 0.9}
                     />
                   </g>
                 );
@@ -368,6 +413,76 @@ export default function WorldMap({ onClose }: Props) {
               </p>
             </div>
           )}
+
+          {/* Détail du fragment cliqué — jamais d'information sur l'histoire source */}
+          {selectedFragment && (() => {
+            const genre = regionGenre(selectedFragment.genre);
+            const style = GENRE_STYLE[genre];
+            const entryDate = formatEntryDate(selectedFragment.createdAt);
+            return (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute", top: "1.25rem", right: "1.25rem",
+                  width: 290, maxWidth: "calc(100% - 2.5rem)",
+                  background: PARCHMENT_LIGHT,
+                  border: `1px solid ${style.stroke}`,
+                  borderTop: `3px solid ${style.marker}`,
+                  boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
+                  borderRadius: 8, padding: "0.9rem 1rem 1rem",
+                }}
+              >
+                <button
+                  onClick={() => setSelectedFragment(null)}
+                  aria-label="Fermer le détail"
+                  style={{
+                    position: "absolute", top: "0.45rem", right: "0.5rem",
+                    background: "none", border: "none", cursor: "pointer",
+                    color: `${INK}88`, fontSize: "1rem", lineHeight: 1,
+                    padding: "0.2rem 0.3rem", fontFamily: "inherit",
+                  }}
+                >
+                  ×
+                </button>
+
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "0.45rem",
+                  fontSize: "0.72rem", letterSpacing: "0.08em", textTransform: "uppercase",
+                  color: `${INK}99`, marginBottom: "0.15rem",
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 10 10" aria-hidden="true">
+                    <Marker type={selectedFragment.type} x={5} y={5} size={3.5} fill={style.marker} />
+                  </svg>
+                  <span>{TYPE_LABEL[selectedFragment.type] ?? selectedFragment.type}</span>
+                </div>
+
+                <p style={{
+                  margin: "0 0 0.6rem", fontSize: "0.82rem",
+                  color: style.marker, fontWeight: 600,
+                }}>
+                  {GENRE_TERRITORY[genre] ?? genre}
+                </p>
+
+                <p style={{
+                  margin: "0 0 0.75rem", fontSize: "1rem", lineHeight: 1.55,
+                  fontStyle: "italic", color: INK,
+                }}>
+                  « {selectedFragment.label} »
+                </p>
+
+                <div style={{
+                  borderTop: `1px solid ${INK}22`, paddingTop: "0.6rem",
+                  display: "flex", flexDirection: "column", gap: "0.25rem",
+                  fontSize: "0.76rem", color: `${INK}99`,
+                }}>
+                  <span>
+                    Évoqué {selectedFragment.weight} fois
+                  </span>
+                  {entryDate && <span>Entré dans le monde le {entryDate}</span>}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Fragment survolé */}
           {hoveredFragment && (
@@ -419,6 +534,43 @@ export default function WorldMap({ onClose }: Props) {
           overflowY: "auto",
           display: "flex", flexDirection: "column", gap: "1.5rem",
         }}>
+          {/* Recherche */}
+          <div>
+            <div style={{ position: "relative" }}>
+              <svg
+                width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"
+                style={{ position: "absolute", left: "0.55rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+              >
+                <circle cx="6" cy="6" r="4.2" fill="none" stroke={`${INK}99`} strokeWidth="1.4" />
+                <line x1="9.2" y1="9.2" x2="12.6" y2="12.6" stroke={`${INK}99`} strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="chercher un fragment…"
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  padding: "0.38rem 0.5rem 0.38rem 1.75rem",
+                  background: PARCHMENT,
+                  border: `1px solid ${INK}30`,
+                  borderRadius: 4,
+                  color: INK, fontSize: "0.8rem",
+                  fontFamily: "inherit", fontStyle: "italic",
+                  outline: "none",
+                }}
+              />
+            </div>
+            {query !== "" && matchCount === 0 && (
+              <p style={{
+                margin: "0.5rem 0 0", fontSize: "0.76rem",
+                color: `${INK}88`, fontStyle: "italic",
+              }}>
+                Aucun fragment trouvé.
+              </p>
+            )}
+          </div>
+
           {/* Filtre par genre */}
           <div>
             <p style={{
