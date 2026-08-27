@@ -44,7 +44,7 @@ export async function extractFragmentsFromStory(storyId: string): Promise<void> 
             select: { content: true },
           },
         },
-        where: { status: "DONE" },
+        where: { status: { not: "DRAFT" } },
       },
     },
   });
