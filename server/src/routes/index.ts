@@ -9,7 +9,6 @@ import contributionRoutes from "./contribution.routes";
 import participantRoutes from "./participant.routes";
 import joinRequestRoutes from "./joinRequest.routes";
 import activityRoutes from "./activity.routes";
-import devRoutes from "./dev.routes";
 import battleRoutes from "./battle.routes";
 import reportRoutes from "./report.routes";
 import adminRoutes from "./admin.routes";
@@ -31,7 +30,8 @@ router.use(contributionRoutes);
 router.use(participantRoutes);
 router.use(joinRequestRoutes);
 router.use(activityRoutes);
-router.use(devRoutes);
+// [SECURITY] devRoutes (POST /dev/seed) n'est plus monté : le handler commençait par
+// prisma.story.deleteMany({}) sans aucune authentification — destruction totale à distance.
 // [BATTLE] masqué temporairement — repasser BATTLE_ENABLED à true pour réactiver
 if (BATTLE_ENABLED) router.use(battleRoutes);
 router.use(reportRoutes);

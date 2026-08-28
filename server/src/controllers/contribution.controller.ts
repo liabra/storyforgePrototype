@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as contributionService from "../services/contribution.service";
 import * as participantService from "../services/participant.service";
+import * as storyService from "../services/story.service";
 import * as activityService from "../services/activity.service";
 import { getIO } from "../socket";
 import prisma from "../prisma/client";
@@ -16,6 +17,15 @@ const getSingleParam = (value: string | string[] | undefined): string => {
 
 export const getByScene = async (req: Request, res: Response) => {
   const sceneId = getSingleParam(req.params.sceneId);
+
+  // Même garde de lecture que scene.controller.getOne : une histoire privée
+  // n'expose son contenu qu'à ses participants
+  const storyId = await participantService.getStoryIdByScene(sceneId);
+  if (!storyId) return res.status(404).json({ error: "Scène introuvable" });
+  const access = await storyService.checkStoryReadAccess(storyId, req.user?.id);
+  if (access === "not_found") return res.status(404).json({ error: "Scène introuvable" });
+  if (access === "forbidden") return res.status(403).json({ error: "Cette histoire est privée" });
+
   const contributions = await contributionService.getContributionsByScene(sceneId);
   return res.json(contributions);
 };
@@ -174,6 +184,19 @@ export const update = async (req: Request, res: Response) => {
 export const moderate = async (req: Request, res: Response) => {
   const id = getSingleParam(req.params.id);
   const { action } = req.body;
+
+  // Modérer n'est pas ouvert à tout compte connecté : réservé à l'équipe de l'histoire
+  const contrib = await prisma.contribution.findUnique({
+    where: { id },
+    select: { scene: { select: { storyId: true } } },
+  });
+  if (!contrib) return res.status(404).json({ error: "Contribution introuvable" });
+
+  const role = await participantService.getUserRole(contrib.scene.storyId, req.user!.id);
+  if (role !== ParticipantRole.OWNER && role !== ParticipantRole.EDITOR) {
+    return res.status(403).json({ error: "Vous devez être OWNER ou EDITOR pour modérer cette contribution" });
+  }
+
   if (action === "flag") return res.json(await contributionService.flagContribution(id));
   if (action === "block") return res.json(await contributionService.blockContribution(id));
   return res.status(400).json({ error: "action must be 'flag' or 'block'" });
