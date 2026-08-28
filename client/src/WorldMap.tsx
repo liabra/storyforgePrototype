@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 
 interface Fragment {
@@ -139,6 +139,40 @@ function regionGenre(genre: string): string {
   return GENRE_REGION[genre] ? genre : "MIXED";
 }
 
+// ── Vue (viewBox piloté) : de la carte entière (100) au zoom ×4 (25)
+const MIN_VIEW = 25;
+const MAX_VIEW = 100;
+const DEFAULT_VIEW: View = { x: 0, y: 0, w: 100, h: 100 };
+const DRAG_THRESHOLD = 4; // px avant de considérer que c'est un déplacement
+
+interface View { x: number; y: number; w: number; h: number }
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max);
+}
+
+/** Borne la vue : jamais plus large que la carte, jamais hors de ses limites. */
+function clampView(v: View): View {
+  const w = clamp(v.w, MIN_VIEW, MAX_VIEW);
+  const h = clamp(v.h, MIN_VIEW, MAX_VIEW);
+  return { w, h, x: clamp(v.x, 0, 100 - w), y: clamp(v.y, 0, 100 - h) };
+}
+
+function zoomBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: 28, height: 28,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    background: "rgba(233,220,194,0.10)",
+    border: `1px solid ${GOLD}`,
+    borderRadius: 5,
+    color: PARCHMENT, fontSize: "1rem", lineHeight: 1,
+    fontFamily: "inherit",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.4 : 1,
+    padding: 0,
+  };
+}
+
 interface Props {
   onClose: () => void;
 }
@@ -150,6 +184,104 @@ export default function WorldMap({ onClose }: Props) {
   const [selectedFragment, setSelectedFragment] = useState<Fragment | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  // ── Vue : zoom et déplacement pilotés par le viewBox
+  const [view, setView] = useState<View>(DEFAULT_VIEW);
+  const [dragging, setDragging] = useState(false);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; from: View; moved: boolean } | null>(null);
+  // Vrai si le geste courant était un déplacement : sert à annuler le clic qui suit
+  const didDragRef = useRef(false);
+
+  const isDefaultView = view.x === 0 && view.y === 0 && view.w === MAX_VIEW && view.h === MAX_VIEW;
+
+  /** Zoome d'un facteur donné, en gardant fixe le point sous le curseur (ou le centre). */
+  const zoomBy = useCallback((factor: number, clientX?: number, clientY?: number) => {
+    setView((v) => {
+      const w = clamp(v.w * factor, MIN_VIEW, MAX_VIEW);
+      const h = clamp(v.h * factor, MIN_VIEW, MAX_VIEW);
+
+      // Point d'ancrage en coordonnées viewBox : le curseur si on l'a, sinon le centre
+      let ax = v.x + v.w / 2;
+      let ay = v.y + v.h / 2;
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (rect && clientX !== undefined && clientY !== undefined) {
+        // preserveAspectRatio="meet" + viewBox carré → la carte occupe un carré centré
+        const side = Math.min(rect.width, rect.height);
+        if (side > 0) {
+          const scale = side / v.w;
+          ax = v.x + (clientX - rect.left - (rect.width - side) / 2) / scale;
+          ay = v.y + (clientY - rect.top - (rect.height - side) / 2) / scale;
+        }
+      }
+
+      return clampView({
+        w, h,
+        x: ax - (ax - v.x) * (w / v.w),
+        y: ay - (ay - v.y) * (h / v.h),
+      });
+    });
+  }, []);
+
+  // Molette : listener non passif (React attache onWheel en passif, preventDefault y échoue)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 0.88 : 1.14, e.clientX, e.clientY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomBy]);
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, from: view, moved: false };
+    didDragRef.current = false;
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    // Filet de sécurité si le pointerup s'est perdu hors de la fenêtre
+    if (e.buttons === 0) { dragRef.current = null; setDragging(false); return; }
+
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+
+    if (!drag.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      drag.moved = true;
+      didDragRef.current = true;
+      setDragging(true);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+
+    const rect = svgRef.current?.getBoundingClientRect();
+    const side = rect ? Math.min(rect.width, rect.height) : 0;
+    if (side <= 0) return;
+    const scale = side / drag.from.w; // px par unité de viewBox
+
+    // Position absolue depuis le début du geste : pas de dérive cumulée
+    setView(clampView({ ...drag.from, x: drag.from.x - dx / scale, y: drag.from.y - dy / scale }));
+  };
+
+  const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    dragRef.current = null;
+    setDragging(false);
+  };
+
+  /** Consomme le drapeau de déplacement : renvoie true si le clic doit être ignoré. */
+  const swallowClickAfterDrag = (): boolean => {
+    if (!didDragRef.current) return false;
+    didDragRef.current = false;
+    return true;
+  };
 
   useEffect(() => {
     api.world.getMap()
@@ -245,8 +377,9 @@ export default function WorldMap({ onClose }: Props) {
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* ── La carte */}
         <div
+          ref={containerRef}
           style={{ flex: 1, position: "relative", overflow: "hidden" }}
-          onClick={() => setSelectedFragment(null)}
+          onClick={() => { if (!swallowClickAfterDrag()) setSelectedFragment(null); }}
         >
           {loading ? (
             <div style={{
@@ -258,10 +391,19 @@ export default function WorldMap({ onClose }: Props) {
             </div>
           ) : (
             <svg
+              ref={svgRef}
               width="100%" height="100%"
-              viewBox="0 0 100 100"
+              viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
               preserveAspectRatio="xMidYMid meet"
-              style={{ position: "absolute", inset: 0 }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              style={{
+                position: "absolute", inset: 0,
+                cursor: dragging ? "grabbing" : "grab",
+                touchAction: "none",
+              }}
             >
               <defs>
                 <clipPath id="wm-sheet">
@@ -366,7 +508,10 @@ export default function WorldMap({ onClose }: Props) {
                     opacity={dimmed ? 0.25 : 1}
                     onMouseEnter={() => setHoveredFragment(f)}
                     onMouseLeave={() => setHoveredFragment(null)}
-                    onClick={(e) => { e.stopPropagation(); setSelectedFragment(f); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!swallowClickAfterDrag()) setSelectedFragment(f);
+                    }}
                   >
                     {selected && (
                       <circle
@@ -484,8 +629,8 @@ export default function WorldMap({ onClose }: Props) {
             );
           })()}
 
-          {/* Fragment survolé */}
-          {hoveredFragment && (
+          {/* Fragment survolé — masqué pendant un déplacement */}
+          {hoveredFragment && !dragging && (
             <div style={{
               position: "absolute", bottom: "1.5rem", left: "50%",
               transform: "translateX(-50%)",
@@ -520,6 +665,54 @@ export default function WorldMap({ onClose }: Props) {
                   Résonance : {hoveredFragment.weight}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Contrôles de vue */}
+          {!loading && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute", right: "1.25rem", bottom: "1.25rem",
+                display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.4rem",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                <button
+                  onClick={() => zoomBy(0.8)}
+                  disabled={view.w <= MIN_VIEW}
+                  aria-label="Zoomer"
+                  title="Zoomer"
+                  style={zoomBtnStyle(view.w <= MIN_VIEW)}
+                >
+                  +
+                </button>
+                <button
+                  onClick={() => zoomBy(1.25)}
+                  disabled={view.w >= MAX_VIEW}
+                  aria-label="Dézoomer"
+                  title="Dézoomer"
+                  style={zoomBtnStyle(view.w >= MAX_VIEW)}
+                >
+                  −
+                </button>
+              </div>
+              <button
+                onClick={() => setView(DEFAULT_VIEW)}
+                disabled={isDefaultView}
+                style={{
+                  background: "rgba(233,220,194,0.10)",
+                  border: `1px solid ${GOLD}`,
+                  borderRadius: 5, padding: "0.28rem 0.6rem",
+                  color: PARCHMENT, fontSize: "0.74rem",
+                  fontFamily: "inherit",
+                  cursor: isDefaultView ? "default" : "pointer",
+                  opacity: isDefaultView ? 0.4 : 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Réinitialiser la vue
+              </button>
             </div>
           )}
         </div>
