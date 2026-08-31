@@ -12,11 +12,12 @@ import {
   suggestIdea,
 } from "../controllers/scene.controller";
 import { requireAuth, optionalAuth, requireNotBanned } from "../middleware/auth";
+import { aiLimiter } from "../middleware/rateLimiters";
 
 const router = Router();
 
 // Literal avant toute route avec :id
-router.post("/scenes/suggest-idea", requireAuth, suggestIdea);
+router.post("/scenes/suggest-idea", requireAuth, aiLimiter, suggestIdea);
 
 // ── Phase A : routes principales (source de vérité = storyId) ──────────────
 router.get("/stories/:storyId/scenes", optionalAuth, getByStory);
@@ -31,6 +32,6 @@ router.get("/scenes/:id", optionalAuth, getOne);
 router.put("/scenes/:id", requireAuth, requireNotBanned, update);
 router.put("/scenes/:id/characters", requireAuth, updateCharacters);
 router.delete("/scenes/:id", requireAuth, remove);
-router.post("/scenes/:id/generate-image", requireAuth, generateImage);
+router.post("/scenes/:id/generate-image", requireAuth, aiLimiter, generateImage);
 
 export default router;

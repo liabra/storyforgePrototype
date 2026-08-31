@@ -2,6 +2,7 @@ import "dotenv/config";
 import http from "http";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import apiRoutes from "./routes/index";
@@ -9,6 +10,7 @@ import { initIO } from "./socket";
 import * as presence from "./presence";
 import prisma from "./prisma/client";
 import { getUserRole, getStoryIdByScene } from "./services/participant.service";
+import { errorHandler } from "./middleware/errorHandler";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -30,14 +32,18 @@ const app = express();
 // clé sur l'IP réelle du client et non celle du proxy
 app.set("trust proxy", 1);
 
+app.use(helmet());
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "StoryForge API running" });
 });
 
 app.use("/api", apiRoutes);
+
+// Middleware d'erreur global — doit être monté après toutes les routes
+app.use(errorHandler);
 
 // ── HTTP server (requis pour socket.io)
 const httpServer = http.createServer(app);
