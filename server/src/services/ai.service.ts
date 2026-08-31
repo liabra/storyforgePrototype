@@ -67,6 +67,7 @@ Phase "Climax / Dénouement" (fin de scène)
 const MODE_INSTRUCTION: Record<GmMode, string> = {
   twist: `Introduis un rebondissement ou un élément inattendu.
 Cohérence obligatoire : reste dans le registre dramatique de la scène (ne bascule pas dans l'horreur si la scène est légère, ni dans la comédie si elle est tendue).
+Proportion obligatoire : l'intensité du rebondissement ne doit jamais dépasser celle déjà présente dans la scène — n'introduis rien de plus dramatique que ce que le registre actuel autorise.
 L'élément doit être suffisamment précis pour que les joueurs puissent y réagir concrètement.
 Exemples de bonnes directions : une arrivée inattendue, un objet qui se comporte étrangement, une information qui contredit quelque chose d'établi, un bruit ou une sensation inexplicable.`,
 
@@ -175,7 +176,7 @@ export function selectGmMode(contribCount: number): GmMode {
   const phase = narrativePhase(contribCount);
   if (phase === "Climax / Dénouement") return "ending_hint";
   if (phase === "Développement") {
-    return Math.random() < 0.7 ? "twist" : "nudge";
+    return Math.random() < 0.55 ? "twist" : "nudge";
   }
   return Math.random() < 0.5 ? "twist" : "nudge";
 }
@@ -183,7 +184,16 @@ export function selectGmMode(contribCount: number): GmMode {
 export const WEAK_CONTEXT_MSG =
   "Le maître du jeu a besoin d'un peu plus de matière pour intervenir.";
 
-const GM_FALLBACK = "Un silence inhabituel s'étire entre vous…";
+const GM_FALLBACKS = [
+  "Un courant d'air froid traverse la pièce, sans qu'on sache d'où il vient.",
+  "Un bruit sourd résonne au loin, puis plus rien.",
+  "Quelque chose grince, juste hors de vue.",
+  "Une ombre passe, trop vite pour qu'on la reconnaisse.",
+];
+
+function pickGmFallback(): string {
+  return GM_FALLBACKS[Math.floor(Math.random() * GM_FALLBACKS.length)];
+}
 
 /**
  * Valide que la réponse est une phrase grammaticalement complète.
@@ -219,7 +229,7 @@ export async function generateGmSuggestion(
       },
       contributions: {
         orderBy: { createdAt: "desc" },
-        take: 8,
+        take: 15,
         select: {
           content: true,
           character: { select: { name: true, nickname: true } },
@@ -248,7 +258,7 @@ export async function generateGmSuggestion(
   const contribLines = orderedContribs
     .map((c) => {
       const speaker = speakerLabel(c);
-      const text = c.content.slice(0, 250).trim();
+      const text = c.content.slice(0, 400).trim();
       return `${speaker} : "${text}"`;
     })
     .join("\n");
@@ -295,7 +305,7 @@ export async function generateGmSuggestion(
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
       maxOutputTokens: 180,
@@ -311,12 +321,12 @@ export async function generateGmSuggestion(
 
   if (!isResponseComplete(text)) {
     console.warn(`[ai.service] réponse tronquée rejetée : "${text.slice(0, 60)}…"`);
-    return GM_FALLBACK;
+    return pickGmFallback();
   }
 
   console.log(`[ai.service] GM (${mode}) scène ${sceneId} : ${text.slice(0, 80)}…`);
 
-  return text || GM_FALLBACK;
+  return text || pickGmFallback();
 }
 
 export async function generateOpeningLine(
@@ -329,7 +339,7 @@ export async function generateOpeningLine(
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     generationConfig: { maxOutputTokens: 120, temperature: 0.95 },
   });
 

@@ -75,69 +75,70 @@ Extrait de l'histoire :
 ${allText}
 """
 
-Identifie UN SEUL élément mémorable et réutilisable de cette histoire.
-Cet élément doit être :
+Identifie TROIS éléments mémorables et réutilisables de cette histoire, réellement DISTINCTS
+les uns des autres (pas trois reformulations d'une même idée).
+Varie les types (OBJECT, PLACE, PHRASE, CHARACTER) autant que le contenu de l'histoire le permet
+— n'utilise pas le même type pour les trois si l'histoire offre matière à varier.
+Chaque élément doit être :
 - Original et spécifique à cette histoire
 - Suffisamment vague pour ne pas trahir l'histoire source
 - Anonymisé : aucun nom de joueur, aucun contexte identifiable
 
-Réponds UNIQUEMENT avec un objet JSON valide sur UNE SEULE LIGNE, sans explication, sans balise markdown :
-{ "type": "OBJECT|PLACE|PHRASE|CHARACTER", "genre": "FANTASY|HORROR|CONTEMPORARY|SF|ROMANCE|MYSTERY|MIXED", "label": "description courte en français" }`;
+Réponds UNIQUEMENT avec un tableau JSON valide de 3 éléments, sans explication, sans balise markdown :
+[{ "type": "OBJECT|PLACE|PHRASE|CHARACTER", "genre": "FANTASY|HORROR|CONTEMPORARY|SF|ROMANCE|MYSTERY|MIXED", "label": "description courte en français" }, { ... }, { ... }]`;
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
   });
 
   try {
-    // On appelle Gemini 3 fois pour obtenir 3 fragments différents
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const result = await model.generateContent(prompt);
-        const raw = result.response.text().trim();
-        console.log(`[world.service] Réponse brute Gemini attempt ${attempt + 1} :`, raw.slice(0, 200));
+    const result = await model.generateContent(prompt);
+    const raw = result.response.text().trim();
+    console.log(`[world.service] Réponse brute Gemini :`, raw.slice(0, 300));
 
-        // Nettoyer et extraire l'objet JSON
-        let clean = raw.replace(/```json|```/g, "").trim();
+    // Nettoyer et extraire le tableau JSON
+    let clean = raw.replace(/```json|```/g, "").trim();
 
-        // Chercher un objet JSON { ... }
-        const start = clean.indexOf("{");
-        const end = clean.lastIndexOf("}");
+    const start = clean.indexOf("[");
+    const end = clean.lastIndexOf("]");
 
-        if (start === -1 || end === -1 || end < start) {
-          console.warn(`[world.service] Pas d'objet JSON trouvé (attempt ${attempt + 1})`);
-          continue;
-        }
+    if (start === -1 || end === -1 || end < start) {
+      console.warn(`[world.service] Pas de tableau JSON trouvé`);
+      return;
+    }
 
-        clean = clean.slice(start, end + 1);
+    clean = clean.slice(start, end + 1);
 
-        let fragment: RawFragment;
-        try {
-          fragment = JSON.parse(clean);
-        } catch {
-          console.warn(`[world.service] JSON invalide (attempt ${attempt + 1}) :`, clean.slice(0, 100));
-          continue;
-        }
+    let fragments: RawFragment[];
+    try {
+      fragments = JSON.parse(clean);
+    } catch {
+      console.warn(`[world.service] JSON invalide :`, clean.slice(0, 200));
+      return;
+    }
 
-        if (!fragment.type || !fragment.label || fragment.label.length < 3) {
-          console.warn(`[world.service] Fragment invalide (attempt ${attempt + 1})`);
-          continue;
-        }
+    if (!Array.isArray(fragments)) {
+      console.warn(`[world.service] Réponse JSON n'est pas un tableau`);
+      return;
+    }
 
-        await prisma.worldFragment.create({
-          data: {
-            type: fragment.type,
-            genre: fragment.genre ?? "MIXED",
-            label: fragment.label.slice(0, 200),
-            sourceStoryId: storyId,
-          },
-        });
-
-        console.log(`[world.service] Fragment ${attempt + 1} extrait : "${fragment.label.slice(0, 60)}"`);
-
-      } catch (attemptErr) {
-        console.error(`[world.service] Erreur attempt ${attempt + 1} :`, attemptErr);
+    for (const [i, fragment] of fragments.slice(0, 3).entries()) {
+      if (!fragment?.type || !fragment.label || fragment.label.length < 3) {
+        console.warn(`[world.service] Fragment ${i + 1} invalide`);
+        continue;
       }
+
+      await prisma.worldFragment.create({
+        data: {
+          type: fragment.type,
+          genre: fragment.genre ?? "MIXED",
+          label: fragment.label.slice(0, 200),
+          sourceStoryId: storyId,
+        },
+      });
+
+      console.log(`[world.service] Fragment ${i + 1} extrait : "${fragment.label.slice(0, 60)}"`);
     }
 
   } catch (err) {

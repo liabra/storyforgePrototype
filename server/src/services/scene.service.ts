@@ -166,7 +166,7 @@ export const suggestSceneIdea = async (
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.6-flash",
       systemInstruction:
         "Tu es un assistant créatif pour les auteurs. Tu proposes des idées courtes et inspirantes, sans jamais écrire à leur place. Réponds en une seule phrase courte (max 2 lignes).",
       generationConfig: { maxOutputTokens: 120, temperature: 0.9 },
