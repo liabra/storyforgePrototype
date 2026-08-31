@@ -112,6 +112,30 @@ const cloudflareProvider: ImageProvider = async (ctx) => {
     );
   }
 
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    // Certains modèles (dont flux-1-schnell) encapsulent l'image en base64 dans un JSON
+    const json = (await response.json()) as {
+      result?: { image?: string };
+      success?: boolean;
+      errors?: unknown;
+    };
+
+    if (json.success === false) {
+      throw new Error(
+        `Cloudflare Workers AI error: ${JSON.stringify(json.errors ?? "réponse en échec")}`
+      );
+    }
+
+    const base64 = json.result?.image;
+    if (!base64) {
+      throw new Error("Cloudflare Workers AI: réponse JSON sans result.image");
+    }
+
+    return `data:image/png;base64,${base64}`;
+  }
+
   // Réponse binaire PNG → data URL base64 (suffisant pour le prototype)
   const buffer = await response.arrayBuffer();
   const base64 = Buffer.from(buffer).toString("base64");
